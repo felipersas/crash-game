@@ -46,3 +46,36 @@ export class NegativeMoneyError extends DomainError {
     super(`Negative money value not allowed: $${cents.toFixed(2)}`);
   }
 }
+
+/**
+ * Thrown when attempting to create a wallet for a player that already has one.
+ */
+export class WalletAlreadyExistsError extends DomainError {
+  constructor(playerId: string) {
+    super(`Wallet already exists for player: ${playerId}`);
+  }
+}
+
+/**
+ * Thrown when a wallet cannot be found for the given player or ID.
+ */
+export class WalletNotFoundError extends DomainError {
+  constructor(identifier: string) {
+    super(`Wallet not found: ${identifier}`);
+  }
+}
+
+/**
+ * Thrown when a wallet version mismatch occurs (optimistic locking).
+ */
+export class OptimisticLockError extends DomainError {
+  constructor(
+    public readonly walletId: string,
+    public readonly expectedVersion: number,
+    public readonly actualVersion: number,
+  ) {
+    super(
+      `Optimistic lock failed for wallet ${walletId}: expected version ${expectedVersion}, got ${actualVersion}`,
+    );
+  }
+}
