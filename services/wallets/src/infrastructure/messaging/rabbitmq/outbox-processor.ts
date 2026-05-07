@@ -62,7 +62,6 @@ export class OutboxProcessor {
 
       this.logger.debug(`Published outbox event: ${event.id}`);
     } catch (error: unknown) {
-      // Increment retry count
       await this.prisma.outboxEvent.update({
         where: { id: event.id },
         data: {

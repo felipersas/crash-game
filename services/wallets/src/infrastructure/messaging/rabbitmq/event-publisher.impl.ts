@@ -2,32 +2,51 @@
  * RabbitMQ Event Publisher Implementation - Infrastructure Layer
  *
  * Publishes wallet domain events to RabbitMQ exchange.
+ * Uses amqp-connection-manager for auto-reconnect.
  */
 
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import * as amqp from 'amqplib';
-import type { IEventPublisher } from '@/application/interfaces/event-publisher';
+import { connect, AmqpConnectionManager, ChannelWrapper } from 'amqp-connection-manager';
+import type { ConfirmChannel } from 'amqplib';
 import { WalletDomainEvent } from '@/domain/events/wallet.events';
+import { IEventPublisher } from '@crash/messaging';
 
 @Injectable()
 export class RabbitMQEventPublisher
   implements IEventPublisher, OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(RabbitMQEventPublisher.name);
-  private connection: any = null;
-  private channel: any = null;
+  private connection: AmqpConnectionManager | null = null;
+  private channel: ChannelWrapper | null = null;
 
   async onModuleInit() {
     const amqpUrl = process.env.RABBITMQ_URL || 'amqp://admin:admin@localhost:5672';
 
     try {
-      this.connection = await amqp.connect(amqpUrl);
-      this.channel = await this.connection.createChannel();
+      this.connection = connect([amqpUrl], {
+        heartbeatIntervalInSeconds: 10,
+        reconnectTimeInSeconds: 5,
+      });
 
-      // Declare exchange for wallet events
-      await this.channel.assertExchange('wallet.events', 'fanout', { durable: true });
+      this.connection.on('connect', () => {
+        this.logger.log('RabbitMQ connected');
+      });
 
-      this.logger.log('RabbitMQ Event Publisher connected');
+      this.connection.on('disconnect', ({ err }) => {
+        this.logger.warn('RabbitMQ disconnected:', err?.message);
+      });
+
+      this.channel = this.connection.createChannel({
+        json: true,
+        setup: (channel: ConfirmChannel) =>
+          channel.assertExchange('wallet.events', 'fanout', { durable: true }),
+      });
+
+      this.channel.on('connect', () => {
+        this.logger.log('RabbitMQ channel created');
+      });
+
+      await this.channel.waitForConnect();
     } catch (error: unknown) {
       this.logger.error('Failed to connect to RabbitMQ:', error);
     }
@@ -52,8 +71,7 @@ export class RabbitMQEventPublisher
       return;
     }
 
-    // Convert BigInt to string for JSON serialization
-    const serialized = JSON.stringify(event, (key, value) =>
+    const serialized = JSON.stringify(event, (_key, value) =>
       typeof value === 'bigint' ? value.toString() : value,
     );
     const content = Buffer.from(serialized);
@@ -64,6 +82,8 @@ export class RabbitMQEventPublisher
       messageId: crypto.randomUUID(),
       timestamp: Math.floor(Date.now() / 1000),
     });
+
+    this.logger.debug(`Published event: ${event.eventType} (${event.aggregateId})`);
   }
 
   async publishBatch(events: WalletDomainEvent[]): Promise<void> {
