@@ -7,6 +7,7 @@
  * - Edge cases: rounding, boundary values, equality
  */
 
+/// <reference types="bun-types" />
 import { describe, test, expect } from 'bun:test';
 import { Money } from '../../src/domain/value-objects/money.value-object';
 import {
