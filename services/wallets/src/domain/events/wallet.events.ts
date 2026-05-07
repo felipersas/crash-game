@@ -1,15 +1,10 @@
+import type { DomainEvent } from '@crash/messaging';
+
 /**
  * Domain events for the Wallet bounded context.
  * These events represent state changes that need to be communicated
  * to other services via the message broker (RabbitMQ).
  */
-
-export interface DomainEvent {
-  readonly eventType: string;
-  readonly aggregateId: string;
-  readonly occurredAt: Date;
-  readonly version: number;
-}
 
 /**
  * Emitted when a new wallet is created for a player.
