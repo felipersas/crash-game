@@ -1,4 +1,11 @@
+import { IsString, IsNotEmpty } from 'class-validator';
+
 export class HealthCheckResponseDto {
-  status: string;
-  service: string;
+  @IsString()
+  @IsNotEmpty()
+  status!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  service!: string;
 }

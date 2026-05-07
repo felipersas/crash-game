@@ -1,0 +1,43 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Wallet {
+  id           String   @id @default(uuid())
+  playerId     String   @unique
+  balanceCents BigInt   @default(0)
+  version      Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("wallets")
+}
+
+model OutboxEvent {
+  id           String             @id @default(uuid())
+  aggregateId  String
+  eventType    String
+  payload      Json
+  status       OutboxEventStatus  @default(PENDING)
+  retryCount   Int?               @default(0)
+  sentAt       DateTime?
+  errorMessage String?
+  createdAt    DateTime           @default(now())
+
+  @@index([aggregateId, status])
+  @@index([status, createdAt])
+  @@map("outbox_events")
+}
+
+enum OutboxEventStatus {
+  PENDING
+  SENT
+  FAILED
+}
