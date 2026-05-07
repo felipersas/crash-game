@@ -1,5 +1,7 @@
-import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req } from '@nestjs/common';
 import { HealthCheckResponseDto } from '@/presentation/dtos/health-check-response.dto';
+import { CreateWalletRequestDto, CreateWalletResponseDto } from '@/presentation/dtos/create-wallet.dto';
+import { GetWalletResponseDto } from '@/presentation/dtos/get-wallet.dto';
 import { CreateWalletUseCase } from '@/application/use-cases/create-wallet.use-case';
 import { GetWalletUseCase } from '@/application/use-cases/get-wallet.use-case';
 
@@ -16,20 +18,29 @@ export class WalletsController {
   }
 
   @Post('wallets')
-  async createWallet(@Req() req: any) {
+  async createWallet(@Body() dto: CreateWalletRequestDto, @Req() req: any): Promise<CreateWalletResponseDto> {
     // TODO: Extract playerId from JWT
-    const playerId = req.user?.sub || 'player-id-from-jwt';
+    const playerId = dto.playerId || req.user?.sub || 'player-id-from-jwt';
 
     const result = await this.createWalletUseCase.execute({ playerId });
-    return result;
+    return {
+      walletId: result.walletId,
+      playerId: result.playerId,
+      balance: result.balance,
+    };
   }
 
   @Get('wallets/me')
-  async getWallet(@Req() req: any) {
+  async getWallet(@Req() req: any): Promise<GetWalletResponseDto> {
     // TODO: Extract playerId from JWT
     const playerId = req.user?.sub || 'player-id-from-jwt';
 
     const result = await this.getWalletUseCase.execute({ playerId });
-    return result;
+    return {
+      walletId: result.walletId,
+      playerId: result.playerId,
+      balance: result.balance,
+      version: result.version,
+    };
   }
 }
