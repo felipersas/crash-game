@@ -41,3 +41,25 @@ enum OutboxEventStatus {
   SENT
   FAILED
 }
+
+model InboxEvent {
+  id             String              @id @default(uuid())
+  idempotencyKey String              @unique
+  eventType      String
+  payload        Json
+  status         InboxEventStatus    @default(PENDING)
+  processedAt    DateTime?
+  errorMessage   String?
+  retryCount     Int?                @default(0)
+  createdAt      DateTime            @default(now())
+
+  @@index([idempotencyKey])
+  @@index([status, createdAt])
+  @@map("inbox_events")
+}
+
+enum InboxEventStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
