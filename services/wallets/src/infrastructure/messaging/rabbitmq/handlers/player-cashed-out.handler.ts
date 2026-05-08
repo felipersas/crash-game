@@ -85,7 +85,7 @@ export class PlayerCashedOutEventHandler {
 
       // 4. Process credit
       await this.creditWalletUseCase.execute({
-        walletId: wallet.id,
+        walletId: wallet!.id,
         amount: typeof event.winAmount === 'string' ? BigInt(event.winAmount) : event.winAmount,
         reason: `Cash out at ${event.cashOutMultiplier}x in round ${event.roundId} (bet: ${event.betId})`,
       });

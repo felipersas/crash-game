@@ -103,7 +103,7 @@ export class BetPlacedEventHandler {
 
       // 4. Process debit
       await this.debitWalletUseCase.execute({
-        walletId: wallet.id,
+        walletId: wallet!.id,
         amount: typeof event.amount === 'string' ? BigInt(event.amount) : event.amount,
         reason: `Bet placed in round ${event.roundId} (bet: ${event.betId})`,
       });
