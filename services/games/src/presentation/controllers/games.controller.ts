@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Param, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { UserContext, type UserContext as UserContextType } from '../decorators/user-context.decorator';
 import { PlaceBetUseCase } from '@/application/use-cases/place-bet.use-case';
 import { CashOutUseCase } from '@/application/use-cases/cash-out.use-case';
 import { GetCurrentRoundUseCase } from '@/application/use-cases/get-current-round.use-case';
@@ -9,7 +10,7 @@ import { CashOutRequestDto, CashOutResponseDto } from '../dtos/cash-out.dto';
 import { RoundOutputDto, GetRoundHistoryResponseDto, VerifyRoundResponseDto } from '../dtos/round.dto';
 import { HealthCheckResponseDto } from '../dtos/health-check-response.dto';
 
-@Controller()
+@Controller('games')
 export class GamesController {
   constructor(
     private readonly placeBetUseCase: PlaceBetUseCase,
@@ -25,11 +26,13 @@ export class GamesController {
   }
 
   @Post('bet')
-  async placeBet(@Body() dto: PlaceBetRequestDto, @Req() req: any): Promise<PlaceBetResponseDto> {
-    const playerId = req.user?.sub || 'player-id-from-jwt';
+  async placeBet(
+    @UserContext() user: UserContextType,
+    @Body() dto: PlaceBetRequestDto,
+  ): Promise<PlaceBetResponseDto> {
 
     const result = await this.placeBetUseCase.execute({
-      playerId,
+      playerId: user.playerId,
       amountCents: BigInt(dto.amount),
     });
 
@@ -42,12 +45,13 @@ export class GamesController {
   }
 
   @Post('bet/cashout')
-  async cashOut(@Body() dto: CashOutRequestDto, @Req() req: any): Promise<CashOutResponseDto> {
-    // TODO: Extract playerId from JWT
-    const playerId = req.user?.sub || 'player-id-from-jwt';
+  async cashOut(
+    @UserContext() user: UserContextType,
+    @Body() dto: CashOutRequestDto,
+  ): Promise<CashOutResponseDto> {
 
     const result = await this.cashOutUseCase.execute({
-      playerId,
+      playerId: user.playerId,
       roundId: dto.roundId,
     });
 
