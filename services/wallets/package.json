@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "bun run --watch src/main.ts",
     "start": "bun run src/main.ts",
+    "build": "tsc --project tsconfig.json",
     "test": "bun test tests/unit",
     "test:e2e": "bun test tests/e2e"
   },

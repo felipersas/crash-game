@@ -3,8 +3,7 @@
   "private": true,
   "workspaces": [
     "services/*",
-    "packages/*",
-    "frontend"
+    "packages/*"
   ],
   "scripts": {
     "docker:up": "docker compose up",
@@ -13,5 +12,8 @@
   },
   "devDependencies": {
     "bun-types": "latest"
+  },
+  "dependencies": {
+    "reflect-metadata": "^0.2.2"
   }
 }
