@@ -8,6 +8,7 @@
     "build": "NODE_ENV=production bun run scripts/build.ts",
     "test": "bun test tests/unit",
     "test:e2e": "bun test tests/e2e",
+    "test:find-seeds": "bun run tests/helpers/find-deterministic-seeds.ts",
     "start:prod": "NODE_ENV=production bun dist/main.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
@@ -33,10 +34,13 @@
     "socket.io": "^4.6.0"
   },
   "devDependencies": {
-    "@types/amqplib": "^0.10.7",
     "@nestjs/testing": "^11.1.17",
+    "@testcontainers/postgresql": "^11.14.0",
+    "@testcontainers/rabbitmq": "^11.14.0",
+    "@types/amqplib": "^0.10.7",
     "bun-types": "latest",
     "prisma": "^6.3.0",
+    "testcontainers": "^11.14.0",
     "typescript": "^5.8.3"
   }
 }
