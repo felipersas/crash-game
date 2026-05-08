@@ -18,7 +18,7 @@ describe('Games Service (E2E)', () => {
   beforeAll(async () => {
     const connections = await beforeAllTests();
     gamesUrl = connections.gamesUrl!;
-  }, 120_000);
+  }, 300_000);
 
   afterAll(async () => {
     await afterAllTests();

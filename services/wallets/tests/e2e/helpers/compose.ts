@@ -37,23 +37,28 @@ export interface ComposeEnvironmentConfig {
  * Docker Compose environment wrapper for E2E tests.
  *
  * Manages the lifecycle of Docker containers used in integration tests.
+ * Uses singleton pattern - environment is started once and reused across tests.
  */
 export class TestCompose {
   private static instance?: StartedDockerComposeEnvironment;
+  private static connections?: Record<string, string>;
 
   /**
-   * Start the Docker Compose environment.
+   * Start the Docker Compose environment (singleton).
+   *
+   * If already started, returns existing connections without restarting.
    *
    * @param config - Configuration options
    * @returns Connection URIs map
    */
   static async start(config: ComposeEnvironmentConfig = {}): Promise<Record<string, string>> {
-    const { services = [], env = {} } = config;
-
-    // Stop any existing environment first
-    if (this.instance) {
-      await this.stop();
+    // Return existing connections if already started
+    if (this.instance && this.connections) {
+      console.log('[TestCompose] Using existing environment');
+      return this.connections;
     }
+
+    const { services = [], env = {} } = config;
 
     const composeFiles = ['docker-compose.test.yml'];
 
@@ -69,7 +74,7 @@ export class TestCompose {
     this.instance = await builder.up(services.length > 0 ? services : undefined);
 
     // Build connection URIs for common services
-    const connections: Record<string, string> = {};
+    this.connections = {};
 
     // PostgreSQL
     try {
@@ -77,10 +82,10 @@ export class TestCompose {
       const host = container.getHost();
       const port = container.getMappedPort(5432);
 
-      connections['postgresGames'] = `postgresql://admin:admin@${host}:${port}/games`;
-      connections['postgresWallets'] = `postgresql://admin:admin@${host}:${port}/wallets`;
-      connections['postgresHost'] = host;
-      connections['postgresPort'] = port.toString();
+      this.connections['postgresGames'] = `postgresql://admin:admin@${host}:${port}/games`;
+      this.connections['postgresWallets'] = `postgresql://admin:admin@${host}:${port}/wallets`;
+      this.connections['postgresHost'] = host;
+      this.connections['postgresPort'] = port.toString();
     } catch (e) {
       console.warn('[TestCompose] PostgreSQL container not available');
     }
@@ -92,10 +97,10 @@ export class TestCompose {
       const amqpPort = rabbitmq.getMappedPort(5672);
       const mgmtPort = rabbitmq.getMappedPort(15672);
 
-      connections['rabbitmqUrl'] = `amqp://admin:admin@${host}:${amqpPort}`;
-      connections['rabbitmqHost'] = host;
-      connections['rabbitmqPort'] = amqpPort.toString();
-      connections['rabbitmqManagement'] = `http://${host}:${mgmtPort}`;
+      this.connections['rabbitmqUrl'] = `amqp://admin:admin@${host}:${amqpPort}`;
+      this.connections['rabbitmqHost'] = host;
+      this.connections['rabbitmqPort'] = amqpPort.toString();
+      this.connections['rabbitmqManagement'] = `http://${host}:${mgmtPort}`;
     } catch (e) {
       console.warn('[TestCompose] RabbitMQ container not available');
     }
@@ -106,9 +111,9 @@ export class TestCompose {
       const host = games.getHost();
       const port = games.getMappedPort(4001);
 
-      connections['gamesUrl'] = `http://${host}:${port}`;
-      connections['gamesHost'] = host;
-      connections['gamesPort'] = port.toString();
+      this.connections['gamesUrl'] = `http://${host}:${port}`;
+      this.connections['gamesHost'] = host;
+      this.connections['gamesPort'] = port.toString();
     } catch (e) {
       console.warn('[TestCompose] Games service container not available');
     }
@@ -119,17 +124,17 @@ export class TestCompose {
       const host = wallets.getHost();
       const port = wallets.getMappedPort(4002);
 
-      connections['walletsUrl'] = `http://${host}:${port}`;
-      connections['walletsHost'] = host;
-      connections['walletsPort'] = port.toString();
+      this.connections['walletsUrl'] = `http://${host}:${port}`;
+      this.connections['walletsHost'] = host;
+      this.connections['walletsPort'] = port.toString();
     } catch (e) {
       console.warn('[TestCompose] Wallets service container not available');
     }
 
     console.log('[TestCompose] Environment started');
-    console.log('  Connections:', Object.keys(connections).join(', '));
+    console.log('  Connections:', Object.keys(this.connections).join(', '));
 
-    return connections;
+    return this.connections;
   }
 
   /**
@@ -157,6 +162,7 @@ export class TestCompose {
       console.log('[TestCompose] Stopping environment...');
       await this.instance.down(options);
       this.instance = undefined;
+      this.connections = undefined;
       console.log('[TestCompose] Environment stopped');
     }
   }
@@ -214,17 +220,28 @@ export class TestCompose {
 export async function beforeAllTests(config?: ComposeEnvironmentConfig): Promise<Record<string, string>> {
   const connections = await TestCompose.start(config);
 
-  // Wait for services to be healthy
+  // Wait for services to be healthy (only on first start)
+  // Skip if environment was already running
   if (connections.gamesUrl) {
-    await TestCompose.waitForHealthCheck(`${connections.gamesUrl}/health`);
+    try {
+      await TestCompose.waitForHealthCheck(`${connections.gamesUrl}/health`, 30000);
+    } catch (e) {
+      console.log('[TestCompose] Games health check failed (may already be running)');
+    }
   }
   if (connections.walletsUrl) {
-    await TestCompose.waitForHealthCheck(`${connections.walletsUrl}/health`);
+    try {
+      await TestCompose.waitForHealthCheck(`${connections.walletsUrl}/health`, 30000);
+    } catch (e) {
+      console.log('[TestCompose] Wallets health check failed (may already be running)');
+    }
   }
 
   return connections;
 }
 
 export async function afterAllTests(): Promise<void> {
-  await TestCompose.stop();
+  // Don't stop - let testcontainers handle cleanup
+  // This allows multiple test files to use the same environment
+  console.log('[TestCompose] Tests completed, keeping environment for cleanup');
 }

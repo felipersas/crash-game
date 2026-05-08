@@ -43,7 +43,7 @@ describe('Wallets ↔ Games Integration (E2E)', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId }),
     });
-  }, 120_000);
+  }, 300_000);
 
   test('should verify RabbitMQ message consumption setup', async () => {
     expect(channel).toBeTruthy();

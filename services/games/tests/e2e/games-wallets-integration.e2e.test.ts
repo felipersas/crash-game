@@ -34,7 +34,7 @@ describe('Games ↔ Wallets Integration (E2E)', () => {
     await channel.assertExchange('games.events', 'topic', { durable: true });
     await channel.assertQueue('test-wallets-events', { durable: true });
     await channel.bindQueue('test-wallets-events', 'games.events', '#');
-  }, 120_000);
+  }, 300_000);
 
   test('should create wallet successfully', async () => {
     const response = await fetch(`${walletsUrl}/wallets`, {

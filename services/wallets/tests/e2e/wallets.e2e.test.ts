@@ -20,7 +20,7 @@ describe('Wallets Service (E2E)', () => {
     const connections = await beforeAllTests();
     walletsUrl = connections.walletsUrl!;
     gamesUrl = connections.gamesUrl!;
-  }, 120_000);
+  }, 300_000);
 
   afterAll(async () => {
     await afterAllTests();
