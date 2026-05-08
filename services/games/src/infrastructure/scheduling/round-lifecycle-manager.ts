@@ -4,7 +4,7 @@ import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/roun
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
-import { ROUND_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { ROUND_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY } from '@/infrastructure/di/tokens';
 
 /**
  * Round Lifecycle Manager - Infrastructure Layer
@@ -27,7 +27,7 @@ export class RoundLifecycleManager {
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
-    private readonly gamesGateway: GamesGateway,
+    @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
   ) {}
 
   /**

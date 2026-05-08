@@ -3,6 +3,7 @@ import { Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import type { IEventPublisher } from '@crash/messaging';
+import { ROUND_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 
 export interface CashOutInput {
   playerId: string;
@@ -20,8 +21,8 @@ export interface CashOutOutput {
 @Injectable()
 export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   constructor(
-    @Inject('ROUND_REPOSITORY') private readonly roundRepository: IRoundRepository,
-    @Inject('EVENT_PUBLISHER') private readonly eventPublisher: IEventPublisher,
+    @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
+    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {

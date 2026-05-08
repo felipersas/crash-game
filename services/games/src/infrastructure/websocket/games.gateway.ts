@@ -6,7 +6,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Logger } from '@nestjs/common';
+import { Logger, Injectable } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { Round, RoundStatus } from '@/domain/entities/round.entity';
 
@@ -22,6 +22,7 @@ export interface ServerToClientEvents {
   playerCashedOut: (data: { roundId: string; playerId: string; multiplier: number; payoutCents: bigint }) => void;
 }
 
+@Injectable()
 @WebSocketGateway({
   cors: {
     origin: '*',
@@ -31,7 +32,7 @@ export class GamesGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   private readonly logger = new Logger(GamesGateway.name);
 

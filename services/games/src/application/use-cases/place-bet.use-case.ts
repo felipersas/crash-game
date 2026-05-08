@@ -10,6 +10,7 @@ import {
   BetBelowMinimumError,
   BetAboveMaximumError,
 } from '@/domain/errors/domain.errors';
+import { ROUND_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 
 export interface PlaceBetInput {
   playerId: string;
@@ -26,8 +27,8 @@ export interface PlaceBetOutput {
 @Injectable()
 export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> {
   constructor(
-    @Inject('ROUND_REPOSITORY') private readonly roundRepository: IRoundRepository,
-    @Inject('EVENT_PUBLISHER') private readonly eventPublisher: IEventPublisher,
+    @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
+    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
   ) {}
 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {
