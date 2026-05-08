@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
@@ -28,7 +28,6 @@ export class RoundLifecycleManager {
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     private readonly gamesGateway: GamesGateway,
-    private readonly schedulerRegistry: SchedulerRegistry,
   ) {}
 
   /**
@@ -45,9 +44,6 @@ export class RoundLifecycleManager {
       this.logger.log(`Resumed existing round: ${this.currentRound.id}`);
       this.resumeRound();
     }
-
-    // Start the ticker that runs every 100ms
-    this.startTicker();
   }
 
   /**
@@ -226,22 +222,12 @@ export class RoundLifecycleManager {
   /**
    * Start the ticker that runs every second to check round state.
    */
-  private startTicker() {
-    const job = this.schedulerRegistry.getCronJob('round-ticker');
-
-    if (!job) {
-      this.schedulerRegistry.addCronJob(
-        'round-ticker',
-        'round-ticker',
-        CronExpression.EVERY_SECOND,
-        () => this.tick(),
-      );
-    }
-  }
-
   /**
    * Tick method called every second.
    */
+  @Cron('* * * * * *', {
+    name: 'round-ticker',
+  })
   private tick() {
     if (!this.currentRound) return;
 
@@ -274,7 +260,5 @@ export class RoundLifecycleManager {
     if (bettingEndTimeout) {
       clearTimeout(bettingEndTimeout);
     }
-
-    this.schedulerRegistry.deleteCronJob('round-ticker');
   }
 }
