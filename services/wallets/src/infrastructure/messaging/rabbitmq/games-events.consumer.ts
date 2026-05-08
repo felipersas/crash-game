@@ -100,19 +100,18 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Handle a single message.
+   * Note: json: true only affects outgoing messages. Incoming messages
+   * are always Buffers that need manual parsing.
    */
   private async handleMessage(
     msg: ConsumeMessage,
     channel: ConfirmChannel,
   ): Promise<void> {
-    const { content, fields } = msg;
+    // Parse Buffer to JSON (json: true only affects publisher, not consumer)
+    const event = JSON.parse(msg.content.toString()) as GameDomainEvent;
 
     try {
-      const event: GameDomainEvent = JSON.parse(content.toString());
-
-      this.logger.debug(
-        `Processing event: ${event.eventType} (deliveryTag: ${fields.deliveryTag})`,
-      );
+      this.logger.debug(`Received event: ${event.eventType}`);
 
       // Dispatch to appropriate handler based on event type
       switch (event.eventType) {
@@ -125,7 +124,7 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
           break;
 
         default: {
-          // Type assertion for unknown event types
+          // Handle unknown event types (shouldn't happen with proper typing)
           const unknownEvent = event as GameDomainEvent & { eventType: string };
           this.logger.warn(`Unhandled event type: ${unknownEvent.eventType}`);
           break;

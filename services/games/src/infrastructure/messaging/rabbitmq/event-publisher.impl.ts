@@ -60,19 +60,25 @@ export class RabbitMQEventPublisher
     }
   }
 
+  /**
+   * Publish a single event to RabbitMQ.
+   * With json: true, the library handles JSON.stringify automatically.
+   */
   async publish(event: GameDomainEvent): Promise<void> {
     if (!this.channel) {
       this.logger.warn('RabbitMQ channel not initialized, skipping event publish');
       return;
     }
 
-    const serialized = JSON.stringify(event, (_key, value) =>
-      typeof value === 'bigint' ? value.toString() : value,
+    // Convert BigInt to string for JSON serialization
+    const serializedEvent = JSON.parse(
+      JSON.stringify(event, (_key, value) =>
+        typeof value === 'bigint' ? value.toString() : value,
+      ),
     );
-    const content = Buffer.from(serialized);
-    const routingKey = event.eventType.toLowerCase();
 
-    this.channel.publish('games.events', routingKey, content, {
+    // With json: true, send object directly (library handles serialization)
+    this.channel.publish('games.events', '', serializedEvent, {
       contentType: 'application/json',
       messageId: crypto.randomUUID(),
       timestamp: Math.floor(Date.now() / 1000),
