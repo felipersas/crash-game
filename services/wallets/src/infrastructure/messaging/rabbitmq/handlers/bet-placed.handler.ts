@@ -9,8 +9,9 @@
  * - WalletDebitFailedEvent: Failure → bet cancelled (PENDING → CANCELLED)
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
+import { EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 import type { IEventPublisher } from '@crash/messaging';
 import {
   createWalletDebitedEvent,
@@ -37,7 +38,7 @@ export class BetPlacedEventHandler {
 
   constructor(
     private readonly debitWalletUseCase: DebitWalletUseCase,
-    private readonly eventPublisher: IEventPublisher,
+    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
   ) {}
 
   /**

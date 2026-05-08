@@ -9,7 +9,7 @@
 
 /// <reference types="bun-types" />
 import { describe, test, expect } from 'bun:test';
-import { Money } from '../../src/domain/value-objects/money.value-object';
+import { Money } from '@crash/domain';
 import {
   InvalidMoneyAmountError,
   NegativeMoneyError,

@@ -1,5 +1,7 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { connect, AmqpConnectionManager, ChannelWrapper } from 'amqp-connection-manager';
+import { Injectable, Logger } from '@nestjs/common';
+import type { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { connect } from 'amqp-connection-manager';
+import type { AmqpConnectionManager, ChannelWrapper } from 'amqp-connection-manager';
 import type { ConfirmChannel } from 'amqplib';
 import { DelayedExchangeSetup } from './delayed-exchange.setup';
 import type {

@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { OnModuleInit } from '@nestjs/common';
 import { RoundLifecycleProducer } from '@/infrastructure/messaging/rabbitmq/round-lifecycle-producer';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';

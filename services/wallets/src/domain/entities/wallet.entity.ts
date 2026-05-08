@@ -8,8 +8,8 @@
  */
 
 import { Money } from '@crash/domain';
+import type { WalletDomainEvent } from '../events/wallet.events';
 import {
-  WalletDomainEvent,
   createWalletCreatedEvent,
   createMoneyCreditedEvent,
   createMoneyDebitedEvent,

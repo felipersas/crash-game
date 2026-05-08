@@ -2,6 +2,8 @@ import {
   WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
+} from '@nestjs/websockets';
+import type {
   OnGatewayInit,
   OnGatewayConnection,
   OnGatewayDisconnect,

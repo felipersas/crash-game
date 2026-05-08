@@ -5,10 +5,12 @@
  * Uses amqp-connection-manager for auto-reconnect.
  */
 
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import { connect, AmqpConnectionManager, ChannelWrapper } from 'amqp-connection-manager';
+import { Injectable, Logger } from '@nestjs/common';
+import type { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { connect } from 'amqp-connection-manager';
+import type { AmqpConnectionManager, ChannelWrapper } from 'amqp-connection-manager';
 import type { ConfirmChannel } from 'amqplib';
-import { WalletDomainEvent } from '@/domain/events/wallet.events';
+import type { WalletDomainEvent } from '@/domain/events/wallet.events';
 import type { IEventPublisher } from '@crash/messaging';
 
 @Injectable()

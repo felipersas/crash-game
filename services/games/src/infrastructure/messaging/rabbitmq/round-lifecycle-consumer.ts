@@ -1,5 +1,7 @@
-import { Inject, Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { connect, AmqpConnectionManager, ChannelWrapper } from 'amqp-connection-manager';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { connect } from 'amqp-connection-manager';
+import type { AmqpConnectionManager, ChannelWrapper } from 'amqp-connection-manager';
 import type { ConfirmChannel, ConsumeMessage } from 'amqplib';
 import { RoundLifecycleProducer } from './round-lifecycle-producer';
 import { StartRoundHandler } from './handlers/start-round.handler';

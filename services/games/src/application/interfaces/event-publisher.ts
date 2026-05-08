@@ -9,4 +9,4 @@ export type IGameEventPublisher = IEventPublisher<GameDomainEvent>;
 /**
  * Default export for easier injection
  */
-export { IEventPublisher };
+export type { IEventPublisher };

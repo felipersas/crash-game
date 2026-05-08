@@ -1,4 +1,4 @@
-import { Channel } from 'amqplib';
+import type { Channel } from 'amqplib';
 import { Logger } from '@nestjs/common';
 
 /**
