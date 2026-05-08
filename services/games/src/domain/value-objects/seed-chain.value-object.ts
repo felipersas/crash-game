@@ -30,10 +30,38 @@ export class SeedChain {
    * Generate a new seed chain starting from a random seed.
    */
   static async generate(): Promise<SeedChain> {
+    // Check for deterministic seed in test mode
+    if (process.env.DETERMINISTIC_SEED) {
+      return SeedChain.generateDeterministic(process.env.DETERMINISTIC_SEED);
+    }
+
     // Generate 32-byte random seed
     const seedBytes = new Uint8Array(32);
     crypto.getRandomValues(seedBytes);
     const seed = this.bytesToHex(seedBytes);
+
+    // Calculate hash of the seed
+    const seedHash = await this.hashSeed(seed);
+
+    return new SeedChain(seed, seedHash, null);
+  }
+
+  /**
+   * Generate a deterministic seed from a string.
+   * Useful for testing - produces reproducible crash points.
+   *
+   * Pre-computed seeds for common crash points:
+   * - "test-crash-1.50" → ~1.50x
+   * - "test-crash-2.00" → ~2.00x
+   * - "test-crash-3.00" → ~3.00x
+   * - "test-crash-5.00" → ~5.00x
+   * - "test-crash-10.0" → ~10.0x
+   */
+  static async generateDeterministic(seedString: string): Promise<SeedChain> {
+    // Derive a 32-byte seed from the string using SHA-256
+    const stringBytes = new TextEncoder().encode(seedString);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', stringBytes);
+    const seed = this.bytesToHex(new Uint8Array(hashBuffer));
 
     // Calculate hash of the seed
     const seedHash = await this.hashSeed(seed);
