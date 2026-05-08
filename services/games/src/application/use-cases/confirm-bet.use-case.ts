@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
+import { BetNotFoundError } from '@/domain/errors/domain.errors';
 
 export interface ConfirmBetInput {
   roundId: string;
@@ -37,7 +38,7 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
     );
 
     if (!bet) {
-      throw new Error(`Bet ${input.betId} not found in round ${input.roundId}`);
+      throw new BetNotFoundError(input.betId);
     }
 
     // Confirm the bet (PENDING → ACTIVE)

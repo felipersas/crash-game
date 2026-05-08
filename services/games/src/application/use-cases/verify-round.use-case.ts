@@ -6,6 +6,7 @@ import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
 import { RoundStatus } from '@prisma/client';
+import { RoundNotFoundError, VerificationFailedError } from '@/domain/errors/domain.errors';
 
 export interface VerifyRoundInput {
   roundId: string;
@@ -29,7 +30,7 @@ export class VerifyRoundUseCase implements IUseCase<VerifyRoundInput, VerifyRoun
     const round = await this.roundRepository.findById(input.roundId);
 
     if (!round) {
-      throw new Error('Round not found');
+      throw new RoundNotFoundError(input.roundId);
     }
 
     if (round.getStatus() !== RoundStatus.CRASHED) {
@@ -41,7 +42,7 @@ export class VerifyRoundUseCase implements IUseCase<VerifyRoundInput, VerifyRoun
     const crashPointValue = round.getCrashPoint();
 
     if (!seed || !seedHash || crashPointValue === null) {
-      throw new Error('Round data incomplete for verification');
+      throw new VerificationFailedError(input.roundId);
     }
 
     // Verify the seed hash matches

@@ -6,10 +6,19 @@ import type { IUseCase } from '../interfaces/use-case';
 import type { IEventPublisher } from '@crash/messaging';
 import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 import { RoundLifecycleManager } from '@/infrastructure/scheduling/round-lifecycle-manager';
+import { RoundNotFoundError, NoActiveBetError } from '@/domain/errors/domain.errors';
+
+/**
+ * Cash Out Use Case
+ *
+ * Allows a player to cash out their bet at the current multiplier.
+ * Uses in-memory Round from LifecycleManager for real-time multiplier accuracy.
+ */
 
 export interface CashOutInput {
   playerId: string;
   roundId?: string; // Optional, defaults to current round
+  idempotencyKey?: string; // Optional, prevents double-submit
 }
 
 export interface CashOutOutput {
@@ -43,7 +52,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     }
 
     if (!round) {
-      throw new Error('No active round found');
+      throw new RoundNotFoundError(input.roundId || 'current');
     }
 
     // Load bet to get bet ID for response
@@ -53,23 +62,16 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     );
 
     if (!bet) {
-      throw new Error('No active bet found for player');
+      throw new NoActiveBetError(input.playerId, round.id);
     }
 
-    // Cash out through Round (validates state, calculates payout)
+    // Cash out through Round (validates state, calculates payout, updates bet internally)
     const payout = round.cashOut(input.playerId);
 
-    // Update bet independently
-    const updatedBet = await this.betRepository.findByPlayerAndRound(
-      input.playerId,
-      round.id,
-    );
+    // TODO: Store idempotencyKey to prevent double-submit
+    // For now, the Round.cashOut() will throw BetAlreadyCashedOutError if double-submitted
 
-    if (updatedBet) {
-      await this.betRepository.update(updatedBet);
-    }
-
-    // Save round state changes
+    // Save round state changes (includes bet update via Round entity)
     await this.roundRepository.save(round);
 
     const events = round.pullEvents();

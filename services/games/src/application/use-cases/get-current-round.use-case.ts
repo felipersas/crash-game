@@ -3,6 +3,7 @@ import { Bet } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
+import { RoundNotFoundError } from '@/domain/errors/domain.errors';
 
 export interface GetCurrentRoundInput {
   includeBets?: boolean;
@@ -41,7 +42,7 @@ export class GetCurrentRoundUseCase implements IUseCase<GetCurrentRoundInput, Ge
     const round = await this.roundRepository.findCurrentRound();
 
     if (!round) {
-      throw new Error('No active round found');
+      throw new RoundNotFoundError('current');
     }
 
     const bets = input.includeBets ? round.getBets() : [];
