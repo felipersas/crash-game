@@ -45,7 +45,8 @@
       "@/infrastructure/di": ["./src/infrastructure/di"],
       "@/presentation": ["./src/presentation"],
       "@/presentation/controllers": ["./src/presentation/controllers"],
-      "@/presentation/dtos": ["./src/presentation/dtos"]
+      "@/presentation/dtos": ["./src/presentation/dtos"],
+      "@/presentation/decorators": ["./src/presentation/decorators"]
     }
   },
   "include": ["src/**/*"],
