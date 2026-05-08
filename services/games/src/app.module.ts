@@ -8,6 +8,7 @@ import { PrismaRoundRepository } from './infrastructure/persistence/prisma/round
 import { RabbitMQEventPublisher } from './infrastructure/messaging/rabbitmq/event-publisher.impl';
 import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-processor';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
+import { RoundLifecycleManager } from './infrastructure/scheduling/round-lifecycle-manager';
 import { PlaceBetUseCase } from './application/use-cases/place-bet.use-case';
 import { CashOutUseCase } from './application/use-cases/cash-out.use-case';
 import { GetCurrentRoundUseCase } from './application/use-cases/get-current-round.use-case';
