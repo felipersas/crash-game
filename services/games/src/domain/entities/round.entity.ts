@@ -421,6 +421,7 @@ export class Round {
   /**
    * Convert to plain object for persistence.
    * NOTE: Seed is only included after round crashes (security).
+   * NOTE: Bets are managed separately by BetRepository.
    */
   toPersistence() {
     return {
@@ -433,7 +434,6 @@ export class Round {
       bettingEndTime: this.bettingEndTime,
       startedAt: this.startedAt,
       crashedAt: this.crashedAt,
-      bets: Array.from(this.bets.values()).map(bet => bet.toPersistence()),
       version: this.version,
       config: this.config,
     };
