@@ -160,3 +160,12 @@ export class SeedNotAvailableError extends DomainError {
     super(`Seed is not available for round ${roundId} until it crashes`);
   }
 }
+
+/**
+ * Thrown when attempting to cash out with an invalid idempotency key format.
+ */
+export class InvalidIdempotencyKeyError extends DomainError {
+  constructor(key: string) {
+    super(`Invalid idempotency key: ${key} (must be a valid UUID)`);
+  }
+}
