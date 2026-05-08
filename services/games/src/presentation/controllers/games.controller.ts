@@ -53,6 +53,7 @@ export class GamesController {
     const result = await this.cashOutUseCase.execute({
       playerId: user.playerId,
       roundId: dto.roundId,
+      idempotencyKey: dto.idempotencyKey,
     });
 
     const payoutDecimal = (Number(result.payoutCents) / 100).toFixed(2);
