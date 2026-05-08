@@ -7,6 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Round {
@@ -60,6 +61,15 @@ model OutboxEvent {
   @@index([aggregateId, status])
   @@index([status, createdAt])
   @@map("outbox_events")
+}
+
+model ProcessedJob {
+  id          String   @id @default(uuid())
+  jobId       String   @unique @map("job_id")
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@index([processedAt])
+  @@map("processed_jobs")
 }
 
 enum RoundStatus {
