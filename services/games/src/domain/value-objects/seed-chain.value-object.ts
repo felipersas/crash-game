@@ -1,5 +1,4 @@
 import { InvalidSeedError } from '../errors/domain.errors';
-import crypto from 'bun:crypto';
 
 /**
  * Seed Chain Value Object - Manages provably fair seed generation.
