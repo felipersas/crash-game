@@ -45,10 +45,8 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
       }
     }
 
-    // Convert bigint to Money
     const amount = Money.fromCents(input.amountCents);
 
-    // Place the bet
     round.placeBet(input.playerId, amount);
 
     await this.roundRepository.save(round);

@@ -25,16 +25,18 @@ export class GamesController {
   }
 
   @Post('bet')
-  async placeBet(@Body() dto: PlaceBetRequestDto): Promise<PlaceBetResponseDto> {
+  async placeBet(@Body() dto: PlaceBetRequestDto, @Req() req: any): Promise<PlaceBetResponseDto> {
+    const playerId = req.user?.sub || 'player-id-from-jwt';
+
     const result = await this.placeBetUseCase.execute({
-      playerId: dto.playerId,
+      playerId,
       amountCents: BigInt(dto.amount),
     });
 
     return {
       roundId: result.roundId,
       betId: result.betId,
-      amountCents: result.amountCents,
+      amountCents: Number(result.amountCents),
       status: result.status,
     };
   }
