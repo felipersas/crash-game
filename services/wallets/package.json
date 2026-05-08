@@ -5,9 +5,12 @@
   "scripts": {
     "dev": "bun run --watch src/main.ts",
     "start": "bun run src/main.ts",
-    "build": "tsc --project tsconfig.json",
+    "build": "NODE_ENV=production bun run scripts/build.ts",
     "test": "bun test tests/unit",
-    "test:e2e": "bun test tests/e2e"
+    "test:e2e": "bun test tests/e2e",
+    "start:prod": "NODE_ENV=production bun dist/main.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
     "@crash/domain": "workspace:*",
