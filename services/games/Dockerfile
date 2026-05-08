@@ -1,5 +1,8 @@
 FROM oven/bun:1.3.13
 
+# Install curl for health checks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copia arquivos da raiz do monorepo
