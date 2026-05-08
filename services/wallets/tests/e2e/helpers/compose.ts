@@ -22,7 +22,7 @@
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
 import path from 'path';
 
-const projectRoot = path.resolve(__dirname, '../../../..');
+const projectRoot = path.resolve(__dirname, '../../../../..');
 
 export interface ComposeEnvironmentConfig {
   /** Services to start (default: all) */
