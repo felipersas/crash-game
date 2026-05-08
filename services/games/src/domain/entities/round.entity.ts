@@ -1,7 +1,8 @@
-import { Bet, BetStatus } from './bet.entity';
+import { Bet } from './bet.entity';
 import { CrashPoint } from '../value-objects/crash-point.value-object';
 import { Multiplier } from '../value-objects/multiplier.value-object';
 import { SeedChain } from '../value-objects/seed-chain.value-object';
+import { Money } from '@crash/domain';
 import {
   RoundNotAcceptingBetsError,
   DuplicateBetError,
@@ -41,15 +42,15 @@ export enum RoundStatus {
 
 export interface RoundConfig {
   bettingDurationMs: number; // How long betting phase lasts
-  minBetAmount: bigint; // Minimum bet in cents ($1.00 = 100)
-  maxBetAmount: bigint; // Maximum bet in cents ($1000.00 = 100000)
+  minBetAmount: Money; // Minimum bet
+  maxBetAmount: Money; // Maximum bet
   growthRate: number; // Multiplier growth rate (default 0.06)
 }
 
 export const DEFAULT_ROUND_CONFIG: RoundConfig = {
   bettingDurationMs: 10000, // 10 seconds
-  minBetAmount: 100n, // $1.00
-  maxBetAmount: 100000n, // $1,000.00
+  minBetAmount: Money.fromDecimal('1.00'), // $1.00
+  maxBetAmount: Money.fromDecimal('1000.00'), // $1,000.00
   growthRate: 0.06,
 };
 
@@ -153,7 +154,7 @@ export class Round {
    * Place a bet for a player.
    * Only allowed during BETTING phase.
    */
-  placeBet(playerId: string, amountCents: bigint): void {
+  placeBet(playerId: string, amount: Money): void {
     if (this.status !== RoundStatus.BETTING) {
       throw new RoundNotAcceptingBetsError(this.id);
     }
@@ -162,15 +163,15 @@ export class Round {
       throw new DuplicateBetError(playerId, this.id);
     }
 
-    if (amountCents < this.config.minBetAmount) {
-      throw new BetBelowMinimumError(amountCents);
+    if (amount.isLessThan(this.config.minBetAmount)) {
+      throw new BetBelowMinimumError(amount.toCents());
     }
 
-    if (amountCents > this.config.maxBetAmount) {
-      throw new BetAboveMaximumError(amountCents);
+    if (amount.isGreaterThan(this.config.maxBetAmount)) {
+      throw new BetAboveMaximumError(amount.toCents());
     }
 
-    const bet = Bet.create(this.id, playerId, amountCents);
+    const bet = Bet.create(this.id, playerId, amount);
     this.bets.set(playerId, bet);
 
     this.version++;
@@ -179,7 +180,7 @@ export class Round {
         this.id,
         bet.id,
         playerId,
-        amountCents,
+        amount.toCents(),
         this.version,
       ),
     );
@@ -189,7 +190,7 @@ export class Round {
    * Cash out a player's bet at the current multiplier.
    * Only allowed during ACTIVE phase.
    */
-  cashOut(playerId: string): bigint {
+  cashOut(playerId: string): Money {
     if (this.status !== RoundStatus.ACTIVE) {
       throw new RoundAlreadyCrashedError(this.id, this.crashPoint?.getValue() || 0);
     }
@@ -207,9 +208,9 @@ export class Round {
         this.id,
         bet.id,
         playerId,
-        bet.getAmountCents(),
+        bet.getAmount().toCents(),
         this.currentMultiplier.getValue(),
-        payout,
+        payout.toCents(),
         this.version,
       ),
     );
@@ -280,9 +281,11 @@ export class Round {
 
     for (const bet of this.bets.values()) {
       totalBets++;
-      totalBetAmount += bet.getAmountCents();
+      const betAmount = bet.getAmount().toCents();
+      totalBetAmount += betAmount;
       if (bet.isCashedOut()) {
-        totalWinAmount += bet.getCashOutAmount()! - bet.getAmountCents();
+        const cashOutAmount = bet.getCashOutAmount()!.toCents();
+        totalWinAmount += cashOutAmount - betAmount;
       }
     }
 

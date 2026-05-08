@@ -1,4 +1,5 @@
 import { Multiplier } from '../value-objects/multiplier.value-object';
+import { Money } from '@crash/domain';
 
 /**
  * Bet Entity - Represents a player's bet in a round.
@@ -19,23 +20,23 @@ export class Bet {
   readonly id: string;
   readonly roundId: string;
   readonly playerId: string;
-  private amountCents: bigint; // Stored in cents for precision
+  private amount: Money;
   private status: BetStatus;
   private cashOutMultiplier: Multiplier | null;
-  private cashOutAmount: bigint | null;
+  private cashOutAmount: Money | null;
   private cashedOutAt: Date | null;
 
   private constructor(
     id: string,
     roundId: string,
     playerId: string,
-    amountCents: bigint,
+    amount: Money,
     status: BetStatus,
   ) {
     this.id = id;
     this.roundId = roundId;
     this.playerId = playerId;
-    this.amountCents = amountCents;
+    this.amount = amount;
     this.status = status;
     this.cashOutMultiplier = null;
     this.cashOutAmount = null;
@@ -45,9 +46,9 @@ export class Bet {
   /**
    * Factory method to create a new bet.
    */
-  static create(roundId: string, playerId: string, amountCents: bigint): Bet {
+  static create(roundId: string, playerId: string, amount: Money): Bet {
     const betId = crypto.randomUUID();
-    return new Bet(betId, roundId, playerId, amountCents, BetStatus.ACTIVE);
+    return new Bet(betId, roundId, playerId, amount, BetStatus.ACTIVE);
   }
 
   /**
@@ -60,15 +61,16 @@ export class Bet {
     amountCents: bigint,
     status: BetStatus,
     cashOutMultiplier: number | null,
-    cashOutAmount: bigint | null,
+    cashOutAmountCents: bigint | null,
     cashedOutAt: Date | null,
   ): Bet {
-    const bet = new Bet(id, roundId, playerId, amountCents, status);
+    const amount = Money.fromCents(amountCents);
+    const bet = new Bet(id, roundId, playerId, amount, status);
 
     if (cashOutMultiplier !== null) {
       bet.cashOutMultiplier = Multiplier.fromValue(cashOutMultiplier);
     }
-    bet.cashOutAmount = cashOutAmount;
+    bet.cashOutAmount = cashOutAmountCents !== null ? Money.fromCents(cashOutAmountCents) : null;
     bet.cashedOutAt = cashedOutAt;
 
     return bet;
@@ -78,19 +80,19 @@ export class Bet {
    * Cash out the bet at the current multiplier.
    * Only allowed if bet is ACTIVE.
    */
-  cashOut(multiplier: Multiplier): bigint {
+  cashOut(multiplier: Multiplier): Money {
     if (this.status !== BetStatus.ACTIVE) {
       throw new Error(`Cannot cash out bet in ${this.status} state`);
     }
 
-    const payout = multiplier.calculatePayout(this.amountCents);
+    const payout = multiplier.calculatePayout(this.amount.toCents());
+    this.cashOutAmount = Money.fromCents(payout);
 
     this.status = BetStatus.CASHED_OUT;
     this.cashOutMultiplier = multiplier;
-    this.cashOutAmount = payout;
     this.cashedOutAt = new Date();
 
-    return payout;
+    return this.cashOutAmount;
   }
 
   /**
@@ -106,20 +108,10 @@ export class Bet {
   }
 
   /**
-   * Get the bet amount in cents.
+   * Get the bet amount.
    */
-  getAmountCents(): bigint {
-    return this.amountCents;
-  }
-
-  /**
-   * Get the bet amount formatted as decimal string.
-   */
-  getAmountDecimal(): string {
-    const cents = Number(this.amountCents);
-    const whole = Math.floor(cents / 100);
-    const fractional = cents % 100;
-    return `${whole}.${fractional.toString().padStart(2, '0')}`;
+  getAmount(): Money {
+    return this.amount;
   }
 
   /**
@@ -139,7 +131,7 @@ export class Bet {
   /**
    * Get the cash out amount (if cashed out).
    */
-  getCashOutAmount(): bigint | null {
+  getCashOutAmount(): Money | null {
     return this.cashOutAmount;
   }
 
@@ -179,10 +171,10 @@ export class Bet {
       id: this.id,
       roundId: this.roundId,
       playerId: this.playerId,
-      amountCents: this.amountCents,
+      amountCents: this.amount.toCents(),
       status: this.status,
       cashOutMultiplier: this.cashOutMultiplier?.getValue() || null,
-      cashOutAmount: this.cashOutAmount,
+      cashOutAmount: this.cashOutAmount?.toCents() || null,
       cashedOutAt: this.cashedOutAt,
     };
   }
