@@ -7,7 +7,6 @@ import { PrismaService } from './infrastructure/persistence/prisma/prisma.servic
 import { PrismaRoundRepository } from './infrastructure/persistence/prisma/round.repository.impl';
 import { RabbitMQEventPublisher } from './infrastructure/messaging/rabbitmq/event-publisher.impl';
 import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-processor';
-import { GamesGateway } from './infrastructure/websocket/games.gateway';
 import { RoundLifecycleManager } from './infrastructure/scheduling/round-lifecycle-manager';
 import { PlaceBetUseCase } from './application/use-cases/place-bet.use-case';
 import { CashOutUseCase } from './application/use-cases/cash-out.use-case';
@@ -15,6 +14,10 @@ import { GetCurrentRoundUseCase } from './application/use-cases/get-current-roun
 import { GetRoundHistoryUseCase } from './application/use-cases/get-round-history.use-case';
 import { VerifyRoundUseCase } from './application/use-cases/verify-round.use-case';
 import { ROUND_REPOSITORY, EVENT_PUBLISHER } from './infrastructure/di/tokens';
+import { RoundLifecycleModule } from './infrastructure/messaging/rabbitmq/round-lifecycle.module';
+import { GamesGateway } from './infrastructure/websocket/games.gateway';
+import { RoundEventListeners } from './infrastructure/websocket/round-event.listeners';
+import { GAMES_GATEWAY } from './infrastructure/di/tokens';
 
 @Module({
   imports: [
@@ -23,11 +26,18 @@ import { ROUND_REPOSITORY, EVENT_PUBLISHER } from './infrastructure/di/tokens';
     }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    // RoundLifecycleModule, // TODO: Fix delayed exchange plugin
   ],
   controllers: [GamesController],
   providers: [
-    // Infrastructure
+    // Infrastructure (PrismaService from global PrismaModule)
     PrismaService,
+    {
+      provide: GAMES_GATEWAY,
+      useClass: GamesGateway,
+    },
+    GamesGateway,
+    RoundEventListeners,
     {
       provide: ROUND_REPOSITORY,
       useClass: PrismaRoundRepository,
@@ -37,10 +47,8 @@ import { ROUND_REPOSITORY, EVENT_PUBLISHER } from './infrastructure/di/tokens';
       useClass: RabbitMQEventPublisher,
     },
     RabbitMQEventPublisher,
-    OutboxProcessor,
-    GamesGateway,
+    // OutboxProcessor, // TODO: Fix PrismaService dependency resolution
     RoundLifecycleManager,
-
     // Use Cases
     PlaceBetUseCase,
     CashOutUseCase,
@@ -51,7 +59,6 @@ import { ROUND_REPOSITORY, EVENT_PUBLISHER } from './infrastructure/di/tokens';
   exports: [
     ROUND_REPOSITORY,
     EVENT_PUBLISHER,
-    GamesGateway,
   ],
 })
 export class AppModule {}
