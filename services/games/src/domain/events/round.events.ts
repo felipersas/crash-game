@@ -65,6 +65,33 @@ export interface RoundCrashedEvent extends DomainEvent {
 }
 
 /**
+ * Emitted by Wallets service when bet amount is successfully debited.
+ * Games service uses this to confirm the bet (PENDING → ACTIVE).
+ */
+export interface WalletDebitedEvent extends DomainEvent {
+  readonly eventType: 'WalletDebited';
+  readonly roundId: string;
+  readonly betId: string;
+  readonly playerId: string;
+  readonly amount: bigint;
+  timestamp: Date;
+}
+
+/**
+ * Emitted by Wallets service when bet debit fails (insufficient funds, etc.).
+ * Games service uses this to cancel the bet (PENDING → CANCELLED).
+ */
+export interface WalletDebitFailedEvent extends DomainEvent {
+  readonly eventType: 'WalletDebitFailed';
+  readonly roundId: string;
+  readonly betId: string;
+  readonly playerId: string;
+  readonly amount: bigint;
+  readonly reason: string; // Why the debit failed
+  timestamp: Date;
+}
+
+/**
  * Union type of all game domain events.
  */
 export type GameDomainEvent =
@@ -72,7 +99,9 @@ export type GameDomainEvent =
   | BettingPhaseEndedEvent
   | BetPlacedEvent
   | PlayerCashedOutEvent
-  | RoundCrashedEvent;
+  | RoundCrashedEvent
+  | WalletDebitedEvent
+  | WalletDebitFailedEvent;
 
 /**
  * Helper factory to create domain events with common fields.
@@ -172,6 +201,44 @@ export function createRoundCrashedEvent(
     totalBets,
     totalBetAmount,
     totalWinAmount,
+    timestamp: new Date(),
+  };
+}
+
+export function createWalletDebitedEvent(
+  roundId: string,
+  betId: string,
+  playerId: string,
+  amount: bigint,
+  version: number,
+): WalletDebitedEvent {
+  return {
+    ...createBaseEvent(roundId, version),
+    eventType: 'WalletDebited',
+    roundId,
+    betId,
+    playerId,
+    amount,
+    timestamp: new Date(),
+  };
+}
+
+export function createWalletDebitFailedEvent(
+  roundId: string,
+  betId: string,
+  playerId: string,
+  amount: bigint,
+  reason: string,
+  version: number,
+): WalletDebitFailedEvent {
+  return {
+    ...createBaseEvent(roundId, version),
+    eventType: 'WalletDebitFailed',
+    roundId,
+    betId,
+    playerId,
+    amount,
+    reason,
     timestamp: new Date(),
   };
 }

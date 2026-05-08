@@ -40,7 +40,12 @@ export interface MoneyDebitedEvent extends DomainEvent {
 /**
  * Union type of all wallet domain events.
  */
-export type WalletDomainEvent = WalletCreatedEvent | MoneyCreditedEvent | MoneyDebitedEvent;
+export type WalletDomainEvent =
+  | WalletCreatedEvent
+  | MoneyCreditedEvent
+  | MoneyDebitedEvent
+  | WalletDebitedEvent
+  | WalletDebitFailedEvent;
 
 /**
  * Helper factory to create domain events with common fields.
@@ -103,5 +108,70 @@ export function createMoneyDebitedEvent(
     amount,
     newBalance,
     reason,
+  };
+}
+
+/**
+ * Emitted when a bet amount is successfully debited from a wallet.
+ * This confirms the bet in the Games service (PENDING → ACTIVE).
+ */
+export interface WalletDebitedEvent extends DomainEvent {
+  readonly eventType: 'WalletDebited';
+  readonly roundId: string;
+  readonly betId: string;
+  readonly playerId: string;
+  readonly amount: bigint;
+  timestamp: Date;
+}
+
+/**
+ * Emitted when a bet debit fails (insufficient funds, wallet not found, etc.).
+ * This cancels the bet in the Games service (PENDING → CANCELLED).
+ */
+export interface WalletDebitFailedEvent extends DomainEvent {
+  readonly eventType: 'WalletDebitFailed';
+  readonly roundId: string;
+  readonly betId: string;
+  readonly playerId: string;
+  readonly amount: bigint;
+  readonly reason: string;
+  timestamp: Date;
+}
+
+export function createWalletDebitedEvent(
+  roundId: string,
+  betId: string,
+  playerId: string,
+  amount: bigint,
+  version: number,
+): WalletDebitedEvent {
+  return {
+    ...createBaseEvent(roundId, version),
+    eventType: 'WalletDebited',
+    roundId,
+    betId,
+    playerId,
+    amount,
+    timestamp: new Date(),
+  };
+}
+
+export function createWalletDebitFailedEvent(
+  roundId: string,
+  betId: string,
+  playerId: string,
+  amount: bigint,
+  reason: string,
+  version: number,
+): WalletDebitFailedEvent {
+  return {
+    ...createBaseEvent(roundId, version),
+    eventType: 'WalletDebitFailed',
+    roundId,
+    betId,
+    playerId,
+    amount,
+    reason,
+    timestamp: new Date(),
   };
 }

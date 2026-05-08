@@ -4,16 +4,20 @@ import { Money } from '@crash/domain';
 /**
  * Bet Entity - Represents a player's bet in a round.
  *
- * A bet can be in one of three states:
- * - ACTIVE: Bet is placed, waiting for crash or cash out
+ * A bet can be in one of five states (saga pattern):
+ * - PENDING: Bet placed, waiting for wallet confirmation
+ * - ACTIVE: Wallet debited, bet is active in round
  * - CASHED_OUT: Player cashed out, waiting for round completion
  * - LOST: Round crashed before player cashed out
+ * - CANCELLED: Wallet debit failed, bet was cancelled
  */
 
 export enum BetStatus {
+  PENDING = 'PENDING',
   ACTIVE = 'ACTIVE',
   CASHED_OUT = 'CASHED_OUT',
   LOST = 'LOST',
+  CANCELLED = 'CANCELLED',
 }
 
 export class Bet {
@@ -25,6 +29,7 @@ export class Bet {
   private cashOutMultiplier: Multiplier | null;
   private cashOutAmount: Money | null;
   private cashedOutAt: Date | null;
+  private cancelReason: string | null;
 
   private constructor(
     id: string,
@@ -41,14 +46,16 @@ export class Bet {
     this.cashOutMultiplier = null;
     this.cashOutAmount = null;
     this.cashedOutAt = null;
+    this.cancelReason = null;
   }
 
   /**
-   * Factory method to create a new bet.
+   * Factory method to create a new bet in PENDING state.
+   * The bet will be confirmed once the wallet is debited.
    */
   static create(roundId: string, playerId: string, amount: Money): Bet {
     const betId = crypto.randomUUID();
-    return new Bet(betId, roundId, playerId, amount, BetStatus.ACTIVE);
+    return new Bet(betId, roundId, playerId, amount, BetStatus.PENDING);
   }
 
   /**
@@ -77,8 +84,33 @@ export class Bet {
   }
 
   /**
+   * Confirm the bet after successful wallet debit.
+   * Transition from PENDING to ACTIVE.
+   */
+  confirm(): void {
+    if (this.status !== BetStatus.PENDING) {
+      throw new Error(`Cannot confirm bet in ${this.status} state`);
+    }
+
+    this.status = BetStatus.ACTIVE;
+  }
+
+  /**
+   * Cancel the bet after wallet debit failure.
+   * Transition from PENDING to CANCELLED.
+   */
+  cancel(reason: string): void {
+    if (this.status !== BetStatus.PENDING) {
+      throw new Error(`Cannot cancel bet in ${this.status} state`);
+    }
+
+    this.status = BetStatus.CANCELLED;
+    this.cancelReason = reason;
+  }
+
+  /**
    * Cash out the bet at the current multiplier.
-   * Only allowed if bet is ACTIVE.
+   * Only allowed if bet is ACTIVE (confirmed by wallet).
    */
   cashOut(multiplier: Multiplier): Money {
     if (this.status !== BetStatus.ACTIVE) {
@@ -98,13 +130,21 @@ export class Bet {
   /**
    * Mark the bet as lost (round crashed before cash out).
    * Only allowed if bet is ACTIVE.
+   * PENDING bets are also marked as lost (implicit cancellation).
    */
   markAsLost(): void {
-    if (this.status !== BetStatus.ACTIVE) {
+    if (this.status !== BetStatus.ACTIVE && this.status !== BetStatus.PENDING) {
       throw new Error(`Cannot mark bet as ${BetStatus.LOST} when in ${this.status} state`);
     }
 
     this.status = BetStatus.LOST;
+  }
+
+  /**
+   * Get the cancellation reason (if cancelled).
+   */
+  getCancelReason(): string | null {
+    return this.cancelReason;
   }
 
   /**
@@ -143,7 +183,21 @@ export class Bet {
   }
 
   /**
-   * Check if the bet is active (not cashed out or lost).
+   * Check if the bet is pending confirmation.
+   */
+  isPending(): boolean {
+    return this.status === BetStatus.PENDING;
+  }
+
+  /**
+   * Check if the bet is cancelled.
+   */
+  isCancelled(): boolean {
+    return this.status === BetStatus.CANCELLED;
+  }
+
+  /**
+   * Check if the bet is active (confirmed and not cashed out or lost).
    */
   isActive(): boolean {
     return this.status === BetStatus.ACTIVE;

@@ -267,9 +267,9 @@ export class Round {
     this.status = RoundStatus.CRASHED;
     this.crashedAt = new Date();
 
-    // Mark all active bets as lost
+    // Mark all active bets as lost (PENDING bets are also lost - implicit cancellation)
     for (const bet of this.bets.values()) {
-      if (bet.isActive()) {
+      if (bet.isActive() || bet.isPending()) {
         bet.markAsLost();
       }
     }

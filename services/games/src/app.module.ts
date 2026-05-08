@@ -7,6 +7,7 @@ import { PrismaService } from './infrastructure/persistence/prisma/prisma.servic
 import { PrismaRoundRepository } from './infrastructure/persistence/prisma/round.repository.impl';
 import { RabbitMQEventPublisher } from './infrastructure/messaging/rabbitmq/event-publisher.impl';
 import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-processor';
+import { WalletEventsConsumer } from './infrastructure/messaging/rabbitmq/wallet-events.consumer';
 import { RoundLifecycleManager } from './infrastructure/scheduling/round-lifecycle-manager';
 import { PlaceBetUseCase } from './application/use-cases/place-bet.use-case';
 import { CashOutUseCase } from './application/use-cases/cash-out.use-case';
@@ -47,6 +48,7 @@ import { GAMES_GATEWAY } from './infrastructure/di/tokens';
       useClass: RabbitMQEventPublisher,
     },
     RabbitMQEventPublisher,
+    WalletEventsConsumer,
     // OutboxProcessor, // TODO: Fix PrismaService dependency resolution
     RoundLifecycleManager,
     // Use Cases

@@ -94,7 +94,7 @@ describe('Round Entity', () => {
       const bet = round.getBetByPlayer(playerId);
       expect(bet).toBeDefined();
       expect(bet?.getAmount().toCents()).toBe(1000n);
-      expect(bet?.getStatus()).toBe('ACTIVE');
+      expect(bet?.getStatus()).toBe('PENDING'); // Bets start in PENDING state
     });
 
     test('should emit BetPlacedEvent when bet is placed', () => {
@@ -222,6 +222,12 @@ describe('Round Entity', () => {
       // Place a bet and start the round
       round.placeBet('player-1', Money.fromDecimal('10.00'));
       await round.startRound();
+
+      // Confirm the bet (simulate wallet confirmation)
+      const bet = round.getBetByPlayer('player-1');
+      if (bet && bet.isPending()) {
+        (bet as any).confirm();
+      }
     });
 
     test('should cash out active bet', () => {
@@ -323,6 +329,14 @@ describe('Round Entity', () => {
       round.placeBet('player-1', Money.fromDecimal('10.00'));
       round.placeBet('player-2', Money.fromDecimal('20.00'));
       await round.startRound();
+
+      // Confirm bets (simulate wallet confirmation)
+      for (const playerId of ['player-1', 'player-2']) {
+        const bet = round.getBetByPlayer(playerId);
+        if (bet && bet.isPending()) {
+          (bet as any).confirm();
+        }
+      }
     });
 
     test('should transition to CRASHED status', async () => {
