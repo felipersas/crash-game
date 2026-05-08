@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
+import { Bet } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
+import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { IEventPublisher } from '@crash/messaging';
 import type { IUseCase } from '@/application/interfaces/use-case';
 import { Money } from '@crash/domain';
@@ -10,7 +12,7 @@ import {
   BetBelowMinimumError,
   BetAboveMaximumError,
 } from '@/domain/errors/domain.errors';
-import { ROUND_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 
 export interface PlaceBetInput {
   playerId: string;
@@ -28,6 +30,7 @@ export interface PlaceBetOutput {
 export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> {
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
+    @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
   ) {}
 
@@ -47,8 +50,19 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
 
     const amount = Money.fromCents(input.amountCents);
 
+    // Create bet in memory (validates business rules)
     round.placeBet(input.playerId, amount);
 
+    // Get the bet from round
+    const bet = round.getBetByPlayer(input.playerId);
+    if (!bet) {
+      throw new Error('Bet was not created in memory');
+    }
+
+    // Persist bet independently (no round version lock)
+    await this.betRepository.create(bet);
+
+    // Update round version for state change
     await this.roundRepository.save(round);
 
     const events = round.pullEvents();
@@ -56,11 +70,9 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
       await this.eventPublisher.publishBatch(events);
     }
 
-    const bet = round.getBetByPlayer(input.playerId);
-
     return {
       roundId: round.id,
-      betId: bet?.id || '',
+      betId: bet.id,
       amountCents: input.amountCents,
       status: round.getStatus(),
     };

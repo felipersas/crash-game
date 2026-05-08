@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { IRoundRepository } from '../interfaces/round.repository';
+import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
-import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
+import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
 
 export interface ConfirmBetInput {
   roundId: string;
@@ -20,21 +20,21 @@ export interface ConfirmBetOutput {
  *
  * Confirms a bet after successful wallet debit.
  * Transitions the bet from PENDING to ACTIVE state.
+ *
+ * Now uses BetRepository directly for better concurrency.
  */
 @Injectable()
 export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOutput> {
   constructor(
-    @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
+    @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
   ) {}
 
   async execute(input: ConfirmBetInput): Promise<ConfirmBetOutput> {
-    const round = await this.roundRepository.findById(input.roundId);
-
-    if (!round) {
-      throw new Error(`Round ${input.roundId} not found for bet ${input.betId}`);
-    }
-
-    const bet = round.getBetByPlayer(input.playerId);
+    // Find bet directly by player and round
+    const bet = await this.betRepository.findByPlayerAndRound(
+      input.playerId,
+      input.roundId,
+    );
 
     if (!bet) {
       throw new Error(`Bet ${input.betId} not found in round ${input.roundId}`);
@@ -43,8 +43,8 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
     // Confirm the bet (PENDING → ACTIVE)
     bet.confirm();
 
-    // Save and emit events
-    await this.roundRepository.save(round);
+    // Save bet state change
+    await this.betRepository.update(bet);
 
     return {
       betId: input.betId,
