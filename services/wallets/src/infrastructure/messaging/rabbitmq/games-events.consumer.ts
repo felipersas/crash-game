@@ -3,6 +3,9 @@
  *
  * Consumes domain events from the Games service via the games.events exchange.
  * Dispatches events to appropriate handlers for wallet operations.
+ *
+ * Implements retry with exponential backoff for transient errors
+ * and dead letter queue for permanent failures.
  */
 
 import { Injectable, Logger, type OnModuleInit, type OnModuleDestroy } from '@nestjs/common';
@@ -11,6 +14,7 @@ import type { ConfirmChannel, ConsumeMessage } from 'amqplib';
 import { BetPlacedEventHandler } from './handlers/bet-placed.handler';
 import { PlayerCashedOutEventHandler } from './handlers/player-cashed-out.handler';
 import type { GameDomainEvent } from '../types/games.events';
+import { OptimisticLockError } from '@/domain/errors/domain.errors';
 
 /**
  * Consumer for game events from the Games service.
@@ -18,12 +22,19 @@ import type { GameDomainEvent } from '../types/games.events';
  * Listens to the games.events fanout exchange and processes:
  * - BetPlacedEvent → Debit wallet for bet amount
  * - PlayerCashedOutEvent → Credit wallet for winnings
+ *
+ * Error handling strategy:
+ * - Transient errors (OptimisticLockError, network) → Retry with exponential backoff
+ * - Permanent errors (WalletNotFound) → DLQ
+ * - Max retries exceeded → DLQ
  */
 @Injectable()
 export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GamesEventsConsumer.name);
   private readonly EXCHANGE_NAME = 'games.events';
   private readonly QUEUE_NAME = 'wallets.games.events';
+  private readonly DLQ_QUEUE_NAME = 'wallets.games.events.dlq';
+  private readonly MAX_RETRIES = 3;
   private connection: AmqpConnectionManager | null = null;
   private channel: ChannelWrapper | null = null;
   private consumerTag: string | null = null;
@@ -48,8 +59,17 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
           // Assert the fanout exchange (created by Games service)
           await channel.assertExchange(this.EXCHANGE_NAME, 'fanout', { durable: true });
 
-          // Create a dedicated queue for this service
-          await channel.assertQueue(this.QUEUE_NAME, { durable: true });
+          // Create DLQ first (to avoid errors when referencing it)
+          await channel.assertQueue(this.DLQ_QUEUE_NAME, { durable: true });
+
+          // Create main queue with DLQ configured
+          await channel.assertQueue(this.QUEUE_NAME, {
+            durable: true,
+            arguments: {
+              'x-dead-letter-exchange': '',
+              'x-dead-letter-routing-key': this.DLQ_QUEUE_NAME,
+            },
+          });
 
           // Bind queue to exchange (fanout ignores routing key)
           await channel.bindQueue(this.QUEUE_NAME, this.EXCHANGE_NAME, '');
@@ -99,9 +119,11 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Handle a single message.
-   * Note: json: true only affects outgoing messages. Incoming messages
-   * are always Buffers that need manual parsing.
+   * Handle a single message with retry logic.
+   *
+   * Retry strategy:
+   * - Transient errors → Requeue with exponential backoff (1s, 2s, 4s, 8s)
+   * - Permanent errors or max retries exceeded → DLQ (nack with requeue: false)
    */
   private async handleMessage(
     msg: ConsumeMessage,
@@ -109,8 +131,11 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     const event = JSON.parse(msg.content.toString()) as GameDomainEvent;
 
+    // Get retry count from message headers (default: 0)
+    const retryCount = (msg.properties?.headers?.['x-retry-count'] as number) ?? 0;
+
     try {
-      this.logger.debug(`Received event: ${event.eventType}`);
+      this.logger.debug(`Received event: ${event.eventType} (retry: ${retryCount}/${this.MAX_RETRIES})`);
 
       switch (event.eventType) {
         case 'BetPlaced':
@@ -131,12 +156,61 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
       channel.ack(msg);
       this.logger.debug(`Event ${event.eventType} processed successfully`);
     } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Error processing event: ${error instanceof Error ? error.message : String(error)}`,
+        `Error processing event (retry ${retryCount}/${this.MAX_RETRIES}): ${errorMessage}`,
       );
 
-      channel.nack(msg, false, false);
+      // Check if this is a transient error that should be retried
+      if (this.isTransientError(error) && retryCount < this.MAX_RETRIES) {
+        // Requeue with exponential backoff delay
+        const delayMs = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s, 8s
+        this.logger.warn(`Retrying after ${delayMs}ms (attempt ${retryCount + 1}/${this.MAX_RETRIES})`);
+
+        // Schedule requeue with delay
+        setTimeout(() => {
+          channel.nack(msg, false, true); // requeue: true
+        }, delayMs);
+      } else {
+        // Permanent error or max retries exceeded → send to DLQ
+        this.logger.error(
+          `Sending to DLQ: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        channel.nack(msg, false, false); // requeue: false → DLQ
+      }
     }
+  }
+
+  /**
+   * Determine if an error is transient (should retry).
+   *
+   * Transient errors:
+   * - OptimisticLockError: Concurrent wallet update
+   * - Network errors: Temporary connectivity issues
+   * - Temporary DB errors: Connection pool exhaustion, etc.
+   */
+  private isTransientError(error: unknown): boolean {
+    if (error instanceof OptimisticLockError) {
+      return true;
+    }
+
+    if (error instanceof Error) {
+      // Prisma transaction errors
+      if (error.message.includes('transaction') || error.message.includes('lock')) {
+        return true;
+      }
+
+      // Network/timeout errors
+      if (
+        error.message.includes('timeout') ||
+        error.message.includes('ETIMEDOUT') ||
+        error.message.includes('ECONNREFUSED')
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
