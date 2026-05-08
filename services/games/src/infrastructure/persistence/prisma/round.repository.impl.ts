@@ -3,6 +3,7 @@ import { PrismaService } from './prisma.service';
 import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
 import { Bet, BetStatus } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
+import { OptimisticLockError } from '@/domain/errors/domain.errors';
 
 @Injectable()
 export class PrismaRoundRepository implements IRoundRepository {
@@ -64,8 +65,9 @@ export class PrismaRoundRepository implements IRoundRepository {
         },
       });
     } catch (error: unknown) {
-      if (error instanceof Error && 'code' in error) {
-        throw new Error(`Optimistic lock failed for round ${data.id}`);
+      // Prisma throws a P2025 error when the record is not found (version mismatch)
+      if (error instanceof Error && 'code' in error && error.code === 'P2025') {
+        throw new OptimisticLockError(data.id, data.version - 1);
       }
       throw error;
     }

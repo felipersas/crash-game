@@ -5,6 +5,7 @@ import type { IRoundRepository } from '@/application/interfaces/round.repository
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
 import { ROUND_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY } from '@/infrastructure/di/tokens';
+import { OptimisticLockError } from '@/domain/errors/domain.errors';
 
 /**
  * Round Lifecycle Manager - Infrastructure Layer
@@ -123,14 +124,51 @@ export class RoundLifecycleManager {
 
   /**
    * End the betting phase and start the round.
+   * Handles optimistic locking conflicts gracefully.
    */
   private async endBettingPhase() {
     if (!this.currentRound) return;
 
     this.logger.log(`Ending betting phase for round ${this.currentRound.id}`);
 
-    await this.currentRound.startRound();
-    await this.roundRepository.save(this.currentRound);
+    try {
+      await this.currentRound.startRound();
+      await this.roundRepository.save(this.currentRound);
+    } catch (error) {
+      if (error instanceof OptimisticLockError) {
+        // Handle optimistic lock conflict - reload the round from the database
+        this.logger.warn(
+          `Optimistic lock conflict for round ${this.currentRound.id}, reloading from database`
+        );
+
+        const reloaded = await this.roundRepository.findById(this.currentRound.id);
+        if (!reloaded) {
+          this.logger.error(`Round ${this.currentRound.id} not found after conflict`);
+          return;
+        }
+
+        // Update the current round with the reloaded state
+        this.currentRound = reloaded;
+
+        // If the round was already transitioned to ACTIVE by another instance, resume normally
+        if (reloaded.getStatus() === RoundStatus.ACTIVE) {
+          this.logger.log(`Round ${this.currentRound.id} already transitioned to ACTIVE`);
+          this.roundStartTime = reloaded.getStartedAt() || new Date();
+          this.startMultiplierUpdates();
+          return;
+        }
+
+        // If still in BETTING phase, retry the transition once
+        if (reloaded.getStatus() === RoundStatus.BETTING) {
+          this.logger.log(`Retrying transition for round ${this.currentRound.id}`);
+          await reloaded.startRound();
+          await this.roundRepository.save(reloaded);
+          this.currentRound = reloaded;
+        }
+      } else {
+        throw error;
+      }
+    }
 
     // Publish events
     const events = this.currentRound.pullEvents();
@@ -142,7 +180,7 @@ export class RoundLifecycleManager {
     this.gamesGateway.broadcastBettingEnded(this.currentRound.id);
 
     // Start multiplier updates
-    this.roundStartTime = new Date();
+    this.roundStartTime = this.currentRound.getStartedAt() || new Date();
     this.startMultiplierUpdates();
   }
 
