@@ -76,9 +76,8 @@ export class GamesController {
       crashedAt: result.crashedAt,
       bets: result.bets.map(bet => ({
         ...bet,
-        cashOutAmountCents: bet.cashOutAmount,
-        cashOutAmountDecimal: bet.cashOutAmount
-          ? (Number(bet.cashOutAmount) / 100).toFixed(2)
+        cashOutAmountDecimal: bet.cashOutAmountCents
+          ? (Number(bet.cashOutAmountCents) / 100).toFixed(2)
           : null,
       })),
     };
