@@ -4,7 +4,7 @@
  * useAuth - Authentication state and operations
  */
 
-import { useSession, signOut } from 'next-auth/react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 
 export function useAuth() {
   const { data: session, status } = useSession();
@@ -14,8 +14,10 @@ export function useAuth() {
     status,
     isAuthenticated: status === 'authenticated',
     user: session?.user,
+    playerId: session?.playerId,
+    accessToken: session?.accessToken,
     login: () => {
-      window.location.href = `/api/auth/signin`;
+      signIn('keycloak', { callbackUrl: '/game' });
     },
     logout: () => signOut({ callbackUrl: '/login' }),
   };
