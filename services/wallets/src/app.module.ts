@@ -15,7 +15,8 @@ import { CreateWalletUseCase } from '@/application/use-cases/create-wallet.use-c
 import { GetWalletUseCase } from '@/application/use-cases/get-wallet.use-case';
 import { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
 import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
-import { WALLET_REPOSITORY, INBOX_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
+import { WALLET_REPOSITORY, INBOX_REPOSITORY, EVENT_PUBLISHER, PLAYER_WALLET_RESOLVER } from '@/infrastructure/di/tokens';
 import { APP_FILTER } from '@nestjs/core';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 
@@ -44,6 +45,9 @@ import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.fil
     // Outbox/Inbox Processors
     OutboxProcessor,
     InboxProcessor,
+
+    // Application Services
+    { provide: PLAYER_WALLET_RESOLVER, useClass: PlayerWalletResolver },
 
     // Games Events Consumer & Handlers
     GamesEventsConsumer,

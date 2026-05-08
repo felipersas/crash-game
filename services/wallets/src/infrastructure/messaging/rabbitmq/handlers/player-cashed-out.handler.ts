@@ -10,11 +10,10 @@
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
-import { WALLET_REPOSITORY, INBOX_REPOSITORY } from '@/infrastructure/di/tokens';
-import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
+import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
+import { INBOX_REPOSITORY, PLAYER_WALLET_RESOLVER } from '@/infrastructure/di/tokens';
 import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import type { PlayerCashedOutEvent } from '../../types/games.events';
-import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 
 /**
  * Handler for PlayerCashedOutEvent.
@@ -24,9 +23,10 @@ import { WalletNotFoundError } from '@/domain/errors/domain.errors';
  *
  * Uses Inbox pattern for idempotency:
  * 1. Try create inbox event (fails if duplicate)
- * 2. If duplicate → skip (already processed)
- * 3. Process credit
- * 4. Mark inbox as PROCESSED
+ * 2. If duplicate → check status (PROCESSED skip, FAILED retry)
+ * 3. Resolve wallet via PlayerWalletResolver
+ * 4. Process credit
+ * 5. Mark inbox as PROCESSED
  */
 @Injectable()
 export class PlayerCashedOutEventHandler {
@@ -34,7 +34,7 @@ export class PlayerCashedOutEventHandler {
 
   constructor(
     private readonly creditWalletUseCase: CreditWalletUseCase,
-    @Inject(WALLET_REPOSITORY) private readonly walletRepository: IWalletRepository,
+    @Inject(PLAYER_WALLET_RESOLVER) private readonly playerWalletResolver: PlayerWalletResolver,
     @Inject(INBOX_REPOSITORY) private readonly inboxRepository: IInboxRepository,
   ) {}
 
@@ -42,7 +42,6 @@ export class PlayerCashedOutEventHandler {
    * Handle the PlayerCashedOutEvent with idempotency.
    *
    * @param event The event from Games service
-   * @throws Error if wallet not found (will be logged by consumer)
    */
   async handle(event: PlayerCashedOutEvent): Promise<void> {
     const idempotencyKey = `cashout-${event.betId}`;
@@ -58,20 +57,33 @@ export class PlayerCashedOutEventHandler {
       payload: event,
     });
 
-    // 2. If duplicate, skip processing (already processed)
+    // 2. If duplicate, check status and handle accordingly
+    let eventId: string;
     if (!inboxEvent) {
-      this.logger.log(`Duplicate PlayerCashedOutEvent detected: ${idempotencyKey}. Skipping.`);
-      return;
+      const existing = await this.inboxRepository.findByIdempotencyKey(idempotencyKey);
+
+      if (existing?.status === 'PROCESSED') {
+        this.logger.log(`Duplicate PlayerCashedOutEvent detected (already processed): ${idempotencyKey}. Skipping.`);
+        return;
+      }
+
+      if (existing?.status === 'FAILED') {
+        this.logger.warn(`Duplicate PlayerCashedOutEvent detected (previously failed): ${idempotencyKey}. Retrying.`);
+        eventId = existing.id;
+        // Continue to retry the failed operation
+      } else {
+        this.logger.log(`Duplicate PlayerCashedOutEvent detected (pending): ${idempotencyKey}. Skipping.`);
+        return;
+      }
+    } else {
+      eventId = inboxEvent.id;
     }
 
     try {
-      // 3. Find wallet by playerId (Wallets service owns the playerId → walletId mapping)
-      const wallet = await this.walletRepository.findByPlayerId(event.playerId);
-      if (!wallet) {
-        throw new WalletNotFoundError(`playerId=${event.playerId}`);
-      }
+      // 3. Resolve wallet using PlayerWalletResolver
+      const wallet = await this.playerWalletResolver.resolveWallet(event.playerId);
 
-      // 4. Process credit (no idempotencyKey needed here - inbox handles it)
+      // 4. Process credit
       await this.creditWalletUseCase.execute({
         walletId: wallet.id,
         amount: typeof event.winAmount === 'string' ? BigInt(event.winAmount) : event.winAmount,
@@ -79,7 +91,7 @@ export class PlayerCashedOutEventHandler {
       });
 
       // 5. Mark inbox as PROCESSED
-      await this.inboxRepository.markAsProcessed(inboxEvent.id, new Date());
+      await this.inboxRepository.markAsProcessed(eventId, new Date());
 
       this.logger.log(
         `Credited ${event.winAmount} cents to player ${event.playerId} for cash out at ${event.cashOutMultiplier}x`,
@@ -87,7 +99,7 @@ export class PlayerCashedOutEventHandler {
     } catch (error: unknown) {
       // Mark as FAILED for visibility
       await this.inboxRepository.markAsFailed(
-        inboxEvent.id,
+        eventId,
         error instanceof Error ? error.message : String(error),
         0,
       );
@@ -95,7 +107,9 @@ export class PlayerCashedOutEventHandler {
       this.logger.error(
         `Failed to credit wallet for cash out ${event.betId}: ${error instanceof Error ? error.message : String(error)}`,
       );
-      throw error; // Re-throw for consumer to handle (nack/retry)
+
+      // Don't re-throw - saga pattern: we've handled the error
+      // Consumer will ACK the message
     }
   }
 }

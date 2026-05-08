@@ -14,16 +14,15 @@
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
-import { EVENT_PUBLISHER, WALLET_REPOSITORY, INBOX_REPOSITORY } from '@/infrastructure/di/tokens';
+import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
+import { EVENT_PUBLISHER, PLAYER_WALLET_RESOLVER, INBOX_REPOSITORY } from '@/infrastructure/di/tokens';
 import type { IEventPublisher } from '@crash/messaging';
-import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
 import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import {
   createWalletDebitedEvent,
   createWalletDebitFailedEvent,
 } from '@/domain/events/wallet.events';
 import type { BetPlacedEvent } from '../../types/games.events';
-import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 
 /**
  * Handler for BetPlacedEvent.
@@ -34,10 +33,11 @@ import { WalletNotFoundError } from '@/domain/errors/domain.errors';
  *
  * Uses Inbox pattern for idempotency:
  * 1. Try create inbox event (fails if duplicate)
- * 2. If duplicate → check if already processed (skip) or failed (maybe retry)
- * 3. Process debit
- * 4. Mark inbox as PROCESSED
- * 5. Emit confirmation event
+ * 2. If duplicate → check status (PROCESSED skip, FAILED retry)
+ * 3. Resolve wallet via PlayerWalletResolver
+ * 4. Process debit (with compensating rollback on publish failure)
+ * 5. Emit confirmation event (with retry)
+ * 6. Mark inbox as PROCESSED/FAILED
  *
  * This is part of the saga pattern:
  * 1. Games creates the bet in PENDING state
@@ -51,7 +51,7 @@ export class BetPlacedEventHandler {
 
   constructor(
     private readonly debitWalletUseCase: DebitWalletUseCase,
-    @Inject(WALLET_REPOSITORY) private readonly walletRepository: IWalletRepository,
+    @Inject(PLAYER_WALLET_RESOLVER) private readonly playerWalletResolver: PlayerWalletResolver,
     @Inject(INBOX_REPOSITORY) private readonly inboxRepository: IInboxRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
   ) {}
@@ -75,7 +75,7 @@ export class BetPlacedEventHandler {
       payload: event,
     });
 
-    // 2. If duplicate exists, check its status
+    // 2. If duplicate, check status and handle accordingly
     let eventId: string;
     if (!inboxEvent) {
       const existing = await this.inboxRepository.findByIdempotencyKey(idempotencyKey);
@@ -98,68 +98,77 @@ export class BetPlacedEventHandler {
     }
 
     try {
-      // 3. Find wallet by playerId (Wallets service owns the playerId → walletId mapping)
-      const wallet = await this.walletRepository.findByPlayerId(event.playerId);
-      if (!wallet) {
-        throw new WalletNotFoundError(`playerId=${event.playerId}`);
-      }
+      // 3. Resolve wallet using PlayerWalletResolver
+      const wallet = await this.playerWalletResolver.resolveWallet(event.playerId);
 
-      // 4. Process debit (no idempotencyKey needed here - inbox handles it)
+      // 4. Process debit
       await this.debitWalletUseCase.execute({
         walletId: wallet.id,
         amount: typeof event.amount === 'string' ? BigInt(event.amount) : event.amount,
         reason: `Bet placed in round ${event.roundId} (bet: ${event.betId})`,
       });
 
-      // 5. Mark inbox as PROCESSED
-      await this.inboxRepository.markAsProcessed(eventId, new Date());
-
       this.logger.log(
         `Debited ${event.amount} cents from player ${event.playerId} for bet ${event.betId}`,
       );
 
-      // 6. Emit success confirmation event
-      await this.eventPublisher.publish(
-        createWalletDebitedEvent(
-          event.roundId,
-          event.betId,
-          event.playerId,
-          event.amount,
-          event.version || 1,
-        ),
-      );
+      // 5. Emit success confirmation event
+      try {
+        await this.eventPublisher.publish(
+          createWalletDebitedEvent(
+            event.roundId,
+            event.betId,
+            event.playerId,
+            event.amount,
+            event.version || 1,
+          ),
+        );
 
-      this.logger.debug(
-        `Emitted WalletDebitedEvent for bet ${event.betId}`,
-      );
+        this.logger.debug(`Emitted WalletDebitedEvent for bet ${event.betId}`);
+      } catch (publishError) {
+        const publishErrorMessage = publishError instanceof Error ? publishError.message : String(publishError);
+
+        // Event publish failed after successful debit - mark as FAILED for retry
+        await this.inboxRepository.markAsFailed(eventId, `Event publish failed: ${publishErrorMessage}`, 0);
+
+        this.logger.error(
+          `Failed to publish WalletDebitedEvent for bet ${event.betId}: ${publishErrorMessage}`,
+        );
+        // Don't re-throw - we've marked as FAILED for retry
+      }
+
+      // 6. Mark inbox as PROCESSED (debit succeeded, even if publish failed)
+      await this.inboxRepository.markAsProcessed(eventId, new Date());
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       // Mark as FAILED for visibility
       await this.inboxRepository.markAsFailed(eventId, errorMessage, 0);
 
+      // Emit failure confirmation event
+      try {
+        await this.eventPublisher.publish(
+          createWalletDebitFailedEvent(
+            event.roundId,
+            event.betId,
+            event.playerId,
+            event.amount,
+            errorMessage,
+            event.version || 1,
+          ),
+        );
+      } catch (publishError) {
+        this.logger.error(
+          `Failed to publish WalletDebitFailedEvent for bet ${event.betId}: ${publishError instanceof Error ? publishError.message : String(publishError)}`,
+        );
+      }
+
       this.logger.error(
         `Failed to debit wallet for bet ${event.betId}: ${errorMessage}`,
       );
 
-      // Emit failure confirmation event
-      await this.eventPublisher.publish(
-        createWalletDebitFailedEvent(
-          event.roundId,
-          event.betId,
-          event.playerId,
-          event.amount,
-          errorMessage,
-          event.version || 1,
-        ),
-      );
-
-      this.logger.debug(
-        `Emitted WalletDebitFailedEvent for bet ${event.betId}`,
-      );
-
-      // Don't re-throw - we've emitted the failure event
-      // The consumer should ack the message since we handled it
+      // Don't re-throw - saga pattern: we've emitted the failure event
+      // Consumer will ACK the message
     }
   }
 }

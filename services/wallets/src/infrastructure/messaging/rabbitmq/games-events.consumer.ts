@@ -6,6 +6,9 @@
  *
  * Implements retry with exponential backoff for transient errors
  * and dead letter queue for permanent failures.
+ *
+ * Retry mechanism: Uses immediate requeue with retry counter increment.
+ * After max retries, messages go to DLQ for inspection.
  */
 
 import { Injectable, Logger, type OnModuleInit, type OnModuleDestroy } from '@nestjs/common';
@@ -24,9 +27,14 @@ import { OptimisticLockError } from '@/domain/errors/domain.errors';
  * - PlayerCashedOutEvent → Credit wallet for winnings
  *
  * Error handling strategy:
- * - Transient errors (OptimisticLockError, network) → Retry with exponential backoff
- * - Permanent errors (WalletNotFound) → DLQ
+ * - Transient errors (OptimisticLockError, network) → Requeue immediately
+ * - Permanent errors (WalletNotFound) → DLQ after max retries
  * - Max retries exceeded → DLQ
+ *
+ * Retry flow:
+ * 1. Message consumed with x-retry-count header
+ * 2. On transient error: increment retry count, requeue
+ * 3. On permanent error or max retries: nack to DLQ
  */
 @Injectable()
 export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
@@ -119,11 +127,14 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Handle a single message with retry logic.
+   * Handle a single message with immediate requeue retry logic.
    *
    * Retry strategy:
-   * - Transient errors → Requeue with exponential backoff (1s, 2s, 4s, 8s)
-   * - Permanent errors or max retries exceeded → DLQ (nack with requeue: false)
+   * - Transient errors → Requeue immediately with incremented retry count
+   * - Permanent errors or max retries exceeded → DLQ
+   *
+   * This approach avoids the setTimeout race condition where delayed
+   * callbacks could reference destroyed channels.
    */
   private async handleMessage(
     msg: ConsumeMessage,
@@ -153,6 +164,7 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
         }
       }
 
+      // Success: acknowledge message
       channel.ack(msg);
       this.logger.debug(`Event ${event.eventType} processed successfully`);
     } catch (error: unknown) {
@@ -163,14 +175,21 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
 
       // Check if this is a transient error that should be retried
       if (this.isTransientError(error) && retryCount < this.MAX_RETRIES) {
-        // Requeue with exponential backoff delay
-        const delayMs = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s, 8s
-        this.logger.warn(`Retrying after ${delayMs}ms (attempt ${retryCount + 1}/${this.MAX_RETRIES})`);
+        // Increment retry count and requeue immediately
+        const newRetryCount = retryCount + 1;
+        this.logger.warn(`Retrying immediately (attempt ${newRetryCount}/${this.MAX_RETRIES})`);
 
-        // Schedule requeue with delay
-        setTimeout(() => {
-          channel.nack(msg, false, true); // requeue: true
-        }, delayMs);
+        // Publish back to queue with incremented retry count
+        channel.sendToQueue(
+          this.QUEUE_NAME,
+          msg.content,
+          {
+            headers: { 'x-retry-count': newRetryCount },
+          },
+        );
+        channel.ack(msg); // Ack original message
+
+        this.logger.debug(`Requeued event with retry count ${newRetryCount}`);
       } else {
         // Permanent error or max retries exceeded → send to DLQ
         this.logger.error(
@@ -187,7 +206,7 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
    * Transient errors:
    * - OptimisticLockError: Concurrent wallet update
    * - Network errors: Temporary connectivity issues
-   * - Temporary DB errors: Connection pool exhaustion, etc.
+   * - Temporary DB errors: Connection pool exhaustion, locks
    */
   private isTransientError(error: unknown): boolean {
     if (error instanceof OptimisticLockError) {
