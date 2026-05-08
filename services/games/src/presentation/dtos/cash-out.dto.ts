@@ -1,6 +1,10 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsUUID } from 'class-validator';
 
 export class CashOutRequestDto {
+  @IsUUID()
+  @IsOptional()
+  idempotencyKey?: string;
+
   @IsString()
   @IsOptional()
   roundId?: string;
