@@ -5,6 +5,7 @@ import { GamesController } from './presentation/controllers/games.controller';
 import { PrismaModule } from './infrastructure/persistence/prisma/prisma.module';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
 import { PrismaRoundRepository } from './infrastructure/persistence/prisma/round.repository.impl';
+import { PrismaBetRepository } from './infrastructure/persistence/prisma/bet.repository.impl';
 import { RabbitMQEventPublisher } from './infrastructure/messaging/rabbitmq/event-publisher.impl';
 import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-processor';
 import { WalletEventsConsumer } from './infrastructure/messaging/rabbitmq/wallet-events.consumer';
@@ -18,7 +19,7 @@ import { GetRoundHistoryUseCase } from './application/use-cases/get-round-histor
 import { VerifyRoundUseCase } from './application/use-cases/verify-round.use-case';
 import { ConfirmBetUseCase } from './application/use-cases/confirm-bet.use-case';
 import { CancelBetUseCase } from './application/use-cases/cancel-bet.use-case';
-import { ROUND_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY } from './infrastructure/di/tokens';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY } from './infrastructure/di/tokens';
 import { RoundLifecycleModule } from './infrastructure/messaging/rabbitmq/round-lifecycle.module';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
 import { RoundEventListeners } from './infrastructure/websocket/round-event.listeners';
@@ -56,6 +57,11 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
       useClass: PrismaRoundRepository,
     },
     {
+      provide: BET_REPOSITORY,
+      useClass: PrismaBetRepository,
+    },
+    PrismaBetRepository,
+    {
       provide: SEED_CHAIN_REPOSITORY,
       useClass: FileSeedChainRepository,
     },
@@ -82,6 +88,7 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
   ],
   exports: [
     ROUND_REPOSITORY,
+    BET_REPOSITORY,
     SEED_CHAIN_REPOSITORY,
     EVENT_PUBLISHER,
   ],
