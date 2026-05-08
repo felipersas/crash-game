@@ -14,15 +14,24 @@ import { GetWalletUseCase } from '@/application/use-cases/get-wallet.use-case';
 import { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
 import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
 import { WALLET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { APP_FILTER } from '@nestjs/core';
+import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     ScheduleModule.forRoot(),
+    // AuthModule, // Removed - auth now handled by Kong OIDC plugin
   ],
   controllers: [WalletsController],
   providers: [
+    // Exception Filter (global - handles all exceptions)
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
+    },
+    // Authentication Guard removed - now handled by Kong OIDC plugin
     // Repository
     { provide: WALLET_REPOSITORY, useClass: PrismaWalletRepository },
 
