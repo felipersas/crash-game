@@ -315,34 +315,6 @@ export class RoundLifecycleManager {
   }
 
   /**
-   * Periodic persistence to PostgreSQL.
-   * Runs every 1 second to ensure DB state is reasonably fresh.
-   * This provides durability and recovery if Redis is lost.
-   *
-   * NOTE: Uses try/catch to avoid crashing the game on DB errors.
-   * The game can continue briefly from Redis if DB is temporarily unavailable.
-   */
-  @Cron('*/1 * * * * *', {
-    name: 'persist-round-state',
-  })
-  private async persistRoundState(): Promise<void> {
-    if (!this.currentRound) return;
-
-    try {
-      await this.roundRepository.save(this.currentRound);
-      this.logger.debug(`Round ${this.currentRound.id} persisted to DB`);
-    } catch (error: unknown) {
-      if (error instanceof Error && 'code' in error && error.code === 'P2025') {
-        // Optimistic lock - another process (like cashout) modified the round
-        // Our in-memory state is still valid for multiplier, just skip this save
-        this.logger.debug(`Round ${this.currentRound.id} modified by cashout, skipping periodic save`);
-      } else {
-        this.logger.error(`Failed to persist round to DB: ${error}`);
-      }
-    }
-  }
-
-  /**
    * Handle round crashed.
    *
    * IMPORTANT: Reloads Round from DB before saving to handle race conditions

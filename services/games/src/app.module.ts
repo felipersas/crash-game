@@ -7,7 +7,6 @@ import { PrismaService } from './infrastructure/persistence/prisma/prisma.servic
 import { PrismaRoundRepository } from './infrastructure/persistence/prisma/round.repository.impl';
 import { PrismaBetRepository } from './infrastructure/persistence/prisma/bet.repository.impl';
 import { RabbitMQEventPublisher } from './infrastructure/messaging/rabbitmq/event-publisher.impl';
-import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-processor';
 import { WalletEventsConsumer } from './infrastructure/messaging/rabbitmq/wallet-events.consumer';
 import { WalletDebitedEventHandler } from './infrastructure/messaging/rabbitmq/handlers/wallet-debited.handler';
 import { WalletDebitFailedEventHandler } from './infrastructure/messaging/rabbitmq/handlers/wallet-debit-failed.handler';
@@ -21,13 +20,13 @@ import { VerifyRoundUseCase } from './application/use-cases/verify-round.use-cas
 import { ConfirmBetUseCase } from './application/use-cases/confirm-bet.use-case';
 import { CancelBetUseCase } from './application/use-cases/cancel-bet.use-case';
 import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY } from './infrastructure/di/tokens';
-import { RoundLifecycleModule } from './infrastructure/messaging/rabbitmq/round-lifecycle.module';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
 import { RoundEventListeners } from './infrastructure/websocket/round-event.listeners';
 import { GAMES_GATEWAY } from './infrastructure/di/tokens';
 import { APP_FILTER } from '@nestjs/core';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-chain.repository.impl';
+import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-processor';
 
 @Module({
   imports: [
@@ -37,7 +36,6 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
     ScheduleModule.forRoot(),
     PrismaModule,
     // AuthModule, // Removed - auth now handled by Kong OIDC plugin
-    // RoundLifecycleModule, // TODO: Fix delayed exchange plugin
   ],
   controllers: [GamesController],
   providers: [
@@ -78,7 +76,8 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
     WalletEventsConsumer,
     WalletDebitedEventHandler,
     WalletDebitFailedEventHandler,
-    // OutboxProcessor, // TODO: Fix PrismaService dependency resolution
+    // Outbox Pattern for reliable event publishing
+    OutboxProcessor,
     RedisService,
     RoundLifecycleManager,
     // Use Cases
