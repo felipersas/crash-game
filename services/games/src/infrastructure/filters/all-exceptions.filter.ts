@@ -24,6 +24,7 @@ import {
   InvalidBetStateError,
   InvalidRoundStateError,
   SeedNotAvailableError,
+  InvalidIdempotencyKeyError,
 } from '@/domain/errors/domain.errors';
 
 /**
@@ -46,6 +47,7 @@ const ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [InvalidBetStateError.name]: HttpStatus.BAD_REQUEST,      // 400
   [InvalidRoundStateError.name]: HttpStatus.BAD_REQUEST,    // 400
   [SeedNotAvailableError.name]: HttpStatus.BAD_REQUEST,     // 400
+  [InvalidIdempotencyKeyError.name]: HttpStatus.BAD_REQUEST, // 400
 };
 
 /**

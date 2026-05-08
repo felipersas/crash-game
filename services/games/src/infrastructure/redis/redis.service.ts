@@ -33,6 +33,18 @@ export interface RoundState {
 }
 
 /**
+ * Cached cashout result for idempotency
+ */
+export interface CashoutIdempotencyResult {
+  betId: string;
+  roundId: string;
+  playerId: string;
+  cashOutMultiplier: number;
+  payoutCents: number; // Stored as number for JSON serialization
+  cashedOutAt: string;
+}
+
+/**
  * Redis service for managing active game state.
  */
 @Injectable()
@@ -207,10 +219,77 @@ export class RedisService implements OnModuleDestroy {
   }
 
   /**
+   * Check if idempotency key exists and return cached result.
+   * Returns null if key doesn't exist (first request).
+   *
+   * @param idempotencyKey - The idempotency key to check
+   * @returns Cached result or null
+   */
+  async checkCashoutIdempotency(idempotencyKey: string): Promise<CashoutIdempotencyResult | null> {
+    if (!this.client) {
+      this.logger.warn('Redis not available for idempotency check');
+      return null;
+    }
+
+    try {
+      const key = this.getIdempotencyKey(idempotencyKey);
+      const data = await this.client.get(key);
+
+      if (!data) {
+        return null;
+      }
+
+      return JSON.parse(data) as CashoutIdempotencyResult;
+    } catch (error) {
+      this.logger.error(`Failed to check idempotency for ${idempotencyKey}: ${error}`);
+      return null; // Fail open - allow request to proceed
+    }
+  }
+
+  /**
+   * Store cashout result with idempotency key.
+   * Uses SET NX (only set if not exists) for atomicity.
+   *
+   * @param idempotencyKey - The idempotency key
+   * @param result - The cashout result to cache
+   * @param ttl - Optional TTL in seconds (defaults to 5 minutes)
+   * @returns true if successfully stored, false otherwise
+   */
+  async setCashoutIdempotency(
+    idempotencyKey: string,
+    result: CashoutIdempotencyResult,
+    ttl?: number,
+  ): Promise<boolean> {
+    if (!this.client) {
+      this.logger.warn('Redis not available for idempotency storage');
+      return false;
+    }
+
+    try {
+      const key = this.getIdempotencyKey(idempotencyKey);
+      const value = JSON.stringify(result);
+
+      const setResult = await this.client.set(key, value, 'EX', ttl ?? this.DEFAULT_TTL, 'NX');
+
+      return setResult === 'OK';
+    } catch (error) {
+      this.logger.error(`Failed to set idempotency for ${idempotencyKey}: ${error}`);
+      return false;
+    }
+  }
+
+  /**
    * Get the Redis key for a round.
    */
   private getRoundKey(roundId: string): string {
     return `crash:round:${roundId}`;
+  }
+
+  /**
+   * Get the Redis key for idempotency.
+   */
+  private getIdempotencyKey(idempotencyKey: string): string {
+    return `crash:idempotency:cashout:${idempotencyKey}`;
   }
 
   /**
