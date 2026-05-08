@@ -57,6 +57,7 @@ export class PrismaRoundRepository implements IRoundRepository {
           startedAt: data.startedAt,
           crashedAt: data.crashedAt,
           version: data.version,
+          // Note: bets are managed separately by BetRepository
         },
       });
     } catch (error: unknown) {
@@ -172,6 +173,7 @@ export class PrismaRoundRepository implements IRoundRepository {
       startedAt: round.getStartedAt(),
       crashedAt: round.getCrashedAt(),
       version: round.getVersion(),
+      // Note: bets are managed separately by BetRepository
     };
   }
 }
