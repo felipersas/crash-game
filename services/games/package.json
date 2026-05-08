@@ -38,6 +38,7 @@
     "@testcontainers/postgresql": "^11.14.0",
     "@testcontainers/rabbitmq": "^11.14.0",
     "@types/amqplib": "^0.10.7",
+    "@types/express": "^5.0.6",
     "bun-types": "latest",
     "prisma": "^6.3.0",
     "testcontainers": "^11.14.0",
