@@ -58,7 +58,7 @@ export class GamesController {
       roundId: result.roundId,
       playerId: result.playerId,
       cashOutMultiplier: result.cashOutMultiplier,
-      payoutCents: result.payoutCents,
+      payoutCents: Number(result.payoutCents),
       payoutDecimal,
     };
   }
@@ -77,7 +77,9 @@ export class GamesController {
       crashedAt: result.crashedAt,
       bets: result.bets.map(bet => ({
         ...bet,
-        cashOutAmountDecimal: bet.cashOutAmountCents
+        amountCents: Number(bet.amountCents),
+        cashOutAmountCents: bet.cashOutAmountCents ? Number(bet.cashOutAmountCents) : null,
+        cashOutAmountDecimal: Number(bet.cashOutAmountCents)
           ? (Number(bet.cashOutAmountCents) / 100).toFixed(2)
           : null,
       })),

@@ -1,11 +1,11 @@
 export class BetOutputDto {
   id!: string;
   playerId!: string;
-  amountCents!: bigint;
+  amountCents!: number;
   amountDecimal!: string;
   status!: string;
   cashOutMultiplier!: number | null;
-  cashOutAmountCents!: bigint | null;
+  cashOutAmountCents!: number | null;
   cashOutAmountDecimal!: string | null;
   cashedOutAt!: Date | null;
 }

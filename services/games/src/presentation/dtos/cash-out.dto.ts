@@ -11,6 +11,6 @@ export class CashOutResponseDto {
   roundId!: string;
   playerId!: string;
   cashOutMultiplier!: number;
-  payoutCents!: bigint;
+  payoutCents!: number;
   payoutDecimal!: string;
 }
