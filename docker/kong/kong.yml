@@ -23,14 +23,23 @@ services:
           - name: jwt
             config:
               key_claim_name: kid
-              uri_param_names: ["jwt", "token"]
               anonymous: skip-auth
       - name: games-rounds-history
         paths: [/games/rounds/history]
         strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: kid
+              anonymous: skip-auth
       - name: games-rounds-verify
         paths: [/games/rounds]
         strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: kid
+              anonymous: skip-auth
       - name: games-bets-me
         paths: [/games/bets/me]
         strip_path: false
@@ -38,7 +47,6 @@ services:
           - name: jwt
             config:
               key_claim_name: kid
-              uri_param_names: ["jwt", "token"]
               anonymous: skip-auth
       - name: games-bet
         paths: [/games/bet]
@@ -47,7 +55,6 @@ services:
           - name: jwt
             config:
               key_claim_name: kid
-              uri_param_names: ["jwt", "token"]
               anonymous: skip-auth
       - name: games-bet-cashout
         paths: [/games/bet/cashout]
@@ -56,11 +63,7 @@ services:
           - name: jwt
             config:
               key_claim_name: kid
-              uri_param_names: ["jwt", "token"]
               anonymous: skip-auth
-      - name: games-websocket
-        paths: [/socket.io]
-        strip_path: false
 
   - name: wallets-service
     url: http://wallets:4002
@@ -84,26 +87,43 @@ services:
           - name: jwt
             config:
               key_claim_name: kid
-              uri_param_names: ["jwt", "token"]
               anonymous: skip-auth
       - name: wallets-create
         paths: [/wallets]
         strip_path: false
         methods: [POST]
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: kid
+              anonymous: skip-auth
 
 consumers:
   - username: keycloak-crash-game
+    jwt_secrets:
+      - key: sc0nlmCmygXw-bQYRlEb20etnPnlaFBbaM4irnSwyTM
+        algorithm: RS256
+        rsa_public_key: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4aQfhMoZR8/fC5pyI0lO
+          lEsLjZGHW6+qExaAvcdTiJaUVc+QcoRJESex1VhW/YReEW61WWMe2gNHH+nSDFBN
+          ablxfKIl3OiDGo/Iqsh7d5NOX4IV0RrEZZyUhvyH16eJTZhI4ho4vNbKHQJKm5Lh
+          TgL6gLUYfwq1/n6Zql6WzV3UnwDzXp7QTEQWCEdoakJOfqvMEWmCY0WT+Zm9zub9
+          BtF/I1oDEKxiWX/h6thRtLRX+gb4hItU75fMSvf6HpzZnF2hlrc7fKsGcBSkiVSv
+          YQwfl7/CwI4huDfk7DYBSqOwsj70lCySNR8dAQ+FXYZLMJ7kMdiRdSlbZcQSO9TH
+          gQIDAQAB
+          -----END PUBLIC KEY-----
   - username: skip-auth
     jwt_secrets:
       - key: m-U9iZ4MfvXDo3DZwPwCRuNRygY8sdyOOf1zRje_TwU
         algorithm: RS256
         rsa_public_key: |-
           -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAumX5Yv7ekxS8uCi8BQkn
-          xhDDTx8GZrrv+l06JMT5t86KFcWNM6HGi3CP1mEtR5ymHBURGT0kkMWlwzGwv4Co
-          EiAJ2wiQB3kZL/aemwgBdS4b5f+dcpsx/6vSVSa2Atk7P3W6wDhW6rsZ//GTclx1
-          TbYGWVNpnPMw6gJlacWTlxHIod53K/1pjzQ0rRsC5Bp+a375szioDCQ+ZRKhlXpa
-          e9wsgaXr9lCH6Qq10tduXf100GSxFtMD4XvQj7Jwlu9VvwapA72vmwSK2Z4Zroh1
-          vtfH7POyrGMeHWb9/SLEkSNAspEXYiFClDBzM0rj1ZjiTc1kvBtuUDbNrL8NHQvU
-          BwIDAQAB
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4aQfhMoZR8/fC5pyI0lO
+          lEsLjZGHW6+qExaAvcdTiJaUVc+QcoRJESex1VhW/YReEW61WWMe2gNHH+nSDFBN
+          ablxfKIl3OiDGo/Iqsh7d5NOX4IV0RrEZZyUhvyH16eJTZhI4ho4vNbKHQJKm5Lh
+          TgL6gLUYfwq1/n6Zql6WzV3UnwDzXp7QTEQWCEdoakJOfqvMEWmCY0WT+Zm9zub9
+          BtF/I1oDEKxiWX/h6thRtLRX+gb4hItU75fMSvf6HpzZnF2hlrc7fKsGcBSkiVSv
+          YQwfl7/CwI4huDfk7DYBSqOwsj70lCySNR8dAQ+FXYZLMJ7kMdiRdSlbZcQSO9TH
+          gQIDAQAB
           -----END PUBLIC KEY-----
