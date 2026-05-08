@@ -70,14 +70,12 @@ export class RabbitMQEventPublisher
       return;
     }
 
-    // Convert BigInt to string for JSON serialization
     const serializedEvent = JSON.parse(
       JSON.stringify(event, (_key, value) =>
         typeof value === 'bigint' ? value.toString() : value,
       ),
     );
 
-    // With json: true, send object directly (library handles serialization)
     this.channel.publish('games.events', '', serializedEvent, {
       contentType: 'application/json',
       messageId: crypto.randomUUID(),

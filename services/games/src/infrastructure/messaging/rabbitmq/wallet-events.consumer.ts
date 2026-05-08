@@ -12,7 +12,8 @@ import { connect, type AmqpConnectionManager, type ChannelWrapper } from 'amqp-c
 import type { ConfirmChannel, ConsumeMessage } from 'amqplib';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
-import type { WalletDebitedEvent, WalletDebitFailedEvent } from '../types/wallet.events';
+import type { WalletDebitedEvent, WalletDebitFailedEvent, WalletDomainEvent } from '../types/wallet.events';
+import type { GameDomainEvent } from '@/domain';
 
 type WalletEvent = WalletDebitedEvent | WalletDebitFailedEvent;
 
@@ -108,14 +109,11 @@ export class WalletEventsConsumer implements OnModuleInit, OnModuleDestroy {
     msg: ConsumeMessage,
     channel: ConfirmChannel,
   ): Promise<void> {
-    const { content, fields } = msg;
+    const event = JSON.parse(msg.content.toString()) as WalletDomainEvent;
+
+
 
     try {
-      const event: WalletEvent = JSON.parse(content.toString());
-
-      this.logger.debug(
-        `Processing wallet event: ${event.eventType} (deliveryTag: ${fields.deliveryTag})`,
-      );
 
       // Dispatch to appropriate handler based on event type
       switch (event.eventType) {
@@ -135,7 +133,6 @@ export class WalletEventsConsumer implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      // Acknowledge message
       channel.ack(msg);
       this.logger.debug(`Wallet event ${event.eventType} processed successfully`);
     } catch (error: unknown) {
@@ -143,8 +140,6 @@ export class WalletEventsConsumer implements OnModuleInit, OnModuleDestroy {
         `Error processing wallet event: ${error instanceof Error ? error.message : String(error)}`,
       );
 
-      // Negative acknowledge without requeue for processing errors
-      // (events are idempotent, retry could cause duplicate operations)
       channel.nack(msg, false, false);
     }
   }
