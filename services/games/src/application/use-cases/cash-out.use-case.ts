@@ -19,7 +19,7 @@ import { RoundNotFoundError, NoActiveBetError, InvalidIdempotencyKeyError } from
 export interface CashOutInput {
   playerId: string;
   roundId?: string;
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface CashOutOutput {
@@ -56,8 +56,6 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   }
 
   private async getCachedResultIfValid(input: CashOutInput): Promise<CashOutOutput | null> {
-    if (!input.idempotencyKey) return null;
-
     this.validateIdempotencyKey(input.idempotencyKey);
     const cached = await this.redisService.checkCashoutIdempotency(input.idempotencyKey);
 
@@ -103,14 +101,12 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   }
 
   private async storeIdempotencyResult(
-    idempotencyKey: string | undefined,
+    idempotencyKey: string,
     playerId: string,
     bet: { id: string },
     round: Round,
     payout: { toCents(): bigint },
   ): Promise<void> {
-    if (!idempotencyKey) return;
-
     const result: CashoutIdempotencyResult = {
       betId: bet.id,
       roundId: round.id,

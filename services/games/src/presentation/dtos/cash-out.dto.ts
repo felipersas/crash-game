@@ -2,8 +2,7 @@ import { IsString, IsOptional, IsUUID } from 'class-validator';
 
 export class CashOutRequestDto {
   @IsUUID()
-  @IsOptional()
-  idempotencyKey?: string;
+  idempotencyKey!: string;
 
   @IsString()
   @IsOptional()
