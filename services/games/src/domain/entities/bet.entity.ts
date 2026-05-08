@@ -179,7 +179,7 @@ export class Bet {
       id: this.id,
       roundId: this.roundId,
       playerId: this.playerId,
-      amountCents: this.amount.toCents(),
+      amountCents: this.amountCents,
       status: this.status,
       cashOutMultiplier: this.cashOutMultiplier?.getValue() || null,
       cashOutAmount: this.cashOutAmount,

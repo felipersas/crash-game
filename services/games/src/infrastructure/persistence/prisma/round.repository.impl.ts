@@ -104,7 +104,7 @@ export class PrismaRoundRepository implements IRoundRepository {
       },
     });
 
-    return records.map(record => this.toDomain(record));
+    return records.map((record: any) => this.toDomain(record));
   }
 
   async findBetById(betId: string): Promise<Bet | null> {
@@ -128,7 +128,7 @@ export class PrismaRoundRepository implements IRoundRepository {
       take: limit,
     });
 
-    return records.map(record => this.betToDomain(record));
+    return records.map((record: any) => this.betToDomain(record));
   }
 
   private toDomain(record: any): Round {
