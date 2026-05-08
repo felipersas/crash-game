@@ -120,3 +120,13 @@ export class VerificationFailedError extends DomainError {
     super(`Verification failed for round ${roundId}`);
   }
 }
+
+/**
+ * Thrown when an optimistic lock conflict occurs during concurrent updates.
+ * This happens when multiple processes try to update the same entity simultaneously.
+ */
+export class OptimisticLockError extends DomainError {
+  constructor(entityId: string, expectedVersion: number) {
+    super(`Optimistic lock conflict for entity ${entityId} (expected version ${expectedVersion})`);
+  }
+}

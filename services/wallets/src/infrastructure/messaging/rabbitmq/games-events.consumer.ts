@@ -107,13 +107,11 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
     msg: ConsumeMessage,
     channel: ConfirmChannel,
   ): Promise<void> {
-    // Parse Buffer to JSON (json: true only affects publisher, not consumer)
     const event = JSON.parse(msg.content.toString()) as GameDomainEvent;
 
     try {
       this.logger.debug(`Received event: ${event.eventType}`);
 
-      // Dispatch to appropriate handler based on event type
       switch (event.eventType) {
         case 'BetPlaced':
           await this.betPlacedEventHandler.handle(event);
@@ -124,14 +122,12 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
           break;
 
         default: {
-          // Handle unknown event types (shouldn't happen with proper typing)
           const unknownEvent = event as GameDomainEvent & { eventType: string };
           this.logger.warn(`Unhandled event type: ${unknownEvent.eventType}`);
           break;
         }
       }
 
-      // Acknowledge message
       channel.ack(msg);
       this.logger.debug(`Event ${event.eventType} processed successfully`);
     } catch (error: unknown) {
@@ -139,8 +135,6 @@ export class GamesEventsConsumer implements OnModuleInit, OnModuleDestroy {
         `Error processing event: ${error instanceof Error ? error.message : String(error)}`,
       );
 
-      // Negative acknowledge without requeue for processing errors
-      // (events are idempotent, retry could cause duplicate operations)
       channel.nack(msg, false, false);
     }
   }
