@@ -6,7 +6,8 @@ import type { IUseCase } from '../interfaces/use-case';
 import type { IEventPublisher } from '@crash/messaging';
 import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 import { RoundLifecycleManager } from '@/infrastructure/scheduling/round-lifecycle-manager';
-import { RoundNotFoundError, NoActiveBetError } from '@/domain/errors/domain.errors';
+import { RedisService, type CashoutIdempotencyResult } from '@/infrastructure/redis/redis.service';
+import { RoundNotFoundError, NoActiveBetError, InvalidIdempotencyKeyError } from '@/domain/errors/domain.errors';
 
 /**
  * Cash Out Use Case
@@ -17,8 +18,8 @@ import { RoundNotFoundError, NoActiveBetError } from '@/domain/errors/domain.err
 
 export interface CashOutInput {
   playerId: string;
-  roundId?: string; // Optional, defaults to current round
-  idempotencyKey?: string; // Optional, prevents double-submit
+  roundId?: string;
+  idempotencyKey?: string;
 }
 
 export interface CashOutOutput {
@@ -36,55 +37,119 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
     private readonly roundLifecycleManager: RoundLifecycleManager,
+    private readonly redisService: RedisService,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
-    // IMPORTANT: Use in-memory Round from LifecycleManager for current multiplier
-    // The DB Round has stale multiplier (updated only in-memory every 100ms)
+    const cachedResult = await this.getCachedResultIfValid(input);
+    if (cachedResult) return cachedResult;
+
+    const round = await this.loadRound(input.roundId);
+    const bet = await this.loadBet(input.playerId, round.id);
+    const payout = round.cashOut(input.playerId);
+
+    await this.roundRepository.save(round);
+    await this.storeIdempotencyResult(input.idempotencyKey, input.playerId, bet, round, payout);
+    await this.publishEvents(round);
+
+    return this.mapToOutput(input.playerId, bet, round, payout);
+  }
+
+  private async getCachedResultIfValid(input: CashOutInput): Promise<CashOutOutput | null> {
+    if (!input.idempotencyKey) return null;
+
+    this.validateIdempotencyKey(input.idempotencyKey);
+    const cached = await this.redisService.checkCashoutIdempotency(input.idempotencyKey);
+
+    if (!cached) return null;
+
+    if (cached.playerId !== input.playerId) {
+      throw new InvalidIdempotencyKeyError('Idempotency key belongs to different player');
+    }
+
+    return {
+      betId: cached.betId,
+      roundId: cached.roundId,
+      playerId: cached.playerId,
+      cashOutMultiplier: cached.cashOutMultiplier,
+      payoutCents: BigInt(cached.payoutCents),
+    };
+  }
+
+  private async loadRound(roundId?: string): Promise<Round> {
     let round: Round | null = null;
 
-    if (input.roundId) {
-      // For specific round ID, load from DB (e.g., historical cashout)
-      round = await this.roundRepository.findById(input.roundId);
+    if (roundId) {
+      round = await this.roundRepository.findById(roundId);
     } else {
-      // For current round, use LifecycleManager's in-memory Round
       round = this.roundLifecycleManager.getCurrentRound();
     }
 
     if (!round) {
-      throw new RoundNotFoundError(input.roundId || 'current');
+      throw new RoundNotFoundError(roundId || 'current');
     }
 
-    // Load bet to get bet ID for response
-    const bet = await this.betRepository.findByPlayerAndRound(
-      input.playerId,
-      round.id,
-    );
+    return round;
+  }
+
+  private async loadBet(playerId: string, roundId: string) {
+    const bet = await this.betRepository.findByPlayerAndRound(playerId, roundId);
 
     if (!bet) {
-      throw new NoActiveBetError(input.playerId, round.id);
+      throw new NoActiveBetError(playerId, roundId);
     }
 
-    // Cash out through Round (validates state, calculates payout, updates bet internally)
-    const payout = round.cashOut(input.playerId);
+    return bet;
+  }
 
-    // TODO: Store idempotencyKey to prevent double-submit
-    // For now, the Round.cashOut() will throw BetAlreadyCashedOutError if double-submitted
+  private async storeIdempotencyResult(
+    idempotencyKey: string | undefined,
+    playerId: string,
+    bet: { id: string },
+    round: Round,
+    payout: { toCents(): bigint },
+  ): Promise<void> {
+    if (!idempotencyKey) return;
 
-    // Save round state changes (includes bet update via Round entity)
-    await this.roundRepository.save(round);
+    const result: CashoutIdempotencyResult = {
+      betId: bet.id,
+      roundId: round.id,
+      playerId,
+      cashOutMultiplier: round.getCurrentMultiplier(),
+      payoutCents: Number(payout.toCents()),
+      cashedOutAt: new Date().toISOString(),
+    };
 
+    await this.redisService.setCashoutIdempotency(idempotencyKey, result);
+  }
+
+  private async publishEvents(round: Round): Promise<void> {
     const events = round.pullEvents();
-    if (events.length > 0) {
-      await this.eventPublisher.publishBatch(events);
-    }
+    if (events.length === 0) return;
 
+    await this.eventPublisher.publishBatch(events);
+  }
+
+  private mapToOutput(
+    playerId: string,
+    bet: { id: string },
+    round: Round,
+    payout: { toCents(): bigint },
+  ): CashOutOutput {
     return {
       betId: bet.id,
       roundId: round.id,
-      playerId: input.playerId,
+      playerId,
       cashOutMultiplier: round.getCurrentMultiplier(),
       payoutCents: payout.toCents(),
     };
+  }
+
+  private validateIdempotencyKey(key: string): void {
+    const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!UUID_V4_REGEX.test(key)) {
+      throw new InvalidIdempotencyKeyError(key);
+    }
   }
 }
