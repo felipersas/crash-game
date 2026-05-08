@@ -77,6 +77,19 @@ services:
               exposed_headers: ["Content-Length", "Content-Type"]
               credentials: true
               max_age: 3600
+      - name: games-websocket-root
+        paths: [/socket.io]
+        strip_path: false
+        protocols: [http, https]
+        plugins:
+          - name: cors
+            config:
+              origins: ["http://localhost:3000", "http://localhost:5173"]
+              methods: ["GET", "POST", "OPTIONS"]
+              headers: ["Accept", "Authorization", "Content-Type", "Origin"]
+              exposed_headers: ["Content-Length", "Content-Type"]
+              credentials: true
+              max_age: 3600
 
   - name: wallets-service
     url: http://wallets:4002
