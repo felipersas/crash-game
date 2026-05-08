@@ -108,7 +108,7 @@ export class SeedChain {
    */
   private static async hashSeed(seed: string): Promise<string> {
     const seedBytes = this.hexToBytes(seed);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', seedBytes);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', seedBytes as BufferSource);
     return this.bytesToHex(new Uint8Array(hashBuffer));
   }
 
