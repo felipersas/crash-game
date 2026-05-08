@@ -9,7 +9,7 @@ import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/commo
 import { connect, AmqpConnectionManager, ChannelWrapper } from 'amqp-connection-manager';
 import type { ConfirmChannel } from 'amqplib';
 import { WalletDomainEvent } from '@/domain/events/wallet.events';
-import { IEventPublisher } from '@crash/messaging';
+import type { IEventPublisher } from '@crash/messaging';
 
 @Injectable()
 export class RabbitMQEventPublisher
