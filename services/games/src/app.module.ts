@@ -18,13 +18,14 @@ import { GetRoundHistoryUseCase } from './application/use-cases/get-round-histor
 import { VerifyRoundUseCase } from './application/use-cases/verify-round.use-case';
 import { ConfirmBetUseCase } from './application/use-cases/confirm-bet.use-case';
 import { CancelBetUseCase } from './application/use-cases/cancel-bet.use-case';
-import { ROUND_REPOSITORY, EVENT_PUBLISHER } from './infrastructure/di/tokens';
+import { ROUND_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY } from './infrastructure/di/tokens';
 import { RoundLifecycleModule } from './infrastructure/messaging/rabbitmq/round-lifecycle.module';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
 import { RoundEventListeners } from './infrastructure/websocket/round-event.listeners';
 import { GAMES_GATEWAY } from './infrastructure/di/tokens';
 import { APP_FILTER } from '@nestjs/core';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
+import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-chain.repository.impl';
 
 @Module({
   imports: [
@@ -55,6 +56,11 @@ import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.fil
       useClass: PrismaRoundRepository,
     },
     {
+      provide: SEED_CHAIN_REPOSITORY,
+      useClass: FileSeedChainRepository,
+    },
+    FileSeedChainRepository,
+    {
       provide: EVENT_PUBLISHER,
       useClass: RabbitMQEventPublisher,
     },
@@ -76,6 +82,7 @@ import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.fil
   ],
   exports: [
     ROUND_REPOSITORY,
+    SEED_CHAIN_REPOSITORY,
     EVENT_PUBLISHER,
   ],
 })

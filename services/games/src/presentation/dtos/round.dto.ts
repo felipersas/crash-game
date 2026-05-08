@@ -14,7 +14,6 @@ export class RoundOutputDto {
   roundId!: string;
   status!: string;
   crashPoint!: number | null;
-  seedHash!: string;
   currentMultiplier!: number;
   bettingEndTime!: Date | null;
   startedAt!: Date | null;

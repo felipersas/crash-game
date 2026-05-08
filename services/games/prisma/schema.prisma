@@ -79,9 +79,11 @@ enum RoundStatus {
 }
 
 enum BetStatus {
+  PENDING
   ACTIVE
   CASHED_OUT
   LOST
+  CANCELLED
 }
 
 enum OutboxEventStatus {

@@ -1,10 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
+import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
+import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
-import { ROUND_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY } from '@/infrastructure/di/tokens';
+import { ROUND_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/infrastructure/di/tokens';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
 
 /**
@@ -22,11 +24,13 @@ import { OptimisticLockError } from '@/domain/errors/domain.errors';
 export class RoundLifecycleManager {
   private readonly logger = new Logger(RoundLifecycleManager.name);
   private currentRound: Round | null = null;
+  private currentSeedChain: SeedChain | null = null;
   private roundStartTime: Date | null = null;
   private updateInterval: NodeJS.Timeout | null = null;
 
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
+    @Inject(SEED_CHAIN_REPOSITORY) private readonly seedChainRepository: ISeedChainRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
   ) {}
@@ -36,6 +40,32 @@ export class RoundLifecycleManager {
    * Called when the module initializes.
    */
   async onModuleInit() {
+    // Load or create seed chain
+    this.currentSeedChain = await this.seedChainRepository.load();
+
+    if (!this.currentSeedChain) {
+      this.logger.log('No seed chain found, generating new chain...');
+      this.currentSeedChain = await SeedChain.generate(1000);
+      await this.seedChainRepository.save(this.currentSeedChain);
+
+      const summary = this.currentSeedChain.getSummary();
+      this.logger.log(
+        `New seed chain created: ${summary.total} seeds, ` +
+        `commitment: ${summary.commitment.substring(0, 16)}...`
+      );
+    } else {
+      const summary = this.currentSeedChain.getSummary();
+      this.logger.log(
+        `Seed chain loaded: ${summary.remaining}/${summary.total} seeds remaining, ` +
+        `position: ${summary.currentPosition}`
+      );
+
+      // Check if chain needs regeneration
+      if (this.currentSeedChain.needsRegeneration()) {
+        this.logger.warn('Seed chain running low, consider regeneration');
+      }
+    }
+
     // Try to load existing current round
     this.currentRound = await this.roundRepository.findCurrentRound();
 
@@ -48,13 +78,44 @@ export class RoundLifecycleManager {
   }
 
   /**
-   * Create a new round.
+   * Create a new round using the current seed from the chain.
    */
   async createNewRound() {
     this.logger.log('Creating new round...');
 
-    this.currentRound = await Round.create(DEFAULT_ROUND_CONFIG);
-    await this.roundRepository.create(this.currentRound);
+    if (!this.currentSeedChain) {
+      throw new Error('Seed chain not initialized');
+    }
+
+    // Check if chain needs regeneration
+    if (this.currentSeedChain.needsRegeneration()) {
+      this.logger.warn('Seed chain running low, regenerating...');
+      this.currentSeedChain = await SeedChain.generate(1000);
+      await this.seedChainRepository.save(this.currentSeedChain);
+
+      const summary = this.currentSeedChain.getSummary();
+      this.logger.log(
+        `New seed chain generated: ${summary.total} seeds, ` +
+        `commitment: ${summary.commitment.substring(0, 16)}...`
+      );
+    }
+
+    // Create round with current seed from chain
+    const newRound = await Round.createWithSeedChain(
+      this.currentSeedChain,
+      DEFAULT_ROUND_CONFIG,
+    );
+    await this.roundRepository.create(newRound);
+
+    // Advance to next seed for next round
+    try {
+      this.currentSeedChain = this.currentSeedChain.advance();
+      await this.seedChainRepository.save(this.currentSeedChain);
+    } catch (error) {
+      this.logger.error(`Failed to advance seed chain: ${error instanceof Error ? error.message : error}`);
+    }
+
+    this.currentRound = newRound;
 
     // Publish events
     const events = this.currentRound.pullEvents();
@@ -64,7 +125,7 @@ export class RoundLifecycleManager {
 
     // Broadcast via WebSocket
     const roundStarted = events.find(e => e.eventType === 'RoundStarted');
-    if (roundStarted) {
+    if (roundStarted && this.currentRound) {
       this.gamesGateway.broadcastRoundStarted(
         this.currentRound.id,
         this.currentRound.getSeedHash(),

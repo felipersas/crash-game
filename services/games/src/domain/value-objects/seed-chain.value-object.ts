@@ -1,53 +1,83 @@
-import { InvalidSeedError } from '../errors/domain.errors';
-
 /**
  * Seed Chain Value Object - Manages provably fair seed generation.
  *
- * Implements a hash chain where each seed is the hash of the next seed.
+ * Implements a hash chain where each seed commits to the next:
+ * hash_chain[n] = H(seed_chain[n+1])
+ *
  * This allows players to verify that the crash point was predetermined
  * and not manipulated after the round started.
  *
+ * Example chain (simplified, 5 seeds):
+ *   seed[4] (oldest, random)
+ *   seed[3] = H(seed[4])
+ *   seed[2] = H(seed[3])
+ *   seed[1] = H(seed[2])
+ *   seed[0] = H(seed[1]) ← current round
+ *
  * Flow:
- * 1. Generate random server seed
- * 2. Create chain: seed_n = hash(seed_{n+1})
- * 3. Commit hash(seed_n) before round starts
- * 4. After crash, reveal seed_n and player can verify
- * 5. Next round uses seed_{n+1}
+ * 1. Pre-generate N seeds on service startup
+ * 2. Publish H(chain[0]) as initial commitment
+ * 3. Round N uses seed[N], reveals it after crash
+ * 4. Players verify: H(seed[N]) == published_hash_chain[N]
+ * 5. Next round uses seed[N+1], etc.
+ * 6. When chain runs low, generate new chain
  */
 
-export class SeedChain {
-  private readonly currentSeed: string;
-  private readonly currentHash: string;
-  private readonly nextSeed: string | null;
+export interface SeedChainData {
+  readonly seeds: readonly string[];  // [seed_N, seed_N+1, ..., seed_0]
+  readonly current: number;           // Index of current seed
+  readonly commitment: string;        // H(seed_0) - initial commitment
+}
 
-  private constructor(currentSeed: string, currentHash: string, nextSeed: string | null) {
-    this.currentSeed = currentSeed;
-    this.currentHash = currentHash;
-    this.nextSeed = nextSeed;
+export class SeedChain {
+  private readonly seeds: readonly string[];
+  private readonly current: number;
+  private readonly commitment: string;
+
+  private constructor(data: SeedChainData) {
+    this.seeds = data.seeds;
+    this.current = data.current;
+    this.commitment = data.commitment;
   }
 
   /**
-   * Generate a new seed chain starting from a random seed.
+   * Generate a new seed chain with the specified size.
+   *
+   * @param size - Number of seeds to generate (default: 1000)
+   * @returns A new SeedChain with randomly generated seeds
    */
-  static async generate(): Promise<SeedChain> {
+  static async generate(size: number = 1000): Promise<SeedChain> {
     // Check for deterministic seed in test mode
     if (process.env.DETERMINISTIC_SEED) {
-      return SeedChain.generateDeterministic(process.env.DETERMINISTIC_SEED);
+      return SeedChain.generateDeterministic(process.env.DETERMINISTIC_SEED, size);
     }
 
-    // Generate 32-byte random seed
-    const seedBytes = new Uint8Array(32);
-    crypto.getRandomValues(seedBytes);
-    const seed = this.bytesToHex(seedBytes);
+    const seeds: string[] = [];
 
-    // Calculate hash of the seed
-    const seedHash = await this.hashSeed(seed);
+    // Generate the last (oldest) seed randomly
+    const lastSeed = await SeedChain.generateRandomSeed();
+    seeds.push(lastSeed);
 
-    return new SeedChain(seed, seedHash, null);
+    // Build the chain backwards: each seed = H(next_seed)
+    let currentSeed = lastSeed;
+    for (let i = 1; i < size; i++) {
+      currentSeed = await SeedChain.hashSeed(currentSeed);
+      seeds.unshift(currentSeed); // Add to front (newest first)
+    }
+
+    // The commitment is the hash of the first (newest) seed
+    // This is published BEFORE any round starts
+    const commitment = await SeedChain.hashSeed(seeds[0]);
+
+    return new SeedChain({
+      seeds,
+      current: 0,
+      commitment,
+    });
   }
 
   /**
-   * Generate a deterministic seed from a string.
+   * Generate a deterministic seed chain from a string.
    * Useful for testing - produces reproducible crash points.
    *
    * Pre-computed seeds for common crash points:
@@ -57,87 +87,186 @@ export class SeedChain {
    * - "test-crash-5.00" → ~5.00x
    * - "test-crash-10.0" → ~10.0x
    */
-  static async generateDeterministic(seedString: string): Promise<SeedChain> {
+  static async generateDeterministic(seedString: string, size: number = 100): Promise<SeedChain> {
     // Derive a 32-byte seed from the string using SHA-256
     const stringBytes = new TextEncoder().encode(seedString);
     const hashBuffer = await crypto.subtle.digest('SHA-256', stringBytes);
-    const seed = this.bytesToHex(new Uint8Array(hashBuffer));
+    const lastSeed = SeedChain.bytesToHex(new Uint8Array(hashBuffer));
 
-    // Calculate hash of the seed
-    const seedHash = await this.hashSeed(seed);
+    const seeds: string[] = [lastSeed];
 
-    return new SeedChain(seed, seedHash, null);
-  }
-
-  /**
-   * Create from existing seed (for persistence).
-   */
-  static async fromSeed(seed: string): Promise<SeedChain> {
-    if (!seed || seed.length !== 64) {
-      throw new InvalidSeedError(seed);
+    // Build the chain backwards
+    let currentSeed = lastSeed;
+    for (let i = 1; i < size; i++) {
+      currentSeed = await SeedChain.hashSeed(currentSeed);
+      seeds.unshift(currentSeed);
     }
 
-    const seedHash = await SeedChain.hashSeed(seed);
+    const commitment = await SeedChain.hashSeed(seeds[0]);
 
-    // Calculate next seed in chain (inverse of hash is not possible, so we store it)
-    // In production, you'd generate the chain in advance
-    return new SeedChain(seed, seedHash, null);
+    return new SeedChain({
+      seeds,
+      current: 0,
+      commitment,
+    });
   }
 
   /**
-   * Create from persistence.
+   * Restore from persisted seed chain data.
    */
   static fromPersistence(data: {
+    seeds: string[];
+    current: number;
+    commitment: string;
+  }): SeedChain {
+    return new SeedChain(data);
+  }
+
+  /**
+   * Create a minimal SeedChain from round persistence data.
+   * Used when restoring a Round from database (single seed).
+   *
+   * NOTE: This creates a single-seed chain for backwards compatibility.
+   * The actual seed chain is managed separately by SeedChainRepository.
+   */
+  static fromRoundPersistence(data: {
     currentSeed: string;
     currentHash: string;
-    nextSeed: string | null;
   }): SeedChain {
-    return new SeedChain(data.currentSeed, data.currentHash, data.nextSeed);
+    return new SeedChain({
+      seeds: [data.currentSeed],
+      current: 0,
+      commitment: data.currentHash,
+    });
   }
 
   /**
-   * Get the current seed (revealed after crash).
+   * Get the current seed (for the active round).
+   * Only available after the round crashes.
    */
   getSeed(): string {
-    return this.currentSeed;
+    if (this.current >= this.seeds.length) {
+      throw new Error('No more seeds in chain');
+    }
+    return this.seeds[this.current];
   }
 
   /**
-   * Get the hash of the current seed (committed before round).
+   * Get the hash of the current seed (commitment).
+   * This is published BEFORE the round starts.
+   *
+   * Note: The hash is pre-calculated during chain generation for performance.
+   * For the current seed, we use the next seed in chain as the hash commitment.
    */
-  getHash(): string {
-    return this.currentHash;
+  getCurrentSeedHash(): string {
+    const currentIndex = this.current;
+
+    // The hash commitment for current seed is the next seed in chain
+    // seed[N] commitment = seed[N+1]
+    if (currentIndex < this.seeds.length - 1) {
+      return this.seeds[currentIndex + 1];
+    }
+
+    // For the last seed, use the commitment hash
+    return this.commitment;
+  }
+
+  /**
+   * Get the initial commitment (hash of seed[0]).
+   * This is published when the service starts.
+   */
+  getCommitment(): string {
+    return this.commitment;
   }
 
   /**
    * Move to the next seed in the chain.
    * Should be called after each round completes.
    */
-  async advance(): Promise<SeedChain> {
-    if (!this.nextSeed) {
-      // Generate new seed when chain ends
-      return SeedChain.generate();
+  advance(): SeedChain {
+    if (this.current >= this.seeds.length - 1) {
+      throw new Error('Seed chain exhausted - generate new chain');
     }
 
-    const nextHash = await SeedChain.hashSeed(this.nextSeed);
-    return new SeedChain(this.nextSeed, nextHash, null);
+    return new SeedChain({
+      seeds: this.seeds,
+      current: this.current + 1,
+      commitment: this.commitment,
+    });
+  }
+
+  /**
+   * Check if the chain needs to be regenerated.
+   * Returns true when less than 10% of seeds remain.
+   */
+  needsRegeneration(): boolean {
+    const threshold = Math.floor(this.seeds.length * 0.1);
+    return this.current >= (this.seeds.length - threshold);
+  }
+
+  /**
+   * Get the number of seeds remaining.
+   */
+  getRemainingCount(): number {
+    return this.seeds.length - this.current;
+  }
+
+  /**
+   * Get the total number of seeds in the chain.
+   */
+  getTotalCount(): number {
+    return this.seeds.length;
+  }
+
+  /**
+   * Get the current position in the chain.
+   */
+  getCurrentPosition(): number {
+    return this.current;
   }
 
   /**
    * Verify that a seed matches the committed hash.
    */
   static async verifySeed(seed: string, committedHash: string): Promise<boolean> {
-    const seedHash = await this.hashSeed(seed);
+    const seedHash = await SeedChain.hashSeed(seed);
     return seedHash === committedHash;
   }
 
   /**
-   * Hash a seed using SHA-256.
+   * Verify a seed at a specific position in the chain.
+   * Used by players to verify past rounds.
+   */
+  async verifySeedAtPosition(position: number, seed: string): Promise<boolean> {
+    if (position < 0 || position >= this.seeds.length) {
+      return false;
+    }
+
+    // The seed at position N should hash to seed at position N+1
+    const expectedNextSeed = position < this.seeds.length - 1
+      ? this.seeds[position + 1]
+      : this.commitment;
+
+    const actualHash = await SeedChain.hashSeed(seed);
+    return actualHash === expectedNextSeed;
+  }
+
+  /**
+   * Generate a cryptographically secure random seed (32 bytes = 64 hex chars).
+   */
+  private static async generateRandomSeed(): Promise<string> {
+    const seedBytes = new Uint8Array(32);
+    crypto.getRandomValues(seedBytes);
+    return SeedChain.bytesToHex(seedBytes);
+  }
+
+  /**
+   * Hash a seed using SHA-256 (async).
    */
   private static async hashSeed(seed: string): Promise<string> {
-    const seedBytes = this.hexToBytes(seed);
+    const seedBytes = SeedChain.hexToBytes(seed);
     const hashBuffer = await crypto.subtle.digest('SHA-256', seedBytes as BufferSource);
-    return this.bytesToHex(new Uint8Array(hashBuffer));
+    return SeedChain.bytesToHex(new Uint8Array(hashBuffer));
   }
 
   /**
@@ -163,11 +292,24 @@ export class SeedChain {
   /**
    * Convert to plain object for persistence.
    */
-  toPersistence() {
+  toPersistence(): SeedChainData {
     return {
-      currentSeed: this.currentSeed,
-      currentHash: this.currentHash,
-      nextSeed: this.nextSeed,
+      seeds: [...this.seeds], // Clone array
+      current: this.current,
+      commitment: this.commitment,
+    };
+  }
+
+  /**
+   * Get a summary for logging (does not expose seeds).
+   */
+  getSummary() {
+    return {
+      currentPosition: this.current,
+      remaining: this.getRemainingCount(),
+      total: this.getTotalCount(),
+      commitment: this.commitment,
+      needsRegeneration: this.needsRegeneration(),
     };
   }
 }

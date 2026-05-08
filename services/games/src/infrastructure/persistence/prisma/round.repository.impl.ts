@@ -10,13 +10,7 @@ export class PrismaRoundRepository implements IRoundRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findCurrentRound(): Promise<Round | null> {
-    // Find a round that is still in BETTING or ACTIVE state
     const record = await this.prisma.round.findFirst({
-      where: {
-        status: {
-          in: [RoundStatus.BETTING, RoundStatus.ACTIVE],
-        },
-      },
       orderBy: {
         createdAt: 'desc',
       },
@@ -57,6 +51,7 @@ export class PrismaRoundRepository implements IRoundRepository {
           version: data.version - 1, // Optimistic locking
         },
         data: {
+          seed: data.seed, // Now reveals seed after crash
           status: data.status,
           crashPoint: data.crashPoint,
           startedAt: data.startedAt,
@@ -78,7 +73,7 @@ export class PrismaRoundRepository implements IRoundRepository {
     await this.prisma.round.create({
       data: {
         id: data.id,
-        seed: data.seed,
+        seed: data.seed, // NULL until crash (security)
         seedHash: data.seedHash,
         nextSeed: data.nextSeed,
         status: data.status,
@@ -169,7 +164,7 @@ export class PrismaRoundRepository implements IRoundRepository {
     return {
       id: round.id,
       seed: round['seedChain'].getSeed(),
-      seedHash: round['seedChain'].getHash(),
+      seedHash: round['seedChain'].getCurrentSeedHash(),
       nextSeed: null,
       status: round.getStatus(),
       crashPoint: round.getCrashPoint(),

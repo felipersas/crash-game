@@ -1,10 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Round } from '@/domain/entities/round.entity';
 import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import { CrashPoint } from '@/domain/value-objects/crash-point.value-object';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
+import { RoundStatus } from '@prisma/client';
 
 export interface VerifyRoundInput {
   roundId: string;
@@ -29,6 +30,10 @@ export class VerifyRoundUseCase implements IUseCase<VerifyRoundInput, VerifyRoun
 
     if (!round) {
       throw new Error('Round not found');
+    }
+
+    if (round.getStatus() !== RoundStatus.CRASHED) {
+      throw new UnauthorizedException('Seed only available after round crashes');
     }
 
     const seed = round.getSeed();

@@ -90,7 +90,7 @@ export class Round {
     this.addEvent(
       createRoundStartedEvent(
         id,
-        seedChain.getHash(),
+        seedChain.getCurrentSeedHash(),
         new Date(Date.now() + config.bettingDurationMs),
         this.version,
       ),
@@ -112,13 +112,27 @@ export class Round {
   }
 
   /**
+   * Factory method to create a new round with an existing seed chain.
+   * Used by RoundLifecycleManager to use pre-generated seeds.
+   */
+  static async createWithSeedChain(seedChain: SeedChain, config: RoundConfig = DEFAULT_ROUND_CONFIG): Promise<Round> {
+    const roundId = crypto.randomUUID();
+    const round = new Round(roundId, seedChain, config);
+
+    // Set betting end time
+    (round as any).bettingEndTime = new Date(Date.now() + config.bettingDurationMs);
+
+    return round;
+  }
+
+  /**
    * Factory method to restore a round from persistence.
    */
   static restore(
     id: string,
     seed: string,
     seedHash: string,
-    nextSeed: string | null,
+    _nextSeed: string | null,
     status: RoundStatus,
     crashPoint: number | null,
     bettingEndTime: Date | null,
@@ -128,10 +142,9 @@ export class Round {
     version: number,
     config: RoundConfig = DEFAULT_ROUND_CONFIG,
   ): Round {
-    const seedChain = SeedChain.fromPersistence({
+    const seedChain = SeedChain.fromRoundPersistence({
       currentSeed: seed,
       currentHash: seedHash,
-      nextSeed,
     });
     const round = new Round(id, seedChain, config);
 
@@ -320,7 +333,7 @@ export class Round {
    * Get the seed hash (committed before round, revealed after crash).
    */
   getSeedHash(): string {
-    return this.seedChain.getHash();
+    return this.seedChain.getCurrentSeedHash();
   }
 
   /**
@@ -407,13 +420,14 @@ export class Round {
 
   /**
    * Convert to plain object for persistence.
+   * NOTE: Seed is only included after round crashes (security).
    */
   toPersistence() {
     return {
       id: this.id,
-      seed: this.seedChain.getSeed(),
-      seedHash: this.seedChain.getHash(),
-      nextSeed: null, // TODO: implement seed chain
+      seed: this.status === RoundStatus.CRASHED ? this.seedChain.getSeed() : null,
+      seedHash: this.seedChain.getCurrentSeedHash(),
+      nextSeed: null, // Seed chain managed separately
       status: this.status,
       crashPoint: this.crashPoint?.getValue() || null,
       bettingEndTime: this.bettingEndTime,

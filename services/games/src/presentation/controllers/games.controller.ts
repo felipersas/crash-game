@@ -71,7 +71,6 @@ export class GamesController {
       roundId: result.roundId,
       status: result.status,
       crashPoint: result.crashPoint,
-      seedHash: result.seedHash,
       currentMultiplier: result.currentMultiplier,
       bettingEndTime: result.bettingEndTime,
       startedAt: result.startedAt,
