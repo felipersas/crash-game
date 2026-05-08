@@ -1,11 +1,9 @@
 _format_version: "3.0"
 
 services:
-  # Games Service
   - name: games-service
     url: http://games:4001
     routes:
-      # Public routes (no authentication)
       - name: games-health
         paths: [/games/health]
         strip_path: false
@@ -18,15 +16,12 @@ services:
       - name: games-rounds-verify
         paths: [/games/rounds]
         strip_path: false
-      # Protected routes (JWT required)
       - name: games-bets-me
         paths: [/games/bets/me]
         strip_path: false
         plugins:
           - name: jwt
             config:
-              uri_param_names: []
-              claims_to_verify: [exp]
               key_claim_name: kid
       - name: games-bet
         paths: [/games/bet]
@@ -34,8 +29,6 @@ services:
         plugins:
           - name: jwt
             config:
-              uri_param_names: []
-              claims_to_verify: [exp]
               key_claim_name: kid
       - name: games-bet-cashout
         paths: [/games/bet/cashout]
@@ -43,27 +36,20 @@ services:
         plugins:
           - name: jwt
             config:
-              uri_param_names: []
-              claims_to_verify: [exp]
               key_claim_name: kid
 
-  # Wallets Service
   - name: wallets-service
     url: http://wallets:4002
     routes:
-      # Public routes (no authentication)
       - name: wallets-health
         paths: [/wallets/health]
         strip_path: false
-      # Protected routes (JWT required)
       - name: wallets-me
         paths: [/wallets/me]
         strip_path: false
         plugins:
           - name: jwt
             config:
-              uri_param_names: []
-              claims_to_verify: [exp]
               key_claim_name: kid
       - name: wallets-create
         paths: [/wallets]
@@ -72,23 +58,21 @@ services:
         plugins:
           - name: jwt
             config:
-              uri_param_names: []
-              claims_to_verify: [exp]
               key_claim_name: kid
 
 consumers:
   - username: keycloak-crash-game
     jwt_secrets:
       - consumer: keycloak-crash-game
-        key: se3Nf9SbK05Afk6fxDiq6J0ZelZpDgpgXAtGLbmQudc
+        key: lh1voD04tRzMaQxMMZ_Nz15QIgA_xTgHfvQaopRR5IA
         algorithm: RS256
         rsa_public_key: |-
           -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0S1XKgEUDaeRNdcOLRfM
-          H5/Gp9jgQ/MirK6/IqhTOUMkYX5HDI9NgQ43oZz+ZOemj+9yMvHmKflHdW/JdUsR
-          co1M45PFWsKLz+TD0SF8vpKE/A5axlmKbOHbHMY4r4p3lcBBx0fAiDdjP4xDfX+X
-          9k8h9qGTGT8RAwaUOCZg+kFKcw03881o9rPqh4ZVWl4lRWLkdi7fNA+tWQjsqU64
-          H4TXPl5Ok8VRnue4Dj0+VANp3wjk+IO/FXZC1Rmrd1QBwxdiHX1YP7Ya+8xEGXet
-          CXlQxxnbGZdqdf9TTkO5H8vBHXuqSuSVEgabCCCnYVQZMsNt2fF+l+AJhvYKK8W4
-          WwIDAQAB
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3FroCKE6yiWldU+FvLxY
+          QGNO27gPLHy3qdTalX6lt//pZluApwmwVxgCDdetLPD5EnxKyCN6LBzBu1nfBnNL
+          1OtE7xPo0RNYa/kGqeSe3XC063eYTzqz38VkNCMv/REHNwRvhc5mdB2ntAQTGMNm
+          GNEbfpwrVSYlra2eCINDcnzOuex/9kq2d4F0pEyYwI4bzScNfUMKE3YFVyD4zl2g
+          zLDiOHkntNa7I0hOpSEUQ/Xh4wh66A+W+HBP6ryQGo9UQ8Q1A8VGKtv4/FBH+Jdj
+          RbRteqpisv5PYyHkgKuhF+u+FAS4QXpFjVjmMvZ2Qa6H7EkUiemWte9bUWLiDc2l
+          gwIDAQAB
           -----END PUBLIC KEY-----

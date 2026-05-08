@@ -55,7 +55,7 @@ services:
     volumes:
       - ./docker/keycloak:/opt/keycloak/data/import:ro
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '200'"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '200'"]
       interval: 10s
       timeout: 5s
       retries: 15
@@ -79,17 +79,36 @@ services:
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_ADMIN_LISTEN: 0.0.0.0:8001
     volumes:
-      - ./docker/kong:/kong:ro
+      - ./docker/kong:/kong:rw
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 10s
       timeout: 5s
       retries: 10
     depends_on:
+      kong-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+
+  kong-init:
+    image: alpine:3.21
+    volumes:
+      - ./docker/kong:/kong:rw
+      - ./docker/kong/sync-keycloak.sh:/sync-keycloak.sh:ro
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: crash-game
+      KONG_CONFIG_PATH: /kong/kong.yml
+      SYNC_INTERVAL: 0
+    command: sh -c "apk add --no-cache curl jq openssl >/dev/null 2>&1 && /sync-keycloak.sh"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    networks:
+      - default
 
   # ---------------------------------------------------------------------------
   # Games Service
