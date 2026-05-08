@@ -1,8 +1,6 @@
-'use client';
-
-import { useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
-import { formatMoney } from '@/shared/utils/money';
+import { useMemo } from "react";
+import { Loader2 } from "lucide-react";
+import { formatMoney } from "@/shared/utils/money";
 
 interface Props {
   balance: string;
@@ -11,7 +9,7 @@ interface Props {
 
 export default function BalanceDisplay({ balance, isLoading }: Props) {
   const displayBalance = useMemo(() => {
-    const cents = Math.round(parseFloat(balance || '0') * 100);
+    const cents = Math.round(parseFloat(balance || "0") * 100);
     return formatMoney(cents);
   }, [balance]);
 

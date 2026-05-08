@@ -1,6 +1,8 @@
-'use client';
-
-export default function GameLayout({ children }: { children: React.ReactNode }) {
+export default function GameLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-purple-950/20 to-zinc-950">
       {/* Header */}
@@ -15,7 +17,7 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
       </header>
-      
+
       {children}
     </div>
   );

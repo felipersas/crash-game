@@ -1,30 +1,40 @@
-'use client';
+"use client";
 
-import { motion } from 'framer-motion';
-import { formatMultiplier } from '@/shared/utils/money';
+import { motion } from "framer-motion";
+import { formatMultiplier } from "@/shared/utils/money";
 
 interface Props {
   multiplier: number;
-  phase: 'betting' | 'active' | 'crashed';
+  phase: "betting" | "active" | "crashed";
   isConnected: boolean;
 }
 
 export default function CrashGraph({ multiplier, phase, isConnected }: Props) {
-  const isCrashed = phase === 'crashed';
-  const colorClass = isCrashed ? 'text-red-500' : multiplier >= 2 ? 'text-green-400' : multiplier >= 1.5 ? 'text-yellow-400' : 'text-purple-400';
+  const isCrashed = phase === "crashed";
+  const colorClass = isCrashed
+    ? "text-red-500"
+    : multiplier >= 2
+      ? "text-green-400"
+      : multiplier >= 1.5
+        ? "text-yellow-400"
+        : "text-purple-400";
 
   return (
     <div className="relative bg-zinc-900/50 border border-purple-500/20 rounded-xl overflow-hidden h-64">
       {/* Grid background */}
-      <div className="absolute inset-0" style={{
-        backgroundImage: 'linear-gradient(rgba(139,92,246,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.1) 1px, transparent 1px)',
-        backgroundSize: '20px 20px',
-      }} />
-      
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(139,92,246,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.1) 1px, transparent 1px)",
+          backgroundSize: "20px 20px",
+        }}
+      />
+
       {/* Multiplier display */}
       <div className="relative z-10 flex items-center justify-center h-full">
         <motion.div
-          key={isCrashed ? 'crashed' : multiplier}
+          key={isCrashed ? "crashed" : multiplier}
           initial={{ scale: 1 }}
           animate={{ scale: isCrashed ? 1.2 : 1 }}
           className={`text-7xl font-black ${colorClass}`}
@@ -38,7 +48,12 @@ export default function CrashGraph({ multiplier, phase, isConnected }: Props) {
         <motion.div
           className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
           initial={{ width: 0 }}
-          animate={{ width: phase === 'betting' ? '100%' : `${Math.min((multiplier - 1) * 10, 100)}%` }}
+          animate={{
+            width:
+              phase === "betting"
+                ? "100%"
+                : `${Math.min((multiplier - 1) * 10, 100)}%`,
+          }}
         />
       </div>
 

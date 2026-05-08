@@ -1,24 +1,24 @@
-'use client';
+"use client";
 
 /**
  * Login Page - Redirects to Keycloak
  */
 
-import { useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const { login, status } = useAuth();
+  const router = useRouter();
 
-  useEffect(() => {
-    if (status === 'authenticated') {
-      window.location.href = '/game';
-    }
-  }, [status]);
+  if (status === "authenticated") {
+    router.push("/game");
+    return null;
+  }
 
-  if (status === 'loading') {
+  if (status === "loading") {
     return (
       <div className="flex h-screen items-center justify-center bg-zinc-950">
         <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
@@ -35,7 +35,7 @@ export default function LoginPage() {
           </h1>
           <p className="text-zinc-400">Jungle Gaming Casino</p>
         </div>
-        
+
         <div className="space-y-4">
           <p className="text-zinc-500">Sign in to play</p>
           <Button
@@ -48,7 +48,10 @@ export default function LoginPage() {
         </div>
 
         <div className="text-sm text-zinc-600">
-          <p>Test user: <code className="text-purple-400">player</code> / <code className="text-purple-400">player123</code></p>
+          <p>
+            Test user: <code className="text-purple-400">player</code> /{" "}
+            <code className="text-purple-400">player123</code>
+          </p>
         </div>
       </div>
     </div>
