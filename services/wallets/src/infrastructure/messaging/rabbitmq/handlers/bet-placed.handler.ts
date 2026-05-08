@@ -11,13 +11,15 @@
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
-import { EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { EVENT_PUBLISHER, WALLET_REPOSITORY } from '@/infrastructure/di/tokens';
 import type { IEventPublisher } from '@crash/messaging';
+import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
 import {
   createWalletDebitedEvent,
   createWalletDebitFailedEvent,
 } from '@/domain/events/wallet.events';
 import type { BetPlacedEvent } from '../../types/games.events';
+import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 
 /**
  * Handler for BetPlacedEvent.
@@ -38,6 +40,7 @@ export class BetPlacedEventHandler {
 
   constructor(
     private readonly debitWalletUseCase: DebitWalletUseCase,
+    @Inject(WALLET_REPOSITORY) private readonly walletRepository: IWalletRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
   ) {}
 
@@ -53,9 +56,15 @@ export class BetPlacedEventHandler {
         `Processing BetPlacedEvent: player=${event.playerId}, amount=${event.amount}, betId=${event.betId}`,
       );
 
+      // Find wallet by playerId (Wallets service owns the playerId → walletId mapping)
+      const wallet = await this.walletRepository.findByPlayerId(event.playerId);
+      if (!wallet) {
+        throw new WalletNotFoundError(`playerId=${event.playerId}`);
+      }
+
       await this.debitWalletUseCase.execute({
-        walletId: event.playerId, // In this design, walletId = playerId
-        amount: event.amount,
+        walletId: wallet.id,
+        amount: typeof event.amount === 'string' ? BigInt(event.amount) : event.amount,
         reason: `Bet placed in round ${event.roundId} (bet: ${event.betId})`,
         idempotencyKey: `bet-${event.betId}`, // Prevent double debiting
       });
