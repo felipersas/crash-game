@@ -19,6 +19,8 @@ import { RoundLifecycleModule } from './infrastructure/messaging/rabbitmq/round-
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
 import { RoundEventListeners } from './infrastructure/websocket/round-event.listeners';
 import { GAMES_GATEWAY } from './infrastructure/di/tokens';
+import { APP_FILTER } from '@nestjs/core';
+import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 
 @Module({
   imports: [
@@ -31,6 +33,11 @@ import { GAMES_GATEWAY } from './infrastructure/di/tokens';
   ],
   controllers: [GamesController],
   providers: [
+    // Exception Filter (global - handles all exceptions)
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
+    },
     // Infrastructure (PrismaService from global PrismaModule)
     PrismaService,
     {
