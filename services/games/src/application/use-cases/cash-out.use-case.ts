@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Round, RoundStatus } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
-import type { IGameEventPublisher } from '../interfaces/event-publisher';
-import type { ICommandHandler } from '../interfaces/command-handler';
+import type { IUseCase } from '../interfaces/use-case';
+import type { IEventPublisher } from '@crash/messaging';
 
 export interface CashOutInput {
   playerId: string;
@@ -18,10 +18,10 @@ export interface CashOutOutput {
 }
 
 @Injectable()
-export class CashOutUseCase implements ICommandHandler<CashOutInput, CashOutOutput> {
+export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   constructor(
     @Inject('ROUND_REPOSITORY') private readonly roundRepository: IRoundRepository,
-    @Inject('EVENT_PUBLISHER') private readonly eventPublisher: IGameEventPublisher,
+    @Inject('EVENT_PUBLISHER') private readonly eventPublisher: IEventPublisher,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {

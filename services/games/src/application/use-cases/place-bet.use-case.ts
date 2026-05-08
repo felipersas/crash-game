@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
-import type { IRoundRepository } from '../interfaces/round.repository';
-import type { IGameEventPublisher } from '../interfaces/event-publisher';
-import type { ICommandHandler } from '../interfaces/command-handler';
+import type { IRoundRepository } from '@/application/interfaces/round.repository';
+import type { IEventPublisher } from '@crash/messaging';
+import type { IUseCase } from '@/application/interfaces/use-case';
 import {
   RoundNotAcceptingBetsError,
   DuplicateBetError,
@@ -23,10 +23,10 @@ export interface PlaceBetOutput {
 }
 
 @Injectable()
-export class PlaceBetUseCase implements ICommandHandler<PlaceBetInput, PlaceBetOutput> {
+export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> {
   constructor(
     @Inject('ROUND_REPOSITORY') private readonly roundRepository: IRoundRepository,
-    @Inject('EVENT_PUBLISHER') private readonly eventPublisher: IGameEventPublisher,
+    @Inject('EVENT_PUBLISHER') private readonly eventPublisher: IEventPublisher,
   ) {}
 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {

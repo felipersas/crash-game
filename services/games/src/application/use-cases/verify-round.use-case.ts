@@ -3,7 +3,7 @@ import { Round } from '@/domain/entities/round.entity';
 import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import { CrashPoint } from '@/domain/value-objects/crash-point.value-object';
 import type { IRoundRepository } from '../interfaces/round.repository';
-import type { ICommandHandler } from '../interfaces/command-handler';
+import type { IUseCase } from '../interfaces/use-case';
 
 export interface VerifyRoundInput {
   roundId: string;
@@ -18,7 +18,7 @@ export interface VerifyRoundOutput {
 }
 
 @Injectable()
-export class VerifyRoundUseCase implements ICommandHandler<VerifyRoundInput, VerifyRoundOutput> {
+export class VerifyRoundUseCase implements IUseCase<VerifyRoundInput, VerifyRoundOutput> {
   constructor(
     @Inject('ROUND_REPOSITORY') private readonly roundRepository: IRoundRepository,
   ) {}

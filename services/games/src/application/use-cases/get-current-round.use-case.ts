@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Round } from '@/domain/entities/round.entity';
 import { Bet } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
-import type { ICommandHandler } from '../interfaces/command-handler';
+import type { IUseCase } from '../interfaces/use-case';
 
 export interface GetCurrentRoundInput {
   includeBets?: boolean;
@@ -32,7 +32,7 @@ export interface GetCurrentRoundOutput {
 }
 
 @Injectable()
-export class GetCurrentRoundUseCase implements ICommandHandler<GetCurrentRoundInput, GetCurrentRoundOutput> {
+export class GetCurrentRoundUseCase implements IUseCase<GetCurrentRoundInput, GetCurrentRoundOutput> {
   constructor(
     @Inject('ROUND_REPOSITORY') private readonly roundRepository: IRoundRepository,
   ) {}

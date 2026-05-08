@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
-import type { ICommandHandler } from '../interfaces/command-handler';
+import type { IUseCase } from '../interfaces/use-case';
 
 export interface GetRoundHistoryInput {
   limit?: number;
@@ -23,7 +23,7 @@ export interface GetRoundHistoryOutput {
 }
 
 @Injectable()
-export class GetRoundHistoryUseCase implements ICommandHandler<GetRoundHistoryInput, GetRoundHistoryOutput> {
+export class GetRoundHistoryUseCase implements IUseCase<GetRoundHistoryInput, GetRoundHistoryOutput> {
   constructor(
     @Inject('ROUND_REPOSITORY') private readonly roundRepository: IRoundRepository,
   ) {}
