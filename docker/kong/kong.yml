@@ -64,6 +64,19 @@ services:
             config:
               key_claim_name: kid
               anonymous: skip-auth
+      - name: games-websocket
+        paths: [/games]
+        strip_path: true
+        protocols: [http, https]
+        plugins:
+          - name: cors
+            config:
+              origins: ["http://localhost:3000", "http://localhost:5173"]
+              methods: ["GET", "POST", "OPTIONS"]
+              headers: ["Accept", "Authorization", "Content-Type", "Origin"]
+              exposed_headers: ["Content-Length", "Content-Type"]
+              credentials: true
+              max_age: 3600
 
   - name: wallets-service
     url: http://wallets:4002
