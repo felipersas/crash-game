@@ -1,5 +1,6 @@
 import { Multiplier } from '../value-objects/multiplier.value-object';
 import { Money } from '@crash/domain';
+import { BetStatus } from '@prisma/client';
 
 /**
  * Bet Entity - Represents a player's bet in a round.
@@ -10,15 +11,10 @@ import { Money } from '@crash/domain';
  * - CASHED_OUT: Player cashed out, waiting for round completion
  * - LOST: Round crashed before player cashed out
  * - CANCELLED: Wallet debit failed, bet was cancelled
+ *
+ * Re-exports BetStatus from Prisma as single source of truth.
  */
-
-export enum BetStatus {
-  PENDING = 'PENDING',
-  ACTIVE = 'ACTIVE',
-  CASHED_OUT = 'CASHED_OUT',
-  LOST = 'LOST',
-  CANCELLED = 'CANCELLED',
-}
+export { BetStatus };
 
 export class Bet {
   readonly id: string;
