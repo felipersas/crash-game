@@ -9,6 +9,7 @@
     "test:e2e": "bun test tests/e2e"
   },
   "dependencies": {
+    "@crash/domain": "workspace:*",
     "@crash/messaging": "workspace:*",
     "@nestjs/common": "^11.1.17",
     "@nestjs/config": "^4.0.4",
