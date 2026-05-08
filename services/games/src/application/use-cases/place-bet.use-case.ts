@@ -3,6 +3,7 @@ import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/roun
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IEventPublisher } from '@crash/messaging';
 import type { IUseCase } from '@/application/interfaces/use-case';
+import { Money } from '@crash/domain';
 import {
   RoundNotAcceptingBetsError,
   DuplicateBetError,
@@ -43,8 +44,11 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
       }
     }
 
+    // Convert bigint to Money
+    const amount = Money.fromCents(input.amountCents);
+
     // Place the bet
-    round.placeBet(input.playerId, input.amountCents);
+    round.placeBet(input.playerId, amount);
 
     await this.roundRepository.save(round);
 

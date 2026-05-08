@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Round, RoundStatus } from '@/domain/entities/round.entity';
+import { Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import type { IEventPublisher } from '@crash/messaging';
@@ -43,7 +43,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
       throw new Error('No active bet found for player');
     }
 
-    const payoutCents = round.cashOut(input.playerId);
+    const payout = round.cashOut(input.playerId);
 
     await this.roundRepository.save(round);
 
@@ -57,7 +57,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
       roundId: round.id,
       playerId: input.playerId,
       cashOutMultiplier: round.getCurrentMultiplier(),
-      payoutCents,
+      payoutCents: payout.toCents(),
     };
   }
 }

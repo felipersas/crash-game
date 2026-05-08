@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Round } from '@/domain/entities/round.entity';
 import { Bet } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
@@ -15,7 +14,7 @@ export interface BetOutput {
   amountDecimal: string;
   status: string;
   cashOutMultiplier: number | null;
-  cashOutAmount: bigint | null;
+  cashOutAmountCents: bigint | null;
   cashedOutAt: Date | null;
 }
 
@@ -63,11 +62,11 @@ export class GetCurrentRoundUseCase implements IUseCase<GetCurrentRoundInput, Ge
     return {
       id: bet.id,
       playerId: bet.playerId,
-      amountCents: bet.getAmountCents(),
-      amountDecimal: bet.getAmountDecimal(),
+      amountCents: bet.getAmount().toCents(),
+      amountDecimal: bet.getAmount().toDecimal(),
       status: bet.getStatus(),
       cashOutMultiplier: bet.getCashOutMultiplier()?.getValue() || null,
-      cashOutAmount: bet.getCashOutAmount(),
+      cashOutAmountCents: bet.getCashOutAmount()?.toCents() || null,
       cashedOutAt: bet.getCashedOutAt(),
     };
   }
