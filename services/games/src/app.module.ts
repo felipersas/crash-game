@@ -35,6 +35,7 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
     }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    // AuthModule, // Removed - auth now handled by Kong OIDC plugin
     // RoundLifecycleModule, // TODO: Fix delayed exchange plugin
   ],
   controllers: [GamesController],
@@ -44,6 +45,7 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
       provide: APP_FILTER,
       useClass: AllExceptionsFilter,
     },
+    // Authentication Guard removed - now handled by Kong OIDC plugin
     // Infrastructure (PrismaService from global PrismaModule)
     PrismaService,
     {
