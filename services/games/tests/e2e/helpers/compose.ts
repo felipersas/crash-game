@@ -1,7 +1,7 @@
 /**
  * Test Environment for E2E Tests
  *
- * Uses Testcontainers for infra (PostgreSQL, RabbitMQ) + Bun for services.
+ * Uses Testcontainers DockerComposeEnvironment with docker-compose.test.yml.
  *
  * @example
  * ```typescript
@@ -19,8 +19,8 @@
  * ```
  */
 
-import { GenericContainer, StartedTestContainer } from 'testcontainers';
-import { spawn } from 'child_process';
+import { DockerComposeEnvironment, Wait, StartedDockerComposeEnvironment, StartedTestContainer } from 'testcontainers';
+import path from 'path';
 
 export interface ComposeEnvironmentConfig {
   /** Additional environment variables */
@@ -30,13 +30,11 @@ export interface ComposeEnvironmentConfig {
 /**
  * Test environment wrapper for E2E tests.
  *
- * Manages infra containers via Testcontainers + services via Bun processes.
+ * Manages all containers (PostgreSQL, RabbitMQ, Games, Wallets) via Docker Compose.
  */
 export class TestCompose {
-  private static postgres?: StartedTestContainer;
-  private static rabbitmq?: StartedTestContainer;
-  private static gamesProcess?: ReturnType<typeof spawn>;
-  private static walletsProcess?: ReturnType<typeof spawn>;
+  private static environment?: StartedDockerComposeEnvironment;
+  private static containers: Map<string, StartedTestContainer> = new Map();
   private static connections?: Record<string, string>;
 
   /**
@@ -54,222 +52,124 @@ export class TestCompose {
 
     console.log('[TestCompose] Starting test environment...');
 
-    // Start PostgreSQL
-    console.log('[TestCompose] Starting PostgreSQL container...');
-    this.postgres = await new GenericContainer('postgres:18.3-alpine')
-      .withEnvironment({
-        POSTGRES_USER: 'admin',
-        POSTGRES_PASSWORD: 'admin',
-        POSTGRES_DB: 'postgres',
-      })
-      .withExposedPorts(5432)
-      .start();
+    // Resolve path to docker-compose.test.yml (from monorepo root)
+    // __dirname = services/games/tests/e2e/helpers
+    // Need to go up 6 levels to reach monorepo root
+    const composeFilePath = path.resolve(__dirname, '../../../../..');
+    const composeFile = 'docker-compose.test.yml';
 
-    const pgHost = this.postgres.getHost();
-    const pgPort = this.postgres.getMappedPort(5432);
-    console.log(`[TestCompose] PostgreSQL ready at ${pgHost}:${pgPort}`);
+    console.log(`[TestCompose] Using compose file: ${path.join(composeFilePath, composeFile)}`);
 
-    // Create databases
-    await this.postgres.exec(['psql', '-U', 'admin', '-c', 'CREATE DATABASE games;']);
-    await this.postgres.exec(['psql', '-U', 'admin', '-c', 'CREATE DATABASE wallets;']);
-
-    // Run migrations for games
-    console.log('[TestCompose] Running Games migrations...');
-    await this.postgres.exec([
-      'sh', '-c',
-      `cd /tmp && bunx prisma migrate deploy --schema=/dev/stdin <<'EOF'
-datasource db {
-  provider = "postgresql"
-  url      = "postgresql://admin:admin@${pgHost}:${pgPort}/games"
-}
-EOF`
-    ]);
-    // Run migrations for wallets
-    await this.postgres.exec([
-      'sh', '-c',
-      `cd /tmp && bunx prisma migrate deploy --schema=/dev/stdin <<'EOF'
-datasource db {
-  provider = "postgresql"
-  url      = "postgresql://admin:admin@${pgHost}:${pgPort}/wallets"
-}
-EOF`
-    ]);
-
-    // Start RabbitMQ
-    console.log('[TestCompose] Starting RabbitMQ container...');
-    this.rabbitmq = await new GenericContainer('rabbitmq:4.2.4-management-alpine')
-      .withEnvironment({
-        RABBITMQ_DEFAULT_USER: 'admin',
-        RABBITMQ_DEFAULT_PASS: 'admin',
-      })
-      .withExposedPorts(5672, 15672)
-      .start();
-
-    const mqHost = this.rabbitmq.getHost();
-    const mqPort = this.rabbitmq.getMappedPort(5672);
-    console.log(`[TestCompose] RabbitMQ ready at ${mqHost}:${mqPort}`);
-
-    // Build connection URIs
-    const gamesUrl = 'http://localhost:4001';
-    const walletsUrl = 'http://localhost:4002';
-
-    this.connections = {
-      postgresGames: `postgresql://admin:admin@${pgHost}:${pgPort}/games`,
-      postgresWallets: `postgresql://admin:admin@${pgHost}:${pgPort}/wallets`,
-      postgresHost: pgHost,
-      postgresPort: pgPort.toString(),
-      rabbitmqUrl: `amqp://admin:admin@${mqHost}:${mqPort}`,
-      rabbitmqHost: mqHost,
-      rabbitmqPort: mqPort.toString(),
-      gamesUrl,
-      walletsUrl,
+    // Build environment variables for compose
+    const composeEnv = {
+      NODE_ENV: 'test',
+      DETERMINISTIC_SEED: 'test-crash-2-27',
+      ...config.env,
     };
 
-    // Start Games service
-    console.log('[TestCompose] Starting Games service...');
-    this.gamesProcess = spawn('bun', ['run', 'start'], {
-      cwd: '/Users/felipersas/Documents/JungleGaming/fullstack-challenge/services/games',
-      env: {
-        ...process.env,
-        DATABASE_URL: this.connections.postgresGames,
-        RABBITMQ_URL: this.connections.rabbitmqUrl,
-        NODE_ENV: 'test',
-        PORT: '4001',
-      },
-      stdio: 'pipe',
-    });
+    // Start Docker Compose environment
+    this.environment = await new DockerComposeEnvironment(composeFilePath, composeFile)
+      .withBuild()
+      .withWaitStrategy('postgres-1', Wait.forHealthCheck())
+      .withWaitStrategy('rabbitmq-1', Wait.forLogMessage('Server startup complete'))
+      .withWaitStrategy('games-1', Wait.forHttp('/health', 4001).withStartupTimeout(120000))
+      .withWaitStrategy('wallets-1', Wait.forHttp('/health', 4002).withStartupTimeout(120000))
+      .withEnvironment(composeEnv)
+      .up();
 
-    this.gamesProcess.stdout?.on('data', (data) => {
-      console.log('[Games]', data.toString().trim());
-    });
-    this.gamesProcess.stderr?.on('data', (data) => {
-      console.error('[Games ERROR]', data.toString().trim());
-    });
+    console.log('[TestCompose] Docker Compose environment started');
 
-    // Start Wallets service
-    console.log('[TestCompose] Starting Wallets service...');
-    this.walletsProcess = spawn('bun', ['run', 'start'], {
-      cwd: '/Users/felipersas/Documents/JungleGaming/fullstack-challenge/services/wallets',
-      env: {
-        ...process.env,
-        DATABASE_URL: this.connections.postgresWallets,
-        RABBITMQ_URL: this.connections.rabbitmqUrl,
-        NODE_ENV: 'test',
-        PORT: '4002',
-      },
-      stdio: 'pipe',
-    });
+    // Get container references
+    const postgres = this.environment.getContainer('postgres-1');
+    const rabbitmq = this.environment.getContainer('rabbitmq-1');
+    const games = this.environment.getContainer('games-1');
+    const wallets = this.environment.getContainer('wallets-1');
 
-    this.walletsProcess.stdout?.on('data', (data) => {
-      console.log('[Wallets]', data.toString().trim());
-    });
-    this.walletsProcess.stderr?.on('data', (data) => {
-      console.error('[Wallets ERROR]', data.toString().trim());
-    });
+    this.containers.set('postgres', postgres);
+    this.containers.set('rabbitmq', rabbitmq);
+    this.containers.set('games', games);
+    this.containers.set('wallets', wallets);
 
-    // Wait for services to be ready
-    console.log('[TestCompose] Waiting for services to be ready...');
-    await this.waitForService(gamesUrl, '/health', 60000);
-    await this.waitForService(walletsUrl, '/health', 60000);
+    // Get mapped ports
+    const pgPort = postgres.getMappedPort(5432);
+    const mqPort = rabbitmq.getMappedPort(5672);
+    const gamesPort = games.getMappedPort(4001);
+    const walletsPort = wallets.getMappedPort(4002);
 
-    console.log('[TestCompose] Environment started');
+    console.log(`[TestCompose] PostgreSQL: localhost:${pgPort}`);
+    console.log(`[TestCompose] RabbitMQ: localhost:${mqPort}`);
+    console.log(`[TestCompose] Games: localhost:${gamesPort}`);
+    console.log(`[TestCompose] Wallets: localhost:${walletsPort}`);
+
+    // Build connection URIs
+    this.connections = {
+      postgresGames: `postgresql://admin:admin@localhost:${pgPort}/games`,
+      postgresWallets: `postgresql://admin:admin@localhost:${pgPort}/wallets`,
+      postgresHost: 'localhost',
+      postgresPort: pgPort.toString(),
+      rabbitmqUrl: `amqp://admin:admin@localhost:${mqPort}`,
+      rabbitmqHost: 'localhost',
+      rabbitmqPort: mqPort.toString(),
+      gamesUrl: `http://localhost:${gamesPort}`,
+      walletsUrl: `http://localhost:${walletsPort}`,
+      gamesHost: 'localhost',
+      gamesPort: gamesPort.toString(),
+      walletsHost: 'localhost',
+      walletsPort: walletsPort.toString(),
+    };
+
+    console.log('[TestCompose] Environment ready');
     return this.connections;
   }
 
   /**
-   * Wait for a service to respond.
-   */
-  private static async waitForService(baseUrl: string, path: string, timeout: number): Promise<void> {
-    const start = Date.now();
-    const url = baseUrl + path;
-
-    while (Date.now() - start < timeout) {
-      try {
-        const response = await fetch(url);
-        if (response.ok) {
-          console.log(`[TestCompose] Service ready: ${baseUrl}`);
-          return;
-        }
-      } catch {
-        // Service not ready yet
-      }
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    throw new Error(`Service not ready: ${baseUrl} (timeout: ${timeout}ms)`);
-  }
-
-  /**
-   * Stop all containers and processes.
+   * Stop all containers and clean up.
    */
   static async stop(): Promise<void> {
     console.log('[TestCompose] Stopping environment...');
 
-    if (this.gamesProcess) {
-      this.gamesProcess.kill();
-      this.gamesProcess = undefined;
-    }
-    if (this.walletsProcess) {
-      this.walletsProcess.kill();
-      this.walletsProcess = undefined;
-    }
-    if (this.postgres) {
-      await this.postgres.stop();
-      this.postgres = undefined;
-    }
-    if (this.rabbitmq) {
-      await this.rabbitmq.stop();
-      this.rabbitmq = undefined;
+    if (this.environment) {
+      await this.environment.down({ removeVolumes: true, timeout: 60000 });
+      this.environment = undefined;
+      this.containers.clear();
+      this.connections = undefined;
     }
 
-    this.connections = undefined;
     console.log('[TestCompose] Environment stopped');
+  }
+
+  /**
+   * Get a container by name.
+   */
+  static getContainer(name: string): StartedTestContainer | undefined {
+    // Handle both service name and container name formats
+    const normalizedName = name.replace('-1', '');
+    return this.containers.get(normalizedName);
+  }
+
+  /**
+   * Execute a command in a container.
+   */
+  static async exec(containerName: string, command: string[]): Promise<{ output: string; exitCode: number }> {
+    const container = this.getContainer(containerName);
+    if (!container) {
+      throw new Error(`Container not found: ${containerName}`);
+    }
+    return await container.exec(command);
   }
 
   /**
    * Execute a command in PostgreSQL container.
    */
   static async execPostgres(command: string[]): Promise<{ output: string; exitCode: number }> {
-    if (!this.postgres) {
-      throw new Error('Environment not started');
-    }
-    return await this.postgres.exec(command);
+    return await this.exec('postgres', command);
   }
 
   /**
    * Execute a command in RabbitMQ container.
    */
   static async execRabbitMQ(command: string[]): Promise<{ output: string; exitCode: number }> {
-    if (!this.rabbitmq) {
-      throw new Error('Environment not started');
-    }
-    return await this.rabbitmq.exec(command);
-  }
-
-  /**
-   * Get a container by name (for compatibility).
-   */
-  static getContainer(name: string) {
-    if (name === 'postgres-1' || name === 'postgres') {
-      return this.postgres;
-    }
-    if (name === 'rabbitmq-1' || name === 'rabbitmq') {
-      return this.rabbitmq;
-    }
-    throw new Error(`Unknown container: ${name}`);
-  }
-
-  /**
-   * Execute a command in a container (compatibility method).
-   */
-  static async exec(containerName: string, command: string[]): Promise<{ output: string; exitCode: number }> {
-    if (containerName.startsWith('postgres')) {
-      return await this.execPostgres(command);
-    }
-    if (containerName.startsWith('rabbitmq')) {
-      return await this.execRabbitMQ(command);
-    }
-    throw new Error(`Unknown container: ${containerName}`);
+    return await this.exec('rabbitmq', command);
   }
 }
 
