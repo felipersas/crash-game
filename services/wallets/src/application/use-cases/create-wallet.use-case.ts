@@ -8,8 +8,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Wallet } from '@/domain/entities/wallet.entity';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
-import type { IEventPublisher } from '@/application/interfaces/event-publisher';
 import { WALLET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { IEventPublisher } from '@crash/messaging';
 
 export interface CreateWalletInput {
   playerId: string;
