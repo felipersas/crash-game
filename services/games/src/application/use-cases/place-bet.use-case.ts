@@ -11,6 +11,7 @@ import {
   DuplicateBetError,
   BetBelowMinimumError,
   BetAboveMaximumError,
+  BetNotFoundError,
 } from '@/domain/errors/domain.errors';
 import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 
@@ -56,7 +57,7 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
     // Get the bet from round
     const bet = round.getBetByPlayer(input.playerId);
     if (!bet) {
-      throw new Error('Bet was not created in memory');
+      throw new BetNotFoundError('bet');
     }
 
     // Persist bet independently (no round version lock)

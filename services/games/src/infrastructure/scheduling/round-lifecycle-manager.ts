@@ -6,6 +6,7 @@ import type { IRoundRepository } from '@/application/interfaces/round.repository
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import { RedisService, type RoundState } from '@/infrastructure/redis/redis.service';
 import { ROUND_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/infrastructure/di/tokens';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
 
@@ -33,6 +34,7 @@ export class RoundLifecycleManager {
     @Inject(SEED_CHAIN_REPOSITORY) private readonly seedChainRepository: ISeedChainRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -272,6 +274,9 @@ export class RoundLifecycleManager {
     const elapsedSeconds = (Date.now() - this.roundStartTime.getTime()) / 1000;
     this.currentRound.updateMultiplier(elapsedSeconds);
 
+    // Persist to Redis for fast access (sub-ms reads for cashout)
+    this.persistToRedis();
+
     // Broadcast multiplier update
     this.gamesGateway.broadcastMultiplierUpdate(
       this.currentRound.id,
@@ -285,12 +290,44 @@ export class RoundLifecycleManager {
   }
 
   /**
+   * Persist current round state to Redis.
+   * Called on every multiplier update (every 100ms).
+   */
+  private persistToRedis(): void {
+    if (!this.currentRound) return;
+
+    const roundState: RoundState = {
+      id: this.currentRound.id,
+      status: this.currentRound.getStatus(),
+      crashPoint: this.currentRound.getCrashPoint(),
+      currentMultiplier: this.currentRound.getCurrentMultiplier(),
+      bettingEndTime: this.currentRound.getBettingEndTime()?.toISOString() || null,
+      startedAt: this.currentRound.getStartedAt()?.toISOString() || null,
+      crashedAt: this.currentRound.getCrashedAt()?.toISOString() || null,
+      version: this.currentRound.getVersion(),
+      lastUpdatedAt: Date.now(),
+    };
+
+    // Fire and forget - Redis errors are logged in the service
+    this.redisService.setCurrentRound(this.currentRound.id, roundState).catch((error) => {
+      this.logger.warn(`Failed to persist to Redis: ${error}`);
+    });
+  }
+
+  /**
    * Handle round crashed.
+   *
+   * IMPORTANT: Reloads Round from DB before saving to handle race conditions
+   * where cashouts occurred via API (which updates the Round independently).
+   * This ensures we have the latest version with all cashouts applied.
    */
   private async handleRoundCrashed() {
     if (!this.currentRound) return;
 
-    this.logger.log(`Round ${this.currentRound.id} crashed at ${this.currentRound.getCrashPoint()}x`);
+    const roundId = this.currentRound.id;
+    const crashPoint = this.currentRound.getCrashPoint();
+
+    this.logger.log(`Round ${roundId} crashed at ${crashPoint}x`);
 
     // Stop updates
     if (this.updateInterval) {
@@ -298,10 +335,42 @@ export class RoundLifecycleManager {
       this.updateInterval = null;
     }
 
-    await this.roundRepository.save(this.currentRound);
+    // Reload Round from DB to get latest version (may have cashouts from API)
+    const latestRound = await this.roundRepository.findById(roundId);
+    if (!latestRound) {
+      this.logger.error(`Round ${roundId} not found in DB during crash handling`);
+      await this.redisService.deleteRound(roundId);
+      this.createNewRound();
+      return;
+    }
 
-    // Publish events
-    const events = this.currentRound.pullEvents();
+    // The crash was already determined in-memory, but we need to apply it
+    // to the DB version which has all the cashouts
+    // Trigger crash by updating multiplier to crash point
+    if (crashPoint) {
+      const startedAt = latestRound.getStartedAt();
+      if (startedAt) {
+        const elapsedSinceStart = (Date.now() - startedAt.getTime()) / 1000;
+        latestRound.updateMultiplier(elapsedSinceStart);
+      }
+    }
+
+    try {
+      await this.roundRepository.save(latestRound);
+    } catch (error: unknown) {
+      if (error instanceof Error && 'code' in error && error.code === 'P2025') {
+        this.logger.warn(`Round ${roundId} version conflict during crash, continuing with in-memory events`);
+        // Continue - crash was determined correctly in-memory
+      } else {
+        this.logger.error(`Failed to save crashed round: ${error}`);
+      }
+    }
+
+    // Clear from Redis (round is over)
+    await this.redisService.deleteRound(roundId);
+
+    // Publish events from DB version (has authoritative state)
+    const events = latestRound.pullEvents();
     if (events.length > 0) {
       await this.eventPublisher.publishBatch(events);
     }
@@ -310,11 +379,14 @@ export class RoundLifecycleManager {
     const crashEvent = events.find(e => e.eventType === 'RoundCrashed');
     if (crashEvent && 'seed' in crashEvent) {
       this.gamesGateway.broadcastCrash(
-        this.currentRound.id,
-        this.currentRound.getCrashPoint()!,
+        latestRound.id,
+        latestRound.getCrashPoint()!,
         crashEvent.seed,
       );
     }
+
+    // Update our reference and start new round
+    this.currentRound = latestRound;
 
     // Start new round after a delay
     setTimeout(() => {

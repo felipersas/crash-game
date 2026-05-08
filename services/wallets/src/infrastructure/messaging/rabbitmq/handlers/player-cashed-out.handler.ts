@@ -3,10 +3,16 @@
  *
  * Handles PlayerCashedOutEvent from the Games service by crediting
  * the winnings to the player's wallet.
+ *
+ * Uses Inbox pattern for idempotency - prevents double crediting
+ * if duplicate events are received from RabbitMQ.
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
+import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
+import { INBOX_REPOSITORY, PLAYER_WALLET_RESOLVER } from '@/infrastructure/di/tokens';
+import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import type { PlayerCashedOutEvent } from '../../types/games.events';
 
 /**
@@ -15,41 +21,95 @@ import type { PlayerCashedOutEvent } from '../../types/games.events';
  * When a player cashes out in the Games service, this handler
  * credits the winnings to their wallet.
  *
- * The winnings are calculated as: betAmount × cashOutMultiplier
+ * Uses Inbox pattern for idempotency:
+ * 1. Try create inbox event (fails if duplicate)
+ * 2. If duplicate → check status (PROCESSED skip, FAILED retry)
+ * 3. Resolve wallet via PlayerWalletResolver
+ * 4. Process credit
+ * 5. Mark inbox as PROCESSED
  */
 @Injectable()
 export class PlayerCashedOutEventHandler {
   private readonly logger = new Logger(PlayerCashedOutEventHandler.name);
 
-  constructor(private readonly creditWalletUseCase: CreditWalletUseCase) {}
+  constructor(
+    private readonly creditWalletUseCase: CreditWalletUseCase,
+    @Inject(PLAYER_WALLET_RESOLVER) private readonly playerWalletResolver: PlayerWalletResolver,
+    @Inject(INBOX_REPOSITORY) private readonly inboxRepository: IInboxRepository,
+  ) {}
 
   /**
-   * Handle the PlayerCashedOutEvent.
+   * Handle the PlayerCashedOutEvent with idempotency.
    *
    * @param event The event from Games service
-   * @throws Error if wallet not found (will be logged by consumer)
    */
   async handle(event: PlayerCashedOutEvent): Promise<void> {
-    try {
-      this.logger.debug(
-        `Processing PlayerCashedOutEvent: player=${event.playerId}, winAmount=${event.winAmount}, betId=${event.betId}`,
-      );
+    const idempotencyKey = `cashout-${event.betId}`;
 
+    this.logger.debug(
+      `Processing PlayerCashedOutEvent: player=${event.playerId}, winAmount=${event.winAmount}, betId=${event.betId}`,
+    );
+
+    // 1. Try to create inbox event (fails if duplicate - unique constraint)
+    const inboxEvent = await this.inboxRepository.tryCreate({
+      idempotencyKey,
+      eventType: 'PlayerCashedOut',
+      payload: event,
+    });
+
+    // 2. If duplicate, check status and handle accordingly
+    let eventId: string;
+    if (!inboxEvent) {
+      const existing = await this.inboxRepository.findByIdempotencyKey(idempotencyKey);
+
+      if (existing?.status === 'PROCESSED') {
+        this.logger.log(`Duplicate PlayerCashedOutEvent detected (already processed): ${idempotencyKey}. Skipping.`);
+        return;
+      }
+
+      if (existing?.status === 'FAILED') {
+        this.logger.warn(`Duplicate PlayerCashedOutEvent detected (previously failed): ${idempotencyKey}. Retrying.`);
+        eventId = existing.id;
+        // Continue to retry the failed operation
+      } else {
+        this.logger.log(`Duplicate PlayerCashedOutEvent detected (pending): ${idempotencyKey}. Skipping.`);
+        return;
+      }
+    } else {
+      eventId = inboxEvent.id;
+    }
+
+    try {
+      // 3. Resolve wallet using PlayerWalletResolver
+      const wallet = await this.playerWalletResolver.resolveWallet(event.playerId);
+
+      // 4. Process credit
       await this.creditWalletUseCase.execute({
-        walletId: event.playerId, // In this design, walletId = playerId
-        amount: event.winAmount,
+        walletId: wallet!.id,
+        amount: typeof event.winAmount === 'string' ? BigInt(event.winAmount) : event.winAmount,
         reason: `Cash out at ${event.cashOutMultiplier}x in round ${event.roundId} (bet: ${event.betId})`,
-        idempotencyKey: `cashout-${event.betId}`, // Prevent double crediting
       });
+
+      // 5. Mark inbox as PROCESSED
+      await this.inboxRepository.markAsProcessed(eventId, new Date());
 
       this.logger.log(
         `Credited ${event.winAmount} cents to player ${event.playerId} for cash out at ${event.cashOutMultiplier}x`,
       );
     } catch (error: unknown) {
+      // Mark as FAILED for visibility
+      await this.inboxRepository.markAsFailed(
+        eventId,
+        error instanceof Error ? error.message : String(error),
+        0,
+      );
+
       this.logger.error(
         `Failed to credit wallet for cash out ${event.betId}: ${error instanceof Error ? error.message : String(error)}`,
       );
-      throw error; // Re-throw for consumer to handle (nack)
+
+      // Don't re-throw - saga pattern: we've handled the error
+      // Consumer will ACK the message
     }
   }
 }

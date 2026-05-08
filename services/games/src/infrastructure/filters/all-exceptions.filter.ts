@@ -21,6 +21,10 @@ import {
   InvalidSeedError,
   VerificationFailedError,
   OptimisticLockError,
+  InvalidBetStateError,
+  InvalidRoundStateError,
+  SeedNotAvailableError,
+  InvalidIdempotencyKeyError,
 } from '@/domain/errors/domain.errors';
 
 /**
@@ -40,6 +44,10 @@ const ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [InvalidSeedError.name]: HttpStatus.BAD_REQUEST,           // 400
   [VerificationFailedError.name]: HttpStatus.INTERNAL_SERVER_ERROR, // 500
   [OptimisticLockError.name]: HttpStatus.CONFLICT,           // 409
+  [InvalidBetStateError.name]: HttpStatus.BAD_REQUEST,      // 400
+  [InvalidRoundStateError.name]: HttpStatus.BAD_REQUEST,    // 400
+  [SeedNotAvailableError.name]: HttpStatus.BAD_REQUEST,     // 400
+  [InvalidIdempotencyKeyError.name]: HttpStatus.BAD_REQUEST, // 400
 };
 
 /**

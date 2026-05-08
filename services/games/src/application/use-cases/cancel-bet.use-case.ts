@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
+import { BetNotFoundError } from '@/domain/errors/domain.errors';
 
 export interface CancelBetInput {
   roundId: string;
@@ -39,7 +40,7 @@ export class CancelBetUseCase implements IUseCase<CancelBetInput, CancelBetOutpu
     );
 
     if (!bet) {
-      throw new Error(`Bet ${input.betId} not found in round ${input.roundId}`);
+      throw new BetNotFoundError(input.betId);
     }
 
     // Cancel the bet (PENDING → CANCELLED)

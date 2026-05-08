@@ -10,6 +10,8 @@ import {
   RoundAlreadyCrashedError,
   BetBelowMinimumError,
   BetAboveMaximumError,
+  InvalidRoundStateError,
+  SeedNotAvailableError,
 } from '../errors/domain.errors';
 import type { GameDomainEvent } from '../events/round.events';
 import {
@@ -237,7 +239,7 @@ export class Round {
    */
   async startRound(): Promise<void> {
     if (this.status !== RoundStatus.BETTING) {
-      throw new Error('Round is not in betting phase');
+      throw new InvalidRoundStateError(this.id, this.status, 'start');
     }
 
     this.version++;
@@ -341,7 +343,7 @@ export class Round {
    */
   getSeed(): string {
     if (this.status !== RoundStatus.CRASHED) {
-      throw new Error('Seed is only available after round crashes');
+      throw new SeedNotAvailableError(this.id);
     }
     return this.seedChain.getSeed();
   }

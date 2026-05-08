@@ -53,6 +53,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     return this.prisma.wallet;
   }
 
+  get inboxEvent() {
+    return this.prisma.inboxEvent;
+  }
+
   get outboxEvent() {
     return this.prisma.outboxEvent;
   }

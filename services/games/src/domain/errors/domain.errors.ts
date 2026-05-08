@@ -1,3 +1,5 @@
+import { BetStatus } from '@prisma/client';
+
 /**
  * Domain-specific exceptions for the Games bounded context.
  * All domain errors extend this base class for consistent error handling.
@@ -128,5 +130,42 @@ export class VerificationFailedError extends DomainError {
 export class OptimisticLockError extends DomainError {
   constructor(entityId: string, expectedVersion: number) {
     super(`Optimistic lock conflict for entity ${entityId} (expected version ${expectedVersion})`);
+  }
+}
+
+/**
+ * Thrown when attempting an invalid bet state transition.
+ */
+export class InvalidBetStateError extends DomainError {
+  constructor(betId: string, currentState: BetStatus, attemptedAction: string) {
+    super(`Cannot ${attemptedAction} bet ${betId} in ${currentState} state`);
+  }
+}
+
+/**
+ * Thrown when attempting an invalid round state transition.
+ */
+export class InvalidRoundStateError extends DomainError {
+  constructor(roundId: string, currentState: string, attemptedAction: string) {
+    super(`Cannot ${attemptedAction} round ${roundId} in ${currentState} state`);
+  }
+}
+
+/**
+ * Thrown when attempting to access the seed before the round crashes.
+ * The seed must remain secret until the round ends for provably fair gaming.
+ */
+export class SeedNotAvailableError extends DomainError {
+  constructor(roundId: string) {
+    super(`Seed is not available for round ${roundId} until it crashes`);
+  }
+}
+
+/**
+ * Thrown when attempting to cash out with an invalid idempotency key format.
+ */
+export class InvalidIdempotencyKeyError extends DomainError {
+  constructor(key: string) {
+    super(`Invalid idempotency key: ${key} (must be a valid UUID)`);
   }
 }
