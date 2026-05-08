@@ -41,6 +41,7 @@ export class GamesWebSocket {
       : undefined;
 
     this.socket = io(WS_URL, {
+      path: '/games/socket.io/',
       auth,
       reconnection: true,
       reconnectionDelay: this.reconnectDelay,
