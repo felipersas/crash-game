@@ -10,29 +10,26 @@
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { connect } from 'amqplib';
-import {
-  testContainers,
-  beforeAllTests,
-  afterAllTests,
-} from './helpers/testcontainers-setup';
+import { beforeAllTests, afterAllTests, TestCompose } from './helpers/compose';
 
 describe('Wallets ↔ Games Integration (E2E)', () => {
   let connection: any | null = null;
   let channel: any | null = null;
   let gamesUrl: string;
   let walletsUrl: string;
+  let rabbitmqUrl: string;
   const playerId = `e2e-integration-${Date.now()}`;
 
   beforeAll(async () => {
     // Start Testcontainers environment
-    await beforeAllTests();
+    const connections = await beforeAllTests();
 
-    gamesUrl = testContainers.getGamesServiceUrl();
-    walletsUrl = testContainers.getWalletsServiceUrl();
+    gamesUrl = connections.gamesUrl!;
+    walletsUrl = connections.walletsUrl!;
+    rabbitmqUrl = connections.rabbitmqUrl!;
 
     // Connect to RabbitMQ
-    const mqConnection = testContainers.getRabbitMQConnectionString();
-    connection = await connect(mqConnection);
+    connection = await connect(rabbitmqUrl);
     channel = await connection.createChannel();
 
     // Set up exchanges and queues
@@ -52,7 +49,7 @@ describe('Wallets ↔ Games Integration (E2E)', () => {
     expect(channel).toBeTruthy();
 
     // Verify exchange exists
-    const result = await testContainers.execRabbitMQ([
+    const result = await TestCompose.exec('rabbitmq-1', [
       'rabbitmqctl',
       'list_exchanges',
       'games.events',
@@ -128,7 +125,7 @@ describe('Wallets ↔ Games Integration (E2E)', () => {
 
   test('should verify database state consistency', async () => {
     // Check wallets table
-    const walletsResult = await testContainers.execPostgres([
+    const walletsResult = await TestCompose.exec('postgres-1', [
       'psql',
       '-U',
       'admin',
@@ -141,7 +138,7 @@ describe('Wallets ↔ Games Integration (E2E)', () => {
     expect(walletsResult.exitCode).toBe(0);
 
     // Check games database exists
-    const gamesResult = await testContainers.execPostgres([
+    const gamesResult = await TestCompose.exec('postgres-1', [
       'psql',
       '-U',
       'admin',

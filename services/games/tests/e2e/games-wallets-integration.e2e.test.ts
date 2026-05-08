@@ -9,29 +9,26 @@
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { connect } from 'amqplib';
-import {
-  testContainers,
-  beforeAllTests,
-  afterAllTests,
-} from './helpers/testcontainers-setup';
+import { beforeAllTests, afterAllTests, TestCompose } from './helpers/compose';
 
 describe('Games ↔ Wallets Integration (E2E)', () => {
-  let connection: Connection | null = null;
-  let channel: Channel | null = null;
+  let connection: any = null;
+  let channel: any = null;
   let gamesUrl: string;
   let walletsUrl: string;
+  let rabbitmqUrl: string;
   const playerId = `e2e-test-player-${Date.now()}`;
 
   beforeAll(async () => {
-    // Start Testcontainers environment
-    await beforeAllTests();
+    // Start Testcontainers environment and get connection strings
+    const connections = await beforeAllTests();
 
-    gamesUrl = testContainers.getGamesServiceUrl();
-    walletsUrl = testContainers.getWalletsServiceUrl();
+    gamesUrl = connections.gamesUrl!;
+    walletsUrl = connections.walletsUrl!;
+    rabbitmqUrl = connections.rabbitmqUrl!;
 
     // Connect to RabbitMQ to verify events
-    const mqConnection = testContainers.getRabbitMQConnectionString();
-    connection = await connect(mqConnection);
+    connection = await connect(rabbitmqUrl);
     channel = await connection.createChannel();
 
     await channel.assertExchange('games.events', 'topic', { durable: true });
@@ -66,7 +63,6 @@ describe('Games ↔ Wallets Integration (E2E)', () => {
     });
 
     // This endpoint might not exist in the current implementation
-    // If it doesn't, we'll skip this test
     if (response.status === 404) {
       console.log('⚠ Credit endpoint not found - manual wallet setup required');
       return;
@@ -89,7 +85,6 @@ describe('Games ↔ Wallets Integration (E2E)', () => {
     // Get initial wallet balance
     const walletResponse = await fetch(`${walletsUrl}/wallets/me`);
     const wallet = await walletResponse.json();
-    const initialBalance = parseInt(wallet.balance || '0');
 
     // Place bet
     const betResponse = await fetch(`${gamesUrl}/bet`, {
@@ -102,7 +97,6 @@ describe('Games ↔ Wallets Integration (E2E)', () => {
     });
 
     // The bet might fail if we're not in BETTING phase
-    // For this E2E test, we're mainly checking the integration
     if (betResponse.status === 400 || betResponse.status === 422) {
       console.log('⚠ Cannot place bet - not in betting phase or validation failed');
       return;
@@ -127,27 +121,22 @@ describe('Games ↔ Wallets Integration (E2E)', () => {
     // We would need to wait and check the wallet balance again
   }, 20_000);
 
-  test('should verify RabbitMQ connectivity via Testcontainers', async () => {
-    const mqConnection = testContainers.getRabbitMQConnection();
+  test('should verify container connectivity', async () => {
+    // Verify we can access containers via TestCompose
+    const postgresContainer = TestCompose.getContainer('postgres-1');
+    const rabbitmqContainer = TestCompose.getContainer('rabbitmq-1');
 
-    expect(mqConnection.host).toBeTruthy();
-    expect(mqConnection.port).toBeGreaterThan(0);
+    expect(postgresContainer).toBeDefined();
+    expect(rabbitmqContainer).toBeDefined();
 
-    console.log(`✓ RabbitMQ at ${mqConnection.host}:${mqConnection.port}`);
-
-    // Verify connection is still alive
-    if (connection) {
-      expect(connection.connection.serverProperties).toBeDefined();
-    }
+    console.log('✓ All containers accessible');
   });
 
-  test('should verify PostgreSQL connectivity via Testcontainers', async () => {
-    const pgConnection = testContainers.getPostgresConnection();
+  test('should execute command in PostgreSQL container', async () => {
+    const result = await TestCompose.exec('postgres-1', ['psql', '-U', 'admin', '-c', 'SELECT 1']);
 
-    expect(pgConnection.host).toBeTruthy();
-    expect(pgConnection.port).toBeGreaterThan(0);
-
-    console.log(`✓ PostgreSQL at ${pgConnection.host}:${pgConnection.port}`);
+    expect(result.exitCode).toBe(0);
+    console.log('✓ PostgreSQL exec works, output:', result.output.trim());
   });
 
   afterAll(async () => {

@@ -10,18 +10,16 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import {
-  testContainers,
-  beforeAllTests,
-  afterAllTests,
-} from './helpers/testcontainers-setup';
+import { beforeAllTests, afterAllTests, TestCompose } from './helpers/compose';
 
 describe('Wallets Service (E2E)', () => {
   let walletsUrl: string;
+  let gamesUrl: string;
 
   beforeAll(async () => {
-    await beforeAllTests();
-    walletsUrl = testContainers.getWalletsServiceUrl();
+    const connections = await beforeAllTests();
+    walletsUrl = connections.walletsUrl!;
+    gamesUrl = connections.gamesUrl!;
   }, 120_000);
 
   afterAll(async () => {
@@ -143,16 +141,18 @@ describe('Wallets Service (E2E)', () => {
 
   describe('Database Operations', () => {
     test('should verify database connection via Testcontainers', async () => {
-      const pgConnection = testContainers.getPostgresConnection();
+      const container = TestCompose.getContainer('postgres-1');
+      const host = container.getHost();
+      const port = container.getMappedPort(5432);
 
-      expect(pgConnection.host).toBeTruthy();
-      expect(pgConnection.port).toBeGreaterThan(0);
+      expect(host).toBeTruthy();
+      expect(port).toBeGreaterThan(0);
 
-      console.log(`✓ PostgreSQL at ${pgConnection.host}:${pgConnection.port}`);
+      console.log(`✓ PostgreSQL at ${host}:${port}`);
     });
 
     test('should query wallets table', async () => {
-      const result = await testContainers.execPostgres([
+      const result = await TestCompose.exec('postgres-1', [
         'psql',
         '-U',
         'admin',
@@ -179,7 +179,7 @@ describe('Wallets Service (E2E)', () => {
       const data = await response.json();
 
       // Verify in database
-      const result = await testContainers.execPostgres([
+      const result = await TestCompose.exec('postgres-1', [
         'psql',
         '-U',
         'admin',
@@ -196,16 +196,18 @@ describe('Wallets Service (E2E)', () => {
 
   describe('RabbitMQ Integration', () => {
     test('should verify RabbitMQ connection via Testcontainers', async () => {
-      const mqConnection = testContainers.getRabbitMQConnection();
+      const container = TestCompose.getContainer('rabbitmq-1');
+      const host = container.getHost();
+      const port = container.getMappedPort(5672);
 
-      expect(mqConnection.host).toBeTruthy();
-      expect(mqConnection.port).toBeGreaterThan(0);
+      expect(host).toBeTruthy();
+      expect(port).toBeGreaterThan(0);
 
-      console.log(`✓ RabbitMQ at ${mqConnection.host}:${mqConnection.port}`);
+      console.log(`✓ RabbitMQ at ${host}:${port}`);
     });
 
     test('should verify RabbitMQ is running', async () => {
-      const result = await testContainers.execRabbitMQ([
+      const result = await TestCompose.exec('rabbitmq-1', [
         'rabbitmq-diagnostics',
         '-q',
         'ping',
@@ -215,7 +217,7 @@ describe('Wallets Service (E2E)', () => {
     });
 
     test('should have games.events exchange configured', async () => {
-      const result = await testContainers.execRabbitMQ([
+      const result = await TestCompose.exec('rabbitmq-1', [
         'rabbitmqctl',
         'list_exchanges',
         'games.events',
@@ -245,7 +247,7 @@ describe('Wallets Service (E2E)', () => {
       expect(data.balance).toMatch(/^\d+$/); // Integer only
 
       // Verify database stores as bigint/numeric
-      const result = await testContainers.execPostgres([
+      const result = await TestCompose.exec('postgres-1', [
         'psql',
         '-U',
         'admin',
@@ -301,7 +303,7 @@ describe('Wallets Service (E2E)', () => {
       }
 
       // Verify all wallets were created
-      const result = await testContainers.execPostgres([
+      const result = await TestCompose.exec('postgres-1', [
         'psql',
         '-U',
         'admin',
@@ -317,8 +319,6 @@ describe('Wallets Service (E2E)', () => {
 
   describe('Service Integration', () => {
     test('should communicate with Games service', async () => {
-      const gamesUrl = testContainers.getGamesServiceUrl();
-
       // Check Games service health
       const response = await fetch(`${gamesUrl}/health`);
 
