@@ -1,0 +1,119 @@
+# Docker Compose for E2E Tests
+# Minimal infrastructure setup for Testcontainers-based integration tests
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 18
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:18.3-alpine
+    ports:
+      - "5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: postgres
+      POSTGRES_EXTRA_DATABASES: games,wallets
+    volumes:
+      - postgres_test_data:/var/lib/postgresql
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  # ---------------------------------------------------------------------------
+  # RabbitMQ (with delayed message plugin)
+  # ---------------------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:4.2.4-management-alpine
+    ports:
+      - "5672"
+      - "15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    volumes:
+      - rabbitmq_test_data:/var/lib/rabbitmq
+      - ./docker/rabbitmq/enabled-plugins:/etc/rabbitmq/enabled_plugins
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+  # ---------------------------------------------------------------------------
+  # Games Service (for E2E tests)
+  # ---------------------------------------------------------------------------
+  games:
+    build:
+      context: .
+      dockerfile: services/games/Dockerfile
+    ports:
+      - "4001"
+    environment:
+      DATABASE_URL: postgresql://admin:admin@postgres:5432/games
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: admin
+      DATABASE_PASSWORD: admin
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: admin
+      NODE_ENV: test
+      # Deterministic seed for predictable crash points in E2E tests
+      # This seed produces ~2x crash (fast test execution)
+      DETERMINISTIC_SEED: test-crash-2-27
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4001/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Wallets Service (for E2E tests)
+  # ---------------------------------------------------------------------------
+  wallets:
+    build:
+      context: .
+      dockerfile: services/wallets/Dockerfile
+    ports:
+      - "4002"
+    environment:
+      DATABASE_URL: postgresql://admin:admin@postgres:5432/wallets
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: admin
+      DATABASE_PASSWORD: admin
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: admin
+      NODE_ENV: test
+      # Deterministic seed for predictable crash points in E2E tests
+      # This seed produces ~2x crash (fast test execution)
+      DETERMINISTIC_SEED: test-crash-2-27
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4002/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 30s
+
+volumes:
+  postgres_test_data:
+  rabbitmq_test_data:
