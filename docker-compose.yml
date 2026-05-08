@@ -41,6 +41,28 @@ services:
       retries: 10
 
   # ---------------------------------------------------------------------------
+  # Redis (Fast in-memory data store for current game state)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:8-bookworm-alpine
+    ports:
+      - "6379:6379"
+    command: [
+      "redis-server",
+      "--appendonly", "yes",           # AOF persistence for durability
+      "--appendfsync", "everysec",     # Sync every second (balance speed/durability)
+      "--maxmemory", "256mb",          # Limit memory usage
+      "--maxmemory-policy", "allkeys-lru",  # Evict least recently used keys
+    ]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
   # Keycloak (Identity Provider)
   # ---------------------------------------------------------------------------
   keycloak:
@@ -181,3 +203,4 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+  redis_data:

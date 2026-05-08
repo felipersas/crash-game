@@ -12,6 +12,7 @@ import { WalletEventsConsumer } from './infrastructure/messaging/rabbitmq/wallet
 import { WalletDebitedEventHandler } from './infrastructure/messaging/rabbitmq/handlers/wallet-debited.handler';
 import { WalletDebitFailedEventHandler } from './infrastructure/messaging/rabbitmq/handlers/wallet-debit-failed.handler';
 import { RoundLifecycleManager } from './infrastructure/scheduling/round-lifecycle-manager';
+import { RedisService } from './infrastructure/redis/redis.service';
 import { PlaceBetUseCase } from './application/use-cases/place-bet.use-case';
 import { CashOutUseCase } from './application/use-cases/cash-out.use-case';
 import { GetCurrentRoundUseCase } from './application/use-cases/get-current-round.use-case';
@@ -78,6 +79,7 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
     WalletDebitedEventHandler,
     WalletDebitFailedEventHandler,
     // OutboxProcessor, // TODO: Fix PrismaService dependency resolution
+    RedisService,
     RoundLifecycleManager,
     // Use Cases
     PlaceBetUseCase,
