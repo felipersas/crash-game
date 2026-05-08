@@ -6,10 +6,10 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { Money } from '@/domain/value-objects/money.value-object';
+import { Money } from '@crash/domain';
 import { WalletNotFoundError, InsufficientFundsError } from '@/domain/errors/domain.errors';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
-import type { IEventPublisher } from '@/application/interfaces/event-publisher';
+import type { IEventPublisher } from '@crash/messaging';
 import { WALLET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 
 export interface DebitWalletInput {

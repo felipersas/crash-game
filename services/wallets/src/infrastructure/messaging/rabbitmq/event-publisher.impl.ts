@@ -5,11 +5,13 @@
  * Uses amqp-connection-manager for auto-reconnect.
  */
 
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import { connect, AmqpConnectionManager, ChannelWrapper } from 'amqp-connection-manager';
+import { Injectable, Logger } from '@nestjs/common';
+import type { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { connect } from 'amqp-connection-manager';
+import type { AmqpConnectionManager, ChannelWrapper } from 'amqp-connection-manager';
 import type { ConfirmChannel } from 'amqplib';
-import { WalletDomainEvent } from '@/domain/events/wallet.events';
-import { IEventPublisher } from '@crash/messaging';
+import type { WalletDomainEvent } from '@/domain/events/wallet.events';
+import type { IEventPublisher } from '@crash/messaging';
 
 @Injectable()
 export class RabbitMQEventPublisher
@@ -65,19 +67,23 @@ export class RabbitMQEventPublisher
     }
   }
 
+  /**
+   * Publish a single event to RabbitMQ.
+   * With json: true, the library handles JSON.stringify automatically.
+   */
   async publish(event: WalletDomainEvent): Promise<void> {
     if (!this.channel) {
       this.logger.warn('RabbitMQ channel not initialized, skipping event publish');
       return;
     }
 
-    const serialized = JSON.stringify(event, (_key, value) =>
-      typeof value === 'bigint' ? value.toString() : value,
+    const serializedEvent = JSON.parse(
+      JSON.stringify(event, (_key, value) =>
+        typeof value === 'bigint' ? value.toString() : value,
+      ),
     );
-    const content = Buffer.from(serialized);
-    const routingKey = event.eventType.toLowerCase();
 
-    this.channel.publish('wallet.events', routingKey, content, {
+    this.channel.publish('wallet.events', '', serializedEvent, {
       contentType: 'application/json',
       messageId: crypto.randomUUID(),
       timestamp: Math.floor(Date.now() / 1000),

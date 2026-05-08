@@ -7,9 +7,9 @@
  * Uses event sourcing pattern - all state changes emit domain events.
  */
 
-import { Money } from '../value-objects/money.value-object';
+import { Money } from '@crash/domain';
+import type { WalletDomainEvent } from '../events/wallet.events';
 import {
-  WalletDomainEvent,
   createWalletCreatedEvent,
   createMoneyCreditedEvent,
   createMoneyDebitedEvent,

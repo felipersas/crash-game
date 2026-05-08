@@ -1,18 +1,94 @@
 _format_version: "3.0"
 
 services:
+  # Games Service
   - name: games-service
     url: http://games:4001
     routes:
-      - name: games-routes
-        paths:
-          - /games
-        strip_path: true
+      # Public routes (no authentication)
+      - name: games-health
+        paths: [/games/health]
+        strip_path: false
+      - name: games-rounds-current
+        paths: [/games/rounds/current]
+        strip_path: false
+      - name: games-rounds-history
+        paths: [/games/rounds/history]
+        strip_path: false
+      - name: games-rounds-verify
+        paths: [/games/rounds]
+        strip_path: false
+      # Protected routes (JWT required)
+      - name: games-bets-me
+        paths: [/games/bets/me]
+        strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              uri_param_names: []
+              claims_to_verify: [exp]
+              key_claim_name: kid
+      - name: games-bet
+        paths: [/games/bet]
+        strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              uri_param_names: []
+              claims_to_verify: [exp]
+              key_claim_name: kid
+      - name: games-bet-cashout
+        paths: [/games/bet/cashout]
+        strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              uri_param_names: []
+              claims_to_verify: [exp]
+              key_claim_name: kid
 
+  # Wallets Service
   - name: wallets-service
     url: http://wallets:4002
     routes:
-      - name: wallets-routes
-        paths:
-          - /wallets
-        strip_path: true
+      # Public routes (no authentication)
+      - name: wallets-health
+        paths: [/wallets/health]
+        strip_path: false
+      # Protected routes (JWT required)
+      - name: wallets-me
+        paths: [/wallets/me]
+        strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              uri_param_names: []
+              claims_to_verify: [exp]
+              key_claim_name: kid
+      - name: wallets-create
+        paths: [/wallets]
+        strip_path: false
+        methods: [POST]
+        plugins:
+          - name: jwt
+            config:
+              uri_param_names: []
+              claims_to_verify: [exp]
+              key_claim_name: kid
+
+consumers:
+  - username: keycloak-crash-game
+    jwt_secrets:
+      - consumer: keycloak-crash-game
+        key: se3Nf9SbK05Afk6fxDiq6J0ZelZpDgpgXAtGLbmQudc
+        algorithm: RS256
+        rsa_public_key: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0S1XKgEUDaeRNdcOLRfM
+          H5/Gp9jgQ/MirK6/IqhTOUMkYX5HDI9NgQ43oZz+ZOemj+9yMvHmKflHdW/JdUsR
+          co1M45PFWsKLz+TD0SF8vpKE/A5axlmKbOHbHMY4r4p3lcBBx0fAiDdjP4xDfX+X
+          9k8h9qGTGT8RAwaUOCZg+kFKcw03881o9rPqh4ZVWl4lRWLkdi7fNA+tWQjsqU64
+          H4TXPl5Ok8VRnue4Dj0+VANp3wjk+IO/FXZC1Rmrd1QBwxdiHX1YP7Ya+8xEGXet
+          CXlQxxnbGZdqdf9TTkO5H8vBHXuqSuSVEgabCCCnYVQZMsNt2fF+l+AJhvYKK8W4
+          WwIDAQAB
+          -----END PUBLIC KEY-----

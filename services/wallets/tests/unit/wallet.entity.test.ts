@@ -9,7 +9,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import { Wallet } from '../../src/domain/entities/wallet.entity';
-import { Money } from '../../src/domain/value-objects/money.value-object';
+import { Money } from '@crash/domain';
 import {
   InsufficientFundsError,
   InvalidMoneyAmountError,

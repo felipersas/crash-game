@@ -1,10 +1,5 @@
 import { IsString, IsNotEmpty, IsUUID } from 'class-validator';
 
-export class CreateWalletRequestDto {
-  @IsUUID()
-  @IsNotEmpty()
-  playerId!: string;
-}
 
 export class CreateWalletResponseDto {
   @IsUUID()

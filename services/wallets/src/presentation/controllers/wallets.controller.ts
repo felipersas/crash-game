@@ -1,11 +1,12 @@
-import { Controller, Get, Post, Body, Req } from '@nestjs/common';
-import { HealthCheckResponseDto } from '@/presentation/dtos/health-check-response.dto';
-import { CreateWalletRequestDto, CreateWalletResponseDto } from '@/presentation/dtos/create-wallet.dto';
-import { GetWalletResponseDto } from '@/presentation/dtos/get-wallet.dto';
+import { Controller, Get, Post, Body } from '@nestjs/common';
+import { UserContext, type UserContext as UserContextType } from '../decorators/user-context.decorator';
+import { HealthCheckResponseDto } from '../dtos/health-check-response.dto';
+import { CreateWalletResponseDto } from '../dtos/create-wallet.dto';
+import { GetWalletResponseDto } from '../dtos/get-wallet.dto';
 import { CreateWalletUseCase } from '@/application/use-cases/create-wallet.use-case';
 import { GetWalletUseCase } from '@/application/use-cases/get-wallet.use-case';
 
-@Controller()
+@Controller('wallets')
 export class WalletsController {
   constructor(
     private readonly createWalletUseCase: CreateWalletUseCase,
@@ -17,12 +18,12 @@ export class WalletsController {
     return { status: 'ok', service: 'wallets' };
   }
 
-  @Post('wallets')
-  async createWallet(@Body() dto: CreateWalletRequestDto, @Req() req: any): Promise<CreateWalletResponseDto> {
-    // TODO: Extract playerId from JWT
-    const playerId = dto.playerId || req.user?.sub || 'player-id-from-jwt';
+  @Post()
+  async createWallet(
+    @UserContext() user: UserContextType,
+  ): Promise<CreateWalletResponseDto> {
 
-    const result = await this.createWalletUseCase.execute({ playerId });
+    const result = await this.createWalletUseCase.execute({ playerId: user.playerId });
     return {
       walletId: result.walletId,
       playerId: result.playerId,
@@ -30,12 +31,10 @@ export class WalletsController {
     };
   }
 
-  @Get('wallets/me')
-  async getWallet(@Req() req: any): Promise<GetWalletResponseDto> {
-    // TODO: Extract playerId from JWT
-    const playerId = req.user?.sub || 'player-id-from-jwt';
+  @Get('me')
+  async getWallet(@UserContext() user: UserContextType): Promise<GetWalletResponseDto> {
 
-    const result = await this.getWalletUseCase.execute({ playerId });
+    const result = await this.getWalletUseCase.execute({ playerId: user.playerId });
     return {
       walletId: result.walletId,
       playerId: result.playerId,

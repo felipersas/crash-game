@@ -21,7 +21,7 @@ services:
       retries: 10
 
   # ---------------------------------------------------------------------------
-  # RabbitMQ (with management UI)
+  # RabbitMQ (with management UI + delayed message plugin)
   # ---------------------------------------------------------------------------
   rabbitmq:
     image: rabbitmq:4.2.4-management-alpine
@@ -33,6 +33,7 @@ services:
       RABBITMQ_DEFAULT_PASS: admin
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+      - ./docker/rabbitmq/enabled-plugins:/etc/rabbitmq/enabled_plugins
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -95,12 +96,17 @@ services:
   # ---------------------------------------------------------------------------
   games:
     build:
-      context: ./services/games
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/games/Dockerfile
     ports:
       - "4001:4001"
     env_file:
       - ./services/games/.env
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: admin
+      DATABASE_PASSWORD: admin
     depends_on:
       postgres:
         condition: service_healthy
@@ -118,12 +124,17 @@ services:
   # ---------------------------------------------------------------------------
   wallets:
     build:
-      context: ./services/wallets
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/wallets/Dockerfile
     ports:
       - "4002:4002"
     env_file:
       - ./services/wallets/.env
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: admin
+      DATABASE_PASSWORD: admin
     depends_on:
       postgres:
         condition: service_healthy
