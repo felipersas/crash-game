@@ -1,10 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import type { IEventPublisher } from '@crash/messaging';
 import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { RoundLifecycleManager } from '@/infrastructure/scheduling/round-lifecycle-manager';
 
 export interface CashOutInput {
   playerId: string;
@@ -25,16 +26,20 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    private readonly roundLifecycleManager: RoundLifecycleManager,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
-    const roundId = input.roundId;
+    // IMPORTANT: Use in-memory Round from LifecycleManager for current multiplier
+    // The DB Round has stale multiplier (updated only in-memory every 100ms)
     let round: Round | null = null;
 
-    if (roundId) {
-      round = await this.roundRepository.findById(roundId);
+    if (input.roundId) {
+      // For specific round ID, load from DB (e.g., historical cashout)
+      round = await this.roundRepository.findById(input.roundId);
     } else {
-      round = await this.roundRepository.findCurrentRound();
+      // For current round, use LifecycleManager's in-memory Round
+      round = this.roundLifecycleManager.getCurrentRound();
     }
 
     if (!round) {

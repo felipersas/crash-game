@@ -286,11 +286,20 @@ export class RoundLifecycleManager {
 
   /**
    * Handle round crashed.
+   *
+   * IMPORTANT: Uses in-memory currentRound for event generation.
+   * If DB save fails due to OptimisticLockError (cashouts via API),
+   * we still publish events since crash was determined in-memory.
+   *
+   * The crash events contain authoritative crash point and seed.
    */
   private async handleRoundCrashed() {
     if (!this.currentRound) return;
 
-    this.logger.log(`Round ${this.currentRound.id} crashed at ${this.currentRound.getCrashPoint()}x`);
+    const roundId = this.currentRound.id;
+    const crashPoint = this.currentRound.getCrashPoint();
+
+    this.logger.log(`Round ${roundId} crashed at ${crashPoint}x`);
 
     // Stop updates
     if (this.updateInterval) {
@@ -298,7 +307,20 @@ export class RoundLifecycleManager {
       this.updateInterval = null;
     }
 
-    await this.roundRepository.save(this.currentRound);
+    // Try to save, but handle OptimisticLockError gracefully
+    // (cashouts via API may have incremented version)
+    try {
+      await this.roundRepository.save(this.currentRound);
+    } catch (error: unknown) {
+      if (error instanceof Error && 'code' in error && error.code === 'P2025') {
+        this.logger.warn(
+          `Round ${roundId} was modified by cashouts, using in-memory state for events`,
+        );
+        // Continue with event publishing - crash was determined in-memory
+      } else {
+        throw error; // Re-throw unexpected errors
+      }
+    }
 
     // Publish events
     const events = this.currentRound.pullEvents();
