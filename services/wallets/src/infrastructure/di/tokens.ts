@@ -3,8 +3,5 @@
  *
  * NestJS injection tokens for infrastructure dependencies.
  */
-
-import type { InjectionToken } from '@nestjs/common';
-
-export const WALLET_REPOSITORY = Symbol('IWalletRepository');
-export const EVENT_PUBLISHER = Symbol('IEventPublisher');
+export const WALLET_REPOSITORY = 'WALLET_REPOSITORY';
+export const EVENT_PUBLISHER = 'EVENT_PUBLISHER';
