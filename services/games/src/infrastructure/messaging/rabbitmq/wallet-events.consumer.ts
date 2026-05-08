@@ -2,20 +2,15 @@
  * RabbitMQ Consumer for Wallet Events - Infrastructure Layer
  *
  * Consumes confirmation events from the Wallets service via the wallet.events exchange.
- * Updates bet states based on wallet debit results:
- * - WalletDebitedEvent → Confirm bet (PENDING → ACTIVE)
- * - WalletDebitFailedEvent → Cancel bet (PENDING → CANCELLED)
+ * Dispatches events to appropriate handlers for bet state updates.
  */
 
-import { Injectable, Logger, Inject, type OnModuleInit, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit, type OnModuleDestroy } from '@nestjs/common';
 import { connect, type AmqpConnectionManager, type ChannelWrapper } from 'amqp-connection-manager';
 import type { ConfirmChannel, ConsumeMessage } from 'amqplib';
-import type { IRoundRepository } from '@/application/interfaces/round.repository';
-import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
-import type { WalletDebitedEvent, WalletDebitFailedEvent, WalletDomainEvent } from '../types/wallet.events';
-import type { GameDomainEvent } from '@/domain';
-
-type WalletEvent = WalletDebitedEvent | WalletDebitFailedEvent;
+import { WalletDebitedEventHandler } from './handlers/wallet-debited.handler';
+import { WalletDebitFailedEventHandler } from './handlers/wallet-debit-failed.handler';
+import type { WalletDomainEvent } from '../types/wallet.events';
 
 /**
  * Consumer for wallet confirmation events from the Wallets service.
@@ -34,7 +29,8 @@ export class WalletEventsConsumer implements OnModuleInit, OnModuleDestroy {
   private consumerTag: string | null = null;
 
   constructor(
-    @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
+    private readonly walletDebitedEventHandler: WalletDebitedEventHandler,
+    private readonly walletDebitFailedEventHandler: WalletDebitFailedEventHandler,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -104,6 +100,8 @@ export class WalletEventsConsumer implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Handle a single message.
+   * Note: json: true only affects outgoing messages. Incoming messages
+   * are always Buffers that need manual parsing.
    */
   private async handleMessage(
     msg: ConsumeMessage,
@@ -111,23 +109,20 @@ export class WalletEventsConsumer implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     const event = JSON.parse(msg.content.toString()) as WalletDomainEvent;
 
-
-
     try {
+      this.logger.debug(`Received event: ${event.eventType}`);
 
-      // Dispatch to appropriate handler based on event type
       switch (event.eventType) {
         case 'WalletDebited':
-          await this.handleWalletDebited(event);
+          await this.walletDebitedEventHandler.handle(event);
           break;
 
         case 'WalletDebitFailed':
-          await this.handleWalletDebitFailed(event);
+          await this.walletDebitFailedEventHandler.handle(event);
           break;
 
         default: {
-          // Type assertion for unknown event types
-          const unknownEvent = event as WalletEvent & { eventType: string };
+          const unknownEvent = event as WalletDomainEvent & { eventType: string };
           this.logger.warn(`Unhandled event type: ${unknownEvent.eventType}`);
           break;
         }
@@ -142,71 +137,6 @@ export class WalletEventsConsumer implements OnModuleInit, OnModuleDestroy {
 
       channel.nack(msg, false, false);
     }
-  }
-
-  /**
-   * Handle successful wallet debit - confirm the bet.
-   */
-  private async handleWalletDebited(event: WalletDebitedEvent): Promise<void> {
-    this.logger.debug(
-      `Confirming bet ${event.betId} for player ${event.playerId} in round ${event.roundId}`,
-    );
-
-    const round = await this.roundRepository.findById(event.roundId);
-    if (!round) {
-      this.logger.warn(`Round ${event.roundId} not found for bet ${event.betId}`);
-      return;
-    }
-
-    const bet = round.getBetByPlayer(event.playerId);
-    if (!bet) {
-      this.logger.warn(`Bet ${event.betId} not found in round ${event.roundId}`);
-      return;
-    }
-
-    // Confirm the bet (PENDING → ACTIVE)
-    bet.confirm();
-
-    // Save and emit events
-    await this.roundRepository.save(round);
-    const events = round.pullEvents();
-    // Note: We might want to emit BetConfirmedEvent here
-
-    this.logger.log(`Bet ${event.betId} confirmed for player ${event.playerId}`);
-  }
-
-  /**
-   * Handle failed wallet debit - cancel the bet.
-   */
-  private async handleWalletDebitFailed(event: WalletDebitFailedEvent): Promise<void> {
-    this.logger.debug(
-      `Cancelling bet ${event.betId} for player ${event.playerId} in round ${event.roundId}: ${event.reason}`,
-    );
-
-    const round = await this.roundRepository.findById(event.roundId);
-    if (!round) {
-      this.logger.warn(`Round ${event.roundId} not found for bet ${event.betId}`);
-      return;
-    }
-
-    const bet = round.getBetByPlayer(event.playerId);
-    if (!bet) {
-      this.logger.warn(`Bet ${event.betId} not found in round ${event.roundId}`);
-      return;
-    }
-
-    // Cancel the bet (PENDING → CANCELLED)
-    bet.cancel(event.reason);
-
-    // Remove from round's bets (optional, depending on requirements)
-    // For now, we keep it with CANCELLED status for audit trail
-
-    // Save and emit events
-    await this.roundRepository.save(round);
-    const events = round.pullEvents();
-    // Note: We might want to emit BetCancelledEvent here
-
-    this.logger.log(`Bet ${event.betId} cancelled for player ${event.playerId}: ${event.reason}`);
   }
 
   /**
