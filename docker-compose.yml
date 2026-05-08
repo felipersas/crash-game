@@ -102,6 +102,11 @@ services:
       - "4001:4001"
     env_file:
       - ./services/games/.env
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: admin
+      DATABASE_PASSWORD: admin
     depends_on:
       postgres:
         condition: service_healthy
@@ -125,6 +130,11 @@ services:
       - "4002:4002"
     env_file:
       - ./services/wallets/.env
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: admin
+      DATABASE_PASSWORD: admin
     depends_on:
       postgres:
         condition: service_healthy

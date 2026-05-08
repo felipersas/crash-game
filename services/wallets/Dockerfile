@@ -22,6 +22,10 @@ ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 WORKDIR /app/services/wallets
 RUN bunx prisma generate
 
+# Copia e configura o script de entrypoint para migrations
+COPY --chmod=755 services/wallets/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
 # Build do serviço de wallets
 RUN bun run build
 
