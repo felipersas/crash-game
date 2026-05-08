@@ -44,7 +44,7 @@ services:
   # Redis (Fast in-memory data store for current game state)
   # ---------------------------------------------------------------------------
   redis:
-    image: redis:8-bookworm-alpine
+    image: redis:7.4-alpine
     ports:
       - "6379:6379"
     command: [
@@ -148,10 +148,13 @@ services:
       DATABASE_PORT: 5432
       DATABASE_USER: admin
       DATABASE_PASSWORD: admin
+      REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:4001/health || exit 1"]
