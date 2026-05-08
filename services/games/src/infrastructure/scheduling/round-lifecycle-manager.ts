@@ -142,12 +142,16 @@ export class RoundLifecycleManager {
   /**
    * Resume an existing round (after server restart).
    */
-  private resumeRound() {
+  private async resumeRound() {
     if (!this.currentRound) return;
 
     const status = this.currentRound.getStatus();
 
-    if (status === RoundStatus.BETTING) {
+    if (status === RoundStatus.CRASHED) {
+      // Round crashed while server was down - create new round immediately
+      this.logger.log(`Current round ${this.currentRound.id} is CRASHED, creating new round`);
+      await this.createNewRound();
+    } else if (status === RoundStatus.BETTING) {
       // Check if betting phase should have ended
       const bettingEndTime = this.currentRound.getBettingEndTime();
       if (bettingEndTime && bettingEndTime < new Date()) {
