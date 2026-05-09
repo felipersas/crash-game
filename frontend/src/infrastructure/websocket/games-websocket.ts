@@ -5,10 +5,15 @@
 import { io, Socket } from 'socket.io-client';
 import type { ServerToClientEvents } from './websocket.types';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:8000/games';
+// Connect through Kong to games service
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:8000';
 
 export interface GamesWebSocketConfig {
   token?: string;
+  onConnect?: () => void;
+  onDisconnect?: (reason: string) => void;
+  onConnectError?: (error: Error) => void;
+  onReconnecting?: (attempt: number) => void;
   onRoundStarted?: (data: Parameters<ServerToClientEvents['roundStarted']>[0]) => void;
   onBettingEnded?: (data: Parameters<ServerToClientEvents['bettingEnded']>[0]) => void;
   onMultiplierUpdate?: (data: Parameters<ServerToClientEvents['multiplierUpdate']>[0]) => void;
@@ -40,8 +45,10 @@ export class GamesWebSocket {
       ? { token: this.config.token }
       : undefined;
 
+    // Use Kong's /socket.io route (games-websocket-root in kong.yml)
+    // Don't specify path - let Socket.IO use default /socket.io/
     this.socket = io(WS_URL, {
-      path: '/games/socket.io/',
+      path: '/socket.io/',
       auth,
       reconnection: true,
       reconnectionDelay: this.reconnectDelay,
@@ -60,15 +67,24 @@ export class GamesWebSocket {
     this.socket.on('connect', () => {
       console.log('WebSocket connected:', this.socket?.id);
       this.reconnectAttempts = 0;
+      this.config.onConnect?.();
     });
 
     this.socket.on('disconnect', (reason) => {
       console.log('WebSocket disconnected:', reason);
+      this.config.onDisconnect?.(reason);
     });
 
     this.socket.on('connect_error', (error) => {
       console.error('WebSocket connection error:', error);
       this.reconnectAttempts++;
+      this.config.onConnectError?.(error);
+    });
+
+    // Socket.IO reconnect event
+    this.socket.io.on('reconnect_attempt', (attempt) => {
+      console.log('WebSocket reconnect attempt:', attempt);
+      this.config.onReconnecting?.(attempt);
     });
 
     // Game events

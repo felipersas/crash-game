@@ -1,13 +1,13 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { Round } from '@/domain/entities/round.entity';
+import { Round, RoundStatus } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import type { IEventPublisher } from '@crash/messaging';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 import { RoundLifecycleManager } from '@/infrastructure/scheduling/round-lifecycle-manager';
 import { RedisService, type CashoutIdempotencyResult } from '@/infrastructure/redis/redis.service';
 import { RoundNotFoundError, NoActiveBetError, InvalidIdempotencyKeyError } from '@/domain/errors/domain.errors';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 
 /**
  * Cash Out Use Case
@@ -77,10 +77,14 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   private async loadRound(roundId?: string): Promise<Round> {
     let round: Round | null = null;
 
-    if (roundId) {
+    const liveRound = this.roundLifecycleManager.getCurrentRound();
+
+    if (liveRound && liveRound.getStatus() === RoundStatus.ACTIVE) {
+      round = liveRound;
+    } else if (roundId) {
       round = await this.roundRepository.findById(roundId);
     } else {
-      round = this.roundLifecycleManager.getCurrentRound();
+      round = liveRound;
     }
 
     if (!round) {

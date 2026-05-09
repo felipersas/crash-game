@@ -10,20 +10,22 @@ import {
   formatMoney,
   formatPayout,
 } from "@/shared/utils/money";
+import { RoundStatus } from "@/domain/types/game.types";
 
 export default function BetControls() {
   const { form, potentialPayout } = useBetForm();
   const {
-    isBettingPhase,
-    isActivePhase,
-    isCrashed,
     placeBet,
     isPlacingBet,
     cashOut,
     isCashingOut,
-    currentMultiplier,
   } = useGame();
-  const { myActiveBet } = useGameStore();
+  const { myActiveBet, roundStatus, liveMultiplier } = useGameStore();
+
+  // Derive phase states from roundStatus enum
+  const isBettingPhase = roundStatus === RoundStatus.BETTING;
+  const isActivePhase = roundStatus === RoundStatus.ACTIVE;
+  const isCrashed = roundStatus === RoundStatus.CRASHED;
 
   const canBet = isBettingPhase && !myActiveBet;
   const canCashOut = isActivePhase && myActiveBet;
@@ -36,7 +38,7 @@ export default function BetControls() {
   };
 
   const potentialWin = myActiveBet
-    ? calculatePayout(myActiveBet.amountCents, currentMultiplier)
+    ? calculatePayout(myActiveBet.amountCents, liveMultiplier)
     : null;
 
   return (
@@ -82,14 +84,14 @@ export default function BetControls() {
           >
             {isCashingOut
               ? "Cashing Out..."
-              : `Cash Out @ ${currentMultiplier.toFixed(2)}x`}
+              : `Cash Out @ ${liveMultiplier.toFixed(2)}x`}
           </Button>
         </div>
       )}
 
       {isCrashed && myActiveBet && (
         <div className="text-center text-red-400">
-          <p>Round Crashed at {currentMultiplier.toFixed(2)}x</p>
+          <p>Round Crashed at {liveMultiplier.toFixed(2)}x</p>
         </div>
       )}
     </div>

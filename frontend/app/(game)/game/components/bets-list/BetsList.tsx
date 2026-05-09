@@ -1,21 +1,20 @@
 "use client";
 
-import { useGame } from "@/hooks/useGame";
+import { useGameStore } from "@/infrastructure/store/game-store";
 import { formatMoney } from "@/shared/utils/money";
 
 export default function BetsList() {
-  const { currentRound } = useGame();
-  const bets = currentRound?.bets || [];
+  const { currentBets } = useGameStore();
 
   return (
     <div className="bg-zinc-900/50 border border-purple-500/20 rounded-xl p-4">
       <h3 className="text-lg font-semibold mb-3">Current Round Bets</h3>
 
       <div className="space-y-2 max-h-48 overflow-y-auto">
-        {!bets?.length ? (
+        {!currentBets?.length ? (
           <p className="text-zinc-500 text-center py-4">No bets yet</p>
         ) : (
-          bets.map((bet) => (
+          currentBets.map((bet) => (
             <div
               key={bet.id}
               className="flex items-center justify-between py-2 px-3 bg-zinc-800/50 rounded-lg"

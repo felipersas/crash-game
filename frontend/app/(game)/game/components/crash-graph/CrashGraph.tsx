@@ -7,9 +7,11 @@ interface Props {
   multiplier: number;
   phase: "betting" | "active" | "crashed";
   isConnected: boolean;
+  connectionStatus?: "connecting" | "connected" | "disconnected" | "error";
+  reconnectAttempt?: number;
 }
 
-export default function CrashGraph({ multiplier, phase, isConnected }: Props) {
+export default function CrashGraph({ multiplier, phase, isConnected, connectionStatus, reconnectAttempt }: Props) {
   const isCrashed = phase === "crashed";
   const colorClass = isCrashed
     ? "text-red-500"
@@ -57,10 +59,39 @@ export default function CrashGraph({ multiplier, phase, isConnected }: Props) {
         />
       </div>
 
-      {/* Connection status */}
-      {!isConnected && (
-        <div className="absolute top-2 right-2 px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">
-          Disconnected
+      {/* Connection status indicator */}
+      {(!isConnected || connectionStatus === 'error') && (
+        <div className="absolute top-2 right-2 flex items-center gap-2">
+          <div className={`px-2 py-1 text-xs rounded flex items-center gap-1.5 ${
+            connectionStatus === 'error'
+              ? 'bg-red-500/20 text-red-400'
+              : 'bg-yellow-500/20 text-yellow-400'
+          }`}>
+            {connectionStatus === 'connecting' && (
+              <>
+                <motion.span
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  className="inline-block"
+                >⚡</motion.span>
+                Connecting...
+              </>
+            )}
+            {connectionStatus === 'error' && (
+              <>
+                <span>⚠️</span>
+                {reconnectAttempt && reconnectAttempt > 0
+                  ? `Reconnecting (${reconnectAttempt}/10)...`
+                  : 'Connection Error'}
+              </>
+            )}
+            {connectionStatus === 'disconnected' && (
+              <>
+                <span>🔌</span>
+                Disconnected
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

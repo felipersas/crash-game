@@ -13,19 +13,26 @@ import type { PlaceBetResponse, CashOutResponse } from '../shared/schemas/api-sc
  * Game operations hook
  *
  * Manages game state, bet placement, and cash out operations.
- * Combines TanStack Query for server state with Zustand for UI state.
+ * Combines TanStack Query for server state with Zustand for real-time UI state.
+ *
+ * IMPORTANT: Multiplier and round phase are managed by WebSocket via Zustand store.
+ * This hook only provides REST-based mutations (bet placement, cash out) and
+ * periodic polling during BETTING phase for round synchronization.
  *
  * @example
  * ```ts
- * const { currentRound, placeBet, cashOut, isBettingPhase } = useGame();
+ * const { placeBet, cashOut, isPlacingBet } = useGame();
+ * // Get real-time state from useGameStore instead
+ * const { liveMultiplier, roundStatus } = useGameStore();
  * ```
  */
 export function useGame() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
-  const { setMyActiveBet, updateBetStatus, myActiveBet } = useGameStore();
+  const { setMyActiveBet, updateBetStatus, myActiveBet, roundStatus } = useGameStore();
 
-  // Current round query with dynamic polling
+  // Current round query with smart polling
+  // Only poll during BETTING phase - ACTIVE phase is handled by WebSocket
   const currentRoundQuery = useQuery<Round>({
     queryKey: ['current-round'],
     queryFn: () => {
@@ -33,9 +40,16 @@ export function useGame() {
       return api.getCurrentRound();
     },
     refetchInterval: (query) => {
-      // Poll faster during active phase for real-time multiplier
-      return query.state.data?.status === RoundStatus.ACTIVE ? 1000 : 3000;
+      const status = query.state.data?.status ?? roundStatus;
+      // Don't poll during ACTIVE phase - WebSocket handles real-time updates
+      if (status === RoundStatus.ACTIVE) {
+        return false; // Disable polling during active phase
+      }
+      // Poll every 3 seconds during BETTING phase to sync round state
+      return status === RoundStatus.BETTING ? 3000 : false;
     },
+    // Only refetch on window focus during betting phase
+    refetchOnWindowFocus: roundStatus === RoundStatus.BETTING,
   });
 
   // Place bet mutation
@@ -103,10 +117,6 @@ export function useGame() {
 
   return {
     currentRound: roundData,
-    isBettingPhase: roundData?.status === RoundStatus.BETTING,
-    isActivePhase: roundData?.status === RoundStatus.ACTIVE,
-    isCrashed: roundData?.status === RoundStatus.CRASHED,
-    currentMultiplier: roundData?.currentMultiplier ?? 1.0,
     isLoading: currentRoundQuery.isLoading,
     placeBet: placeBetMutation.mutate,
     isPlacingBet: placeBetMutation.isPending,

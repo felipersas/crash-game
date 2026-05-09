@@ -14,19 +14,23 @@ interface GameState {
   liveMultiplier: number;
   bettingEndTime: Date | null;
   myActiveBet: Bet | null;
-  
+  currentBets: Bet[];
+
   setConnectionStatus: (status: GameState['connectionStatus']) => void;
   setConnected: (connected: boolean) => void;
   setRoundStarted: (roundId: string, seedHash: string, bettingEndTime: Date) => void;
   setBettingEnded: () => void;
   setMultiplier: (multiplier: number) => void;
-  setCrash: (crashPoint: number, seed: string) => void;
+  setCrash: (crashPoint: number) => void;
   setMyActiveBet: (bet: Bet | null) => void;
   updateBetStatus: (betId: string, status: Bet['status'], cashOutData?: {
     multiplier: number;
     payoutCents: number;
     payoutDecimal: string;
   }) => void;
+  setCurrentBets: (bets: Bet[]) => void;
+  addBet: (bet: Bet) => void;
+  updateBet: (betId: string, updates: Partial<Bet>) => void;
   resetRound: () => void;
 }
 
@@ -40,6 +44,7 @@ export const useGameStore = create<GameState>()(
       liveMultiplier: 1.0,
       bettingEndTime: null,
       myActiveBet: null,
+      currentBets: [],
       
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       setConnected: (connected) => set({ isConnected: connected }),
@@ -96,7 +101,22 @@ export const useGameStore = create<GameState>()(
           liveMultiplier: 1.0,
           bettingEndTime: null,
           myActiveBet: null,
+          currentBets: [],
         }),
+
+      setCurrentBets: (bets) => set({ currentBets: bets }),
+
+      addBet: (bet) =>
+        set((state) => ({
+          currentBets: [...state.currentBets, bet],
+        })),
+
+      updateBet: (betId, updates) =>
+        set((state) => ({
+          currentBets: state.currentBets.map((bet) =>
+            bet.id === betId ? { ...bet, ...updates } : bet
+          ),
+        })),
     }),
     { name: 'GameStore' }
   )
