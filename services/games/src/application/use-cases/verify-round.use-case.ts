@@ -1,5 +1,4 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
-import { Round } from '@/domain/entities/round.entity';
 import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import { CrashPoint } from '@/domain/value-objects/crash-point.value-object';
 import type { IRoundRepository } from '../interfaces/round.repository';
@@ -16,8 +15,10 @@ export interface VerifyRoundOutput {
   roundId: string;
   seed: string;
   seedHash: string;
+  salt: string;
   crashPoint: number;
   verified: boolean;
+  verificationFormula: string;
 }
 
 @Injectable()
@@ -56,8 +57,10 @@ export class VerifyRoundUseCase implements IUseCase<VerifyRoundInput, VerifyRoun
       roundId: round.id,
       seed,
       seedHash,
+      salt: seed,
       crashPoint: crashPointValue,
       verified: hashMatches && crashPointMatches,
+      verificationFormula: 'SHA-256(seed) → extract first 52 bits → crash = max(1.00, (1 - 0.04) / (bits / 2^52))',
     };
   }
 }

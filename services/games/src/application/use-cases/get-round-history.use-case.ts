@@ -3,10 +3,13 @@ import { Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
+import { computePagination, buildPaginationMeta, type PaginationMeta } from '../shared/pagination.util';
+
+export { type PaginationMeta };
 
 export interface GetRoundHistoryInput {
+  page?: number;
   limit?: number;
-  offset?: number;
 }
 
 export interface RoundSummaryOutput {
@@ -16,11 +19,12 @@ export interface RoundSummaryOutput {
   startedAt: Date | null;
   crashedAt: Date | null;
   totalBets: number;
+  totalWageredCents: number;
 }
 
 export interface GetRoundHistoryOutput {
-  rounds: RoundSummaryOutput[];
-  total: number;
+  data: RoundSummaryOutput[];
+  meta: PaginationMeta;
 }
 
 @Injectable()
@@ -30,19 +34,22 @@ export class GetRoundHistoryUseCase implements IUseCase<GetRoundHistoryInput, Ge
   ) {}
 
   async execute(input: GetRoundHistoryInput = {}): Promise<GetRoundHistoryOutput> {
-    const limit = input.limit || 20;
-    const offset = input.offset || 0;
+    const { page, limit, offset } = computePagination(input);
 
-    const rounds = await this.roundRepository.findHistory(limit, offset);
+    const [rounds, total] = await Promise.all([
+      this.roundRepository.findHistory(limit, offset),
+      this.roundRepository.findHistoryCount(),
+    ]);
 
     return {
-      rounds: rounds.map(this.mapRoundToSummary),
-      total: rounds.length,
+      data: rounds.map(this.mapRoundToSummary),
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
   private mapRoundToSummary(round: Round): RoundSummaryOutput {
     const bets = round.getBets();
+    const totalWageredCents = bets.reduce((sum, bet) => sum + Number(bet.getAmount().toCents()), 0);
 
     return {
       roundId: round.id,
@@ -51,6 +58,7 @@ export class GetRoundHistoryUseCase implements IUseCase<GetRoundHistoryInput, Ge
       startedAt: round.getStartedAt(),
       crashedAt: round.getCrashedAt(),
       totalBets: bets.length,
+      totalWageredCents,
     };
   }
 }

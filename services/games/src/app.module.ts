@@ -20,6 +20,7 @@ import { VerifyRoundUseCase } from './application/use-cases/verify-round.use-cas
 import { ConfirmBetUseCase } from './application/use-cases/confirm-bet.use-case';
 import { CancelBetUseCase } from './application/use-cases/cancel-bet.use-case';
 import { GetBetStatusUseCase } from './application/use-cases/get-bet-status.use-case';
+import { GetMyBetsUseCase } from './application/use-cases/get-my-bets.use-case';
 import { BetTimeoutHandler } from './infrastructure/scheduling/bet-timeout.handler';
 import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY } from './infrastructure/di/tokens';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
@@ -93,6 +94,7 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
     ConfirmBetUseCase,
     CancelBetUseCase,
     GetBetStatusUseCase,
+    GetMyBetsUseCase,
   ],
   exports: [
     ROUND_REPOSITORY,

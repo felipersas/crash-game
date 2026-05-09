@@ -67,8 +67,8 @@ export class GetCurrentRoundUseCase implements IUseCase<GetCurrentRoundInput, Ge
       amountCents: bet.getAmount().toCents(),
       amountDecimal: bet.getAmount().toDecimal(),
       status: bet.getStatus(),
-      cashOutMultiplier: bet.getCashOutMultiplier()?.getValue() || null,
-      cashOutAmountCents: bet.getCashOutAmount()?.toCents() || null,
+      cashOutMultiplier: bet.getCashOutMultiplier()?.getValue() ?? null,
+      cashOutAmountCents: bet.getCashOutAmount()?.toCents() ?? null,
       cashedOutAt: bet.getCashedOutAt(),
     };
   }

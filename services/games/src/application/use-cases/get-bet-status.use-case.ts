@@ -3,7 +3,7 @@ import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
 import { BetNotFoundError } from '@/domain/errors/domain.errors';
-import { BetStatus } from '@prisma/client';
+import { BetStatus } from '@/domain/entities/bet.entity';
 
 export interface GetBetStatusInput {
   betId: string;
@@ -16,7 +16,7 @@ export interface BetStatusOutput {
   amountCents: bigint;
   status: BetStatus;
   cashOutMultiplier: number | null;
-  cashOutAmountCents: bigint | null;
+  payoutCents: bigint | null;
   cashedOutAt: Date | null;
   cancelReason: string | null;
 }
@@ -46,8 +46,8 @@ export class GetBetStatusUseCase implements IUseCase<GetBetStatusInput, BetStatu
       playerId: bet.playerId,
       amountCents: bet.getAmount().toCents(),
       status: bet.getStatus(),
-      cashOutMultiplier: bet.getCashOutMultiplier()?.getValue() || null,
-      cashOutAmountCents: bet.getCashOutAmount()?.toCents() || null,
+      cashOutMultiplier: bet.getCashOutMultiplier()?.getValue() ?? null,
+      payoutCents: bet.getCashOutAmount()?.toCents() ?? null,
       cashedOutAt: bet.getCashedOutAt(),
       cancelReason: bet.getCancelReason(),
     };
