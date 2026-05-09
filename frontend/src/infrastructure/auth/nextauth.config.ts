@@ -24,9 +24,9 @@ export const authOptions: NextAuthOptions = {
         token.expiresAt = account.expires_at;
       }
 
-      // Add playerId from profile
+      // playerId = Keycloak sub claim (same UUID backend uses as playerId)
       if (profile) {
-        token.playerId = profile.playerId;
+        token.playerId = profile.sub;
       }
 
       return token;
