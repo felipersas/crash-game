@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Round, RoundStatus } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IBetRepository } from '../interfaces/bet.repository';
@@ -8,6 +8,8 @@ import { RoundLifecycleManager } from '@/infrastructure/scheduling/round-lifecyc
 import { RedisService, type CashoutIdempotencyResult } from '@/infrastructure/redis/redis.service';
 import { RoundNotFoundError, NoActiveBetError, InvalidIdempotencyKeyError } from '@/domain/errors/domain.errors';
 import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
 
 /**
  * Cash Out Use Case
@@ -32,12 +34,15 @@ export interface CashOutOutput {
 
 @Injectable()
 export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
+  private readonly logger = new Logger(CashOutUseCase.name);
+
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
     private readonly roundLifecycleManager: RoundLifecycleManager,
     private readonly redisService: RedisService,
+    private readonly gamesGateway: GamesGateway,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
@@ -134,6 +139,24 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     if (events.length === 0) return;
 
     await this.eventPublisher.publishBatch(events);
+
+    // Broadcast player cashed out via WebSocket (fire-and-forget)
+    const cashedOut = events.find(
+      (e): e is PlayerCashedOutEvent => e.eventType === 'PlayerCashedOut',
+    );
+    if (cashedOut) {
+      try {
+        this.gamesGateway.broadcastPlayerCashedOut(
+          cashedOut.roundId,
+          cashedOut.betId,
+          cashedOut.playerId,
+          cashedOut.cashOutMultiplier,
+          cashedOut.winAmount,
+        );
+      } catch (error) {
+        this.logger.error('Failed to broadcast player cashed out event', error);
+      }
+    }
   }
 
   private mapToOutput(

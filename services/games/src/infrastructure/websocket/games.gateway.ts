@@ -1,7 +1,6 @@
 import {
   WebSocketGateway,
   WebSocketServer,
-  SubscribeMessage,
 } from '@nestjs/websockets';
 import type {
   OnGatewayInit,
@@ -10,7 +9,6 @@ import type {
 } from '@nestjs/websockets';
 import { Logger, Injectable } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
-import { Round, RoundStatus } from '@/domain/entities/round.entity';
 
 /**
  * WebSocket Events - Server to Client only (push)
@@ -20,10 +18,10 @@ export interface ServerToClientEvents {
   bettingEnded: (data: { roundId: string }) => void;
   multiplierUpdate: (data: { roundId: string; multiplier: number }) => void;
   crash: (data: { roundId: string; crashPoint: number; seed: string }) => void;
-  betPlaced: (data: { roundId: string; playerId: string; amountCents: bigint }) => void;
-  betConfirmed: (data: { roundId: string; betId: string; playerId: string; amountCents: bigint }) => void;
-  betCancelled: (data: { roundId: string; betId: string; playerId: string; amountCents: bigint; reason: string }) => void;
-  playerCashedOut: (data: { roundId: string; playerId: string; multiplier: number; payoutCents: bigint }) => void;
+  betPlaced: (data: { roundId: string; betId: string; playerId: string; amountCents: number }) => void;
+  betConfirmed: (data: { roundId: string; betId: string; playerId: string; amountCents: number }) => void;
+  betCancelled: (data: { roundId: string; betId: string; playerId: string; amountCents: number; reason: string }) => void;
+  playerCashedOut: (data: { roundId: string; betId: string; playerId: string; multiplier: number; payoutCents: number }) => void;
 }
 
 @Injectable()
@@ -94,11 +92,12 @@ export class GamesGateway
   /**
    * Broadcast bet placed event.
    */
-  broadcastBetPlaced(roundId: string, playerId: string, amountCents: bigint) {
+  broadcastBetPlaced(roundId: string, betId: string, playerId: string, amountCents: bigint) {
     this.server.emit('betPlaced', {
       roundId,
+      betId,
       playerId,
-      amountCents,
+      amountCents: Number(amountCents),
     });
   }
 
@@ -110,7 +109,7 @@ export class GamesGateway
       roundId,
       betId,
       playerId,
-      amountCents,
+      amountCents: Number(amountCents),
     });
   }
 
@@ -122,7 +121,7 @@ export class GamesGateway
       roundId,
       betId,
       playerId,
-      amountCents,
+      amountCents: Number(amountCents),
       reason,
     });
   }
@@ -132,15 +131,17 @@ export class GamesGateway
    */
   broadcastPlayerCashedOut(
     roundId: string,
+    betId: string,
     playerId: string,
     multiplier: number,
     payoutCents: bigint,
   ) {
     this.server.emit('playerCashedOut', {
       roundId,
+      betId,
       playerId,
       multiplier,
-      payoutCents,
+      payoutCents: Number(payoutCents),
     });
   }
 }

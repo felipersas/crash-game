@@ -1,19 +1,13 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
-import { Bet } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { IEventPublisher } from '@crash/messaging';
 import type { IUseCase } from '@/application/interfaces/use-case';
 import { Money } from '@crash/domain';
-import {
-  RoundNotAcceptingBetsError,
-  DuplicateBetError,
-  BetBelowMinimumError,
-  BetAboveMaximumError,
-  BetNotFoundError,
-} from '@/domain/errors/domain.errors';
+import { BetNotFoundError } from '@/domain/errors/domain.errors';
 import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
 
 export interface PlaceBetInput {
   playerId: string;
@@ -29,10 +23,13 @@ export interface PlaceBetOutput {
 
 @Injectable()
 export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> {
+  private readonly logger = new Logger(PlaceBetUseCase.name);
+
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    private readonly gamesGateway: GamesGateway,
   ) {}
 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {
@@ -69,6 +66,18 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
     const events = round.pullEvents();
     if (events.length > 0) {
       await this.eventPublisher.publishBatch(events);
+    }
+
+    // Broadcast via WebSocket (fire-and-forget, non-blocking)
+    try {
+      this.gamesGateway.broadcastBetPlaced(
+        round.id,
+        bet.id,
+        input.playerId,
+        input.amountCents,
+      );
+    } catch (error) {
+      this.logger.error('Failed to broadcast bet placed event', error);
     }
 
     return {
