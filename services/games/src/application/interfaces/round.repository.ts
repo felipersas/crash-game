@@ -1,11 +1,12 @@
-import { Round, RoundStatus } from '@/domain/entities/round.entity';
-import { Bet } from '@/domain/entities/bet.entity';
+import { Round } from '@/domain/entities/round.entity';
 
 /**
  * Round Repository Interface - Application Layer
  *
  * Defines the contract for round persistence.
  * Implemented by Infrastructure layer.
+ *
+ * NOTE: Bet queries belong to IBetRepository, not here.
  */
 export interface IRoundRepository {
   /**
@@ -19,7 +20,7 @@ export interface IRoundRepository {
   findById(id: string): Promise<Round | null>;
 
   /**
-   * Save a round (create or update).
+   * Update an existing round (with optimistic locking).
    */
   save(round: Round): Promise<void>;
 
@@ -34,12 +35,7 @@ export interface IRoundRepository {
   findHistory(limit: number, offset: number): Promise<Round[]>;
 
   /**
-   * Find a bet by ID.
+   * Count total finished rounds for pagination.
    */
-  findBetById(betId: string): Promise<Bet | null>;
-
-  /**
-   * Find all bets for a player.
-   */
-  findBetsByPlayer(playerId: string, limit?: number): Promise<Bet[]>;
+  findHistoryCount(): Promise<number>;
 }

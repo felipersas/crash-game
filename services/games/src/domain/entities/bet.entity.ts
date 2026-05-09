@@ -1,21 +1,18 @@
 import { Multiplier } from '../value-objects/multiplier.value-object';
 import { Money } from '@crash/domain';
-import { BetStatus } from '@prisma/client';
 import { InvalidBetStateError } from '../errors/domain.errors';
 
 /**
- * Bet Entity - Represents a player's bet in a round.
- *
- * A bet can be in one of five states (saga pattern):
- * - PENDING: Bet placed, waiting for wallet confirmation
- * - ACTIVE: Wallet debited, bet is active in round
- * - CASHED_OUT: Player cashed out, waiting for round completion
- * - LOST: Round crashed before player cashed out
- * - CANCELLED: Wallet debit failed, bet was cancelled
- *
- * Re-exports BetStatus from Prisma as single source of truth.
+ * Bet lifecycle states (saga pattern).
+ * Defined in domain layer to avoid infrastructure dependency.
  */
-export { BetStatus };
+export enum BetStatus {
+  PENDING = 'PENDING',
+  ACTIVE = 'ACTIVE',
+  CASHED_OUT = 'CASHED_OUT',
+  LOST = 'LOST',
+  CANCELLED = 'CANCELLED',
+}
 
 export class Bet {
   readonly id: string;
@@ -27,6 +24,7 @@ export class Bet {
   private cashOutAmount: Money | null;
   private cashedOutAt: Date | null;
   private cancelReason: string | null;
+  private createdAt: Date;
 
   private constructor(
     id: string,
@@ -44,6 +42,7 @@ export class Bet {
     this.cashOutAmount = null;
     this.cashedOutAt = null;
     this.cancelReason = null;
+    this.createdAt = new Date();
   }
 
   /**
@@ -67,6 +66,7 @@ export class Bet {
     cashOutMultiplier: number | null,
     cashOutAmountCents: bigint | null,
     cashedOutAt: Date | null,
+    createdAt?: Date,
   ): Bet {
     const amount = Money.fromCents(amountCents);
     const bet = new Bet(id, roundId, playerId, amount, status);
@@ -76,6 +76,7 @@ export class Bet {
     }
     bet.cashOutAmount = cashOutAmountCents !== null ? Money.fromCents(cashOutAmountCents) : null;
     bet.cashedOutAt = cashedOutAt;
+    if (createdAt) bet.createdAt = createdAt;
 
     return bet;
   }
@@ -180,6 +181,13 @@ export class Bet {
   }
 
   /**
+   * Get the time when the bet was placed.
+   */
+  getCreatedAt(): Date {
+    return this.createdAt;
+  }
+
+  /**
    * Check if the bet is pending confirmation.
    */
   isPending(): boolean {
@@ -224,8 +232,8 @@ export class Bet {
       playerId: this.playerId,
       amountCents: this.amount.toCents(),
       status: this.status,
-      cashOutMultiplier: this.cashOutMultiplier?.getValue() || null,
-      cashOutAmount: this.cashOutAmount?.toCents() || null,
+      cashOutMultiplier: this.cashOutMultiplier?.getValue() ?? null,
+      cashOutAmount: this.cashOutAmount?.toCents() ?? null,
       cashedOutAt: this.cashedOutAt,
     };
   }
