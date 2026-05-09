@@ -30,7 +30,7 @@ export class VerifyRoundUseCase implements IUseCase<VerifyRoundInput, VerifyRoun
     const round = await this.roundRepository.findById(input.roundId);
 
     if (!round) {
-      throw new RoundNotFoundError(input.roundId);
+      throw new RoundNotFoundError();
     }
 
     if (round.getStatus() !== RoundStatus.CRASHED) {
@@ -42,7 +42,7 @@ export class VerifyRoundUseCase implements IUseCase<VerifyRoundInput, VerifyRoun
     const crashPointValue = round.getCrashPoint();
 
     if (!seed || !seedHash || crashPointValue === null) {
-      throw new VerificationFailedError(input.roundId);
+      throw new VerificationFailedError();
     }
 
     // Verify the seed hash matches

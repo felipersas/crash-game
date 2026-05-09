@@ -62,7 +62,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     if (!cached) return null;
 
     if (cached.playerId !== input.playerId) {
-      throw new InvalidIdempotencyKeyError('Idempotency key belongs to different player');
+      throw new InvalidIdempotencyKeyError();
     }
 
     return {
@@ -88,7 +88,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     }
 
     if (!round) {
-      throw new RoundNotFoundError(roundId || 'current');
+      throw new RoundNotFoundError();
     }
 
     return round;
@@ -98,7 +98,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     const bet = await this.betRepository.findByPlayerAndRound(playerId, roundId);
 
     if (!bet) {
-      throw new NoActiveBetError(playerId, roundId);
+      throw new NoActiveBetError();
     }
 
     return bet;
@@ -149,7 +149,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
     if (!UUID_V4_REGEX.test(key)) {
-      throw new InvalidIdempotencyKeyError(key);
+      throw new InvalidIdempotencyKeyError();
     }
   }
 }

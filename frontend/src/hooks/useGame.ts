@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import { BetStatus, RoundStatus, type Round, type Bet } from '../domain/types/game.types';
 import type { PlaceBetResponse, CashOutResponse } from '../shared/schemas/api-schemas';
+import type { ApiError } from '../infrastructure/api/http-client';
+import { getErrorMessage } from '../shared/constants/error-codes';
 
 /**
  * Game operations hook
@@ -53,7 +55,7 @@ export function useGame() {
   });
 
   // Place bet mutation
-  const placeBetMutation = useMutation<PlaceBetResponse, Error, number>({
+  const placeBetMutation = useMutation<PlaceBetResponse, ApiError, number>({
     mutationFn: (amountCents: number) => {
       const api = createGamesApi(session?.accessToken);
       return api.placeBet(amountCents);
@@ -81,13 +83,13 @@ export function useGame() {
       queryClient.invalidateQueries({ queryKey: ['wallet'] });
       queryClient.invalidateQueries({ queryKey: ['current-round'] });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to place bet');
+    onError: (error: ApiError) => {
+      toast.error(getErrorMessage(error.code, error.message));
     },
   });
 
   // Cash out mutation
-  const cashOutMutation = useMutation<CashOutResponse, Error, void>({
+  const cashOutMutation = useMutation<CashOutResponse, ApiError, void>({
     mutationFn: () => {
       if (!myActiveBet) throw new Error('No active bet to cash out');
 
@@ -108,8 +110,8 @@ export function useGame() {
       queryClient.invalidateQueries({ queryKey: ['wallet'] });
       queryClient.invalidateQueries({ queryKey: ['current-round'] });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to cash out');
+    onError: (error: ApiError) => {
+      toast.error(getErrorMessage(error.code, error.message));
     },
   });
 

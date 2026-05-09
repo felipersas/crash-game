@@ -42,7 +42,7 @@ export class GetCurrentRoundUseCase implements IUseCase<GetCurrentRoundInput, Ge
     const round = await this.roundRepository.findCurrentRound();
 
     if (!round) {
-      throw new RoundNotFoundError('current');
+      throw new RoundNotFoundError();
     }
 
     const bets = input.includeBets ? round.getBets() : [];

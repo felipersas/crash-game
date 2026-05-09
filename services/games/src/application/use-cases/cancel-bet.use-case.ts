@@ -44,7 +44,7 @@ export class CancelBetUseCase implements IUseCase<CancelBetInput, CancelBetOutpu
     );
 
     if (!bet) {
-      throw new BetNotFoundError(input.betId);
+      throw new BetNotFoundError();
     }
 
     // Cancel the bet (PENDING → CANCELLED)

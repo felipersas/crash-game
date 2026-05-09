@@ -42,7 +42,7 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
     );
 
     if (!bet) {
-      throw new BetNotFoundError(input.betId);
+      throw new BetNotFoundError();
     }
 
     // Confirm the bet (PENDING → ACTIVE)

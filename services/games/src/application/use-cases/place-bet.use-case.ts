@@ -57,7 +57,7 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
     // Get the bet from round
     const bet = round.getBetByPlayer(input.playerId);
     if (!bet) {
-      throw new BetNotFoundError('bet');
+      throw new BetNotFoundError();
     }
 
     // Persist bet independently (no round version lock)

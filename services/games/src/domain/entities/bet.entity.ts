@@ -86,7 +86,7 @@ export class Bet {
    */
   confirm(): void {
     if (this.status !== BetStatus.PENDING) {
-      throw new InvalidBetStateError(this.id, this.status, 'confirm');
+      throw new InvalidBetStateError(this.status, 'confirm');
     }
 
     this.status = BetStatus.ACTIVE;
@@ -98,7 +98,7 @@ export class Bet {
    */
   cancel(reason: string): void {
     if (this.status !== BetStatus.PENDING) {
-      throw new InvalidBetStateError(this.id, this.status, 'cancel');
+      throw new InvalidBetStateError(this.status, 'cancel');
     }
 
     this.status = BetStatus.CANCELLED;
@@ -111,7 +111,7 @@ export class Bet {
    */
   cashOut(multiplier: Multiplier): Money {
     if (this.status !== BetStatus.ACTIVE) {
-      throw new InvalidBetStateError(this.id, this.status, 'cash out');
+      throw new InvalidBetStateError(this.status, 'cash out');
     }
 
     const payout = multiplier.calculatePayout(this.amount.toCents());
@@ -131,7 +131,7 @@ export class Bet {
    */
   markAsLost(): void {
     if (this.status !== BetStatus.ACTIVE && this.status !== BetStatus.PENDING) {
-      throw new InvalidBetStateError(this.id, this.status, 'mark as lost');
+      throw new InvalidBetStateError(this.status, 'mark as lost');
     }
 
     this.status = BetStatus.LOST;

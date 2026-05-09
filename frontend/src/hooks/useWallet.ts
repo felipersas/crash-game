@@ -1,9 +1,13 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { createWalletsApi } from '../infrastructure/api/wallets-api';
 import type { Wallet } from '../domain/types/game.types';
+import type { ApiError } from '../infrastructure/api/http-client';
+import { getErrorMessage } from '../shared/constants/error-codes';
+import { toast } from 'sonner';
 
 /**
  * Wallet hook
@@ -27,9 +31,16 @@ export function useWallet() {
       return api.getWallet();
     },
     enabled: !!session?.accessToken,
-    staleTime: 5000, // Consider data fresh for 5 seconds
-    refetchInterval: 10000, // Refetch every 10 seconds
+    staleTime: 5000,
+    refetchInterval: 10000,
   });
+
+  useEffect(() => {
+    if (query.isError) {
+      const error = query.error as unknown as ApiError;
+      toast.error(getErrorMessage(error.code, 'Failed to load wallet'));
+    }
+  }, [query.isError, query.error]);
 
   return {
     wallet: query.data,

@@ -37,7 +37,7 @@ export class GetBetStatusUseCase implements IUseCase<GetBetStatusInput, BetStatu
     const bet = await this.betRepository.findById(input.betId);
 
     if (!bet) {
-      throw new BetNotFoundError(input.betId);
+      throw new BetNotFoundError();
     }
 
     return {

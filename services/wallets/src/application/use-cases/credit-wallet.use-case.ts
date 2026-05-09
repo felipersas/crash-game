@@ -35,7 +35,7 @@ export class CreditWalletUseCase {
   async execute(input: CreditWalletInput): Promise<CreditWalletOutput> {
     const wallet = await this.walletRepository.findById(input.walletId);
     if (!wallet) {
-      throw new WalletNotFoundError(input.walletId);
+      throw new WalletNotFoundError();
     }
 
     const amount = Money.fromCents(input.amount);

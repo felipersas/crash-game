@@ -20,6 +20,18 @@ import axios, {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 /**
+ * Backend error response format
+ */
+interface BackendErrorResponse {
+  statusCode: number;
+  code?: string;
+  error: string;
+  message: string;
+  path: string;
+  timestamp: string;
+}
+
+/**
  * Sanitized API error shape - safe to expose to clients
  */
 export interface ApiError {
@@ -84,7 +96,11 @@ export function createHttpClient(
 
 /**
  * Converts Axios error to sanitized ApiError
- * Prevents server detail leakage to client
+ *
+ * Strategy:
+ * - 4xx errors (client errors): Show backend message (domain errors are user-friendly)
+ * - 5xx errors (server errors): Show generic message (don't leak internal details)
+ * - Network errors: Show connection message
  */
 function toApiError(error: AxiosError): ApiError {
   // Network errors or timeout
@@ -98,40 +114,70 @@ function toApiError(error: AxiosError): ApiError {
     };
   }
 
-  // HTTP errors with status
   const status = error.response.status;
-  let message = error.message || 'Request failed';
+  const data = error.response.data as BackendErrorResponse | unknown;
 
-  // User-friendly messages for common errors
-  switch (status) {
-    case 400:
-      message = 'Invalid request. Please check your input.';
-      break;
-    case 401:
-      message = 'Authentication required. Please log in.';
-      break;
-    case 403:
-      message = 'Access denied.';
-      break;
-    case 404:
-      message = 'Resource not found.';
-      break;
-    case 429:
-      message = 'Too many requests. Please try again later.';
-      break;
-    case 500:
-      message = 'Server error. Please try again later.';
-      break;
-    case 503:
-      message = 'Service temporarily unavailable.';
-      break;
+  // Extract backend error if response matches our format
+  const backendError = isBackendErrorResponse(data)
+    ? {
+        message: data.message,
+        code: data.code,
+      }
+    : {};
+
+  // 4xx errors: Use backend message (domain errors are safe and user-friendly)
+  if (status >= 400 && status < 500) {
+    return {
+      message: backendError.message || getDefaultMessage(status),
+      status,
+      code: backendError.code,
+    };
   }
 
+  // 5xx errors: Use generic message (don't leak internal errors)
   return {
-    message,
+    message: getDefaultMessage(status),
     status,
-    code: error.code,
   };
+}
+
+/**
+ * Type guard for backend error response format
+ */
+function isBackendErrorResponse(data: unknown): data is BackendErrorResponse {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'statusCode' in data &&
+    'error' in data &&
+    'message' in data
+  );
+}
+
+/**
+ * Generic fallback messages by status code
+ */
+function getDefaultMessage(status: number): string {
+  switch (status) {
+    case 400:
+      return 'Invalid request. Please check your input.';
+    case 401:
+      return 'Authentication required. Please log in.';
+    case 403:
+      return 'Access denied.';
+    case 404:
+      return 'Resource not found.';
+    case 409:
+      return 'Conflict. Please refresh and try again.';
+    case 429:
+      return 'Too many requests. Please try again later.';
+    case 500:
+      return 'Server error. Please try again later.';
+    case 503:
+      return 'Service temporarily unavailable.';
+    default:
+      return 'Request failed. Please try again.';
+  }
 }
 
 /**

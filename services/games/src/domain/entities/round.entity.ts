@@ -171,11 +171,11 @@ export class Round {
    */
   placeBet(playerId: string, amount: Money): void {
     if (this.status !== RoundStatus.BETTING) {
-      throw new RoundNotAcceptingBetsError(this.id);
+      throw new RoundNotAcceptingBetsError();
     }
 
     if (this.bets.has(playerId)) {
-      throw new DuplicateBetError(playerId, this.id);
+      throw new DuplicateBetError();
     }
 
     if (amount.isLessThan(this.config.minBetAmount)) {
@@ -207,12 +207,12 @@ export class Round {
    */
   cashOut(playerId: string): Money {
     if (this.status !== RoundStatus.ACTIVE) {
-      throw new RoundAlreadyCrashedError(this.id, this.crashPoint?.getValue() || 0);
+      throw new RoundAlreadyCrashedError(this.crashPoint?.getValue() || 0);
     }
 
     const bet = this.bets.get(playerId);
     if (!bet || !bet.isActive()) {
-      throw new NoActiveBetError(playerId, this.id);
+      throw new NoActiveBetError();
     }
 
     const payout = bet.cashOut(this.currentMultiplier);
@@ -239,7 +239,7 @@ export class Round {
    */
   async startRound(): Promise<void> {
     if (this.status !== RoundStatus.BETTING) {
-      throw new InvalidRoundStateError(this.id, this.status, 'start');
+      throw new InvalidRoundStateError(this.status, 'start');
     }
 
     this.version++;
@@ -343,7 +343,7 @@ export class Round {
    */
   getSeed(): string {
     if (this.status !== RoundStatus.CRASHED) {
-      throw new SeedNotAvailableError(this.id);
+      throw new SeedNotAvailableError();
     }
     return this.seedChain.getSeed();
   }
