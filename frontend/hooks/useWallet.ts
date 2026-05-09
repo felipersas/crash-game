@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { createWalletsApi } from "../infrastructure/api/wallets-api";
@@ -9,20 +9,9 @@ import type { ApiError } from "../infrastructure/api/http-client";
 import { getErrorMessage } from "../shared/constants/error-codes";
 import { toast } from "sonner";
 
-/**
- * Wallet hook
- *
- * Provides wallet data and balance information.
- * Auto-refreshes every 10 seconds to keep balance current.
- *
- * @example
- * ```ts
- * const { wallet, balance, isLoading } = useWallet();
- * console.log(`Current balance: $${balance}`);
- * ```
- */
 export function useWallet() {
   const { data: session } = useSession();
+  const hasShownError = useRef(false);
 
   const query = useQuery<Wallet>({
     queryKey: ["wallet"],
@@ -36,9 +25,13 @@ export function useWallet() {
   });
 
   useEffect(() => {
-    if (query.isError) {
+    if (query.isError && !hasShownError.current) {
       const error = query.error as unknown as ApiError;
       toast.error(getErrorMessage(error.code, "Failed to load wallet"));
+      hasShownError.current = true;
+    }
+    if (!query.isError) {
+      hasShownError.current = false;
     }
   }, [query.isError, query.error]);
 

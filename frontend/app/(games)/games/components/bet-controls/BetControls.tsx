@@ -86,10 +86,11 @@ export default function BetControls() {
 
     prevRoundStatus.current = roundStatus;
     prevMyActiveBet.current = myActiveBet;
-  }, [roundStatus, myActiveBet, liveMultiplier]);
+  }, [roundStatus, myActiveBet, liveMultiplier, playWin, playCrash]);
 
   const handlePlaceBet = () => {
     const cents = Math.round(parseFloat(amount) * 100);
+    if (isNaN(cents) || cents <= 0) return;
     placeBet(cents);
   };
 
@@ -259,7 +260,7 @@ export default function BetControls() {
         </div>
       )}
 
-      {isActivePhase && hasCashedOut && (
+      {hasCashedOut && (isActivePhase || isCrashed) && (
         <div className="text-center py-4">
           <p className="text-primary font-terminal text-sm uppercase tracking-wider">
             You Won!
@@ -280,20 +281,6 @@ export default function BetControls() {
           </p>
           <p className="text-text-muted font-terminal text-xs mt-1">
             You lost {formatMoney(myActiveBet.amountCents)}
-          </p>
-        </div>
-      )}
-
-      {isCrashed && hasCashedOut && (
-        <div className="text-center py-4">
-          <p className="text-primary font-terminal text-sm uppercase tracking-wider">
-            You Won!
-          </p>
-          <p className="text-text-primary font-terminal text-lg mt-1">
-            {formatMoney(myActiveBet!.payoutCents || 0)}
-          </p>
-          <p className="text-text-muted font-terminal text-xs mt-1">
-            at {myActiveBet!.cashOutMultiplier?.toFixed(2)}x
           </p>
         </div>
       )}

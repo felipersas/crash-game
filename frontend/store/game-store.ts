@@ -45,7 +45,6 @@ interface GameState {
   setCurrentBets: (bets: Bet[]) => void;
   addBet: (bet: Bet) => void;
   updateBet: (betId: string, updates: Partial<Bet>) => void;
-  resetRound: () => void;
 }
 
 const initialState = {
@@ -76,6 +75,7 @@ export const useGameStore = create<GameState>()(
           bettingEndTime,
           currentSeedHash: seedHash,
           myActiveBet: null,
+          currentBets: [],
         }),
 
       setBettingEnded: () =>
@@ -111,13 +111,6 @@ export const useGameStore = create<GameState>()(
             };
           }
           return {};
-        }),
-
-      resetRound: () =>
-        set({
-          ...initialState,
-          isConnected: get().isConnected,
-          connectionStatus: get().connectionStatus,
         }),
 
       setCurrentBets: (bets) => set({ currentBets: bets }),

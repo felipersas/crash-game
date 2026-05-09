@@ -166,7 +166,6 @@ export function useGameWebSocket(
       },
       // Game event callbacks - update Zustand store
       onRoundStarted: (data) => {
-        console.log("[WS] roundStarted", data.roundId);
         currentRoundIdRef.current = data.roundId;
         setStoreRoundStarted(
           data.roundId,
@@ -194,12 +193,6 @@ export function useGameWebSocket(
         }
       },
       onBetPlaced: (data) => {
-        console.log(
-          "[WS] betPlaced",
-          data,
-          "currentRound:",
-          currentRoundIdRef.current,
-        );
         if (
           currentRoundIdRef.current &&
           data.roundId !== currentRoundIdRef.current
@@ -217,7 +210,6 @@ export function useGameWebSocket(
           payoutDecimal: null,
           cashedOutAt: null,
         };
-        console.log("[WS] adding bet to store", bet.id);
         storeAddBet(bet);
       },
       onPlayerCashedOut: (data) => {
@@ -243,9 +235,9 @@ export function useGameWebSocket(
         storeUpdateBet(data.betId, { status: BetStatus.ACTIVE });
         // Update myActiveBet if it's our bet
         if (data.playerId === playerId) {
-          const state = useGameStore.getState();
-          if (state.myActiveBet?.id === data.betId) {
-            state.updateBetStatus(data.betId, BetStatus.ACTIVE);
+          const myBet = useGameStore.getState().myActiveBet;
+          if (myBet?.id === data.betId) {
+            useGameStore.getState().updateBetStatus(data.betId, BetStatus.ACTIVE);
           }
           toast.success("Bet Confirmed!", {
             description: `${formatMoney(data.amountCents)} is now active`,
@@ -262,9 +254,9 @@ export function useGameWebSocket(
         storeUpdateBet(data.betId, { status: BetStatus.CANCELLED });
         // Clear myActiveBet if it's our bet
         if (data.playerId === playerId) {
-          const state = useGameStore.getState();
-          if (state.myActiveBet?.id === data.betId) {
-            state.setMyActiveBet(null);
+          const myBet = useGameStore.getState().myActiveBet;
+          if (myBet?.id === data.betId) {
+            setStoreMyActiveBet(null);
           }
           toast.error("Bet Cancelled", {
             description: data.reason,
