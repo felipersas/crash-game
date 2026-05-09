@@ -17,10 +17,17 @@ interface VerifyData {
   verificationFormula: string;
 }
 
-async function computeSHA256(message: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+async function computeSHA256(hexString: string): Promise<string> {
+  const data = hexToBytes(hexString);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data.buffer as ArrayBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -52,7 +59,7 @@ export default function VerifyRoundPage() {
 
   const handleVerify = async () => {
     if (!data) return;
-    const hash = await computeSHA256(data.seed + data.salt);
+    const hash = await computeSHA256(data.seed);
     setComputedHash(hash);
   };
 

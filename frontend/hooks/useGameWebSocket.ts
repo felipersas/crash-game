@@ -10,10 +10,15 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import {
   createGamesWebSocket,
   GamesWebSocket,
-} from "../infrastructure/websocket/games-websocket";
-import { createGamesApi } from "../infrastructure/api/games-api";
-import { RoundStatus, type Round } from "../domain/types/game.types";
-import { useGameStore } from "../infrastructure/store/game-store";
+} from "../websocket/games-websocket";
+import { createGamesApi } from "@/infrastructure/api/games-api";
+import {
+  RoundStatus,
+  BetStatus,
+  type Bet,
+  type Round,
+} from "@/types/game.types";
+import { useGameStore } from "@/store/game-store";
 
 export interface UseGameWebSocketOptions {
   token?: string;
@@ -51,6 +56,8 @@ export function useGameWebSocket(
   const setStoreCrash = useGameStore((state) => state.setCrash);
   const setStoreCurrentBets = useGameStore((state) => state.setCurrentBets);
   const setStoreMyActiveBet = useGameStore((state) => state.setMyActiveBet);
+  const storeAddBet = useGameStore((state) => state.addBet);
+  const storeUpdateBet = useGameStore((state) => state.updateBet);
 
   // Use ref to avoid stale closures in event handlers
   const currentRoundIdRef = useRef<string | null>(null);
@@ -98,9 +105,6 @@ export function useGameWebSocket(
             break;
         }
 
-        // Recover player's bet on page reload/reconnect
-        // Include CASHED_OUT so "You Won!" displays; only skip terminal losses
-        console.log(playerId);
         if (playerId && round.bets?.length) {
           const myBet = round.bets.find(
             (b) =>
@@ -160,12 +164,14 @@ export function useGameWebSocket(
       },
       // Game event callbacks - update Zustand store
       onRoundStarted: (data) => {
+        console.log("[WS] roundStarted", data.roundId);
         currentRoundIdRef.current = data.roundId;
         setStoreRoundStarted(
           data.roundId,
           data.seedHash,
           new Date(data.bettingEndTime),
         );
+        setStoreCurrentBets([]);
       },
       onBettingEnded: (data) => {
         // Only update if for current round
@@ -185,34 +191,62 @@ export function useGameWebSocket(
           setStoreCrash(data.crashPoint);
         }
       },
-      onBetPlaced: async (data) => {
-        // Refetch round data to get updated bets list
-        // Note: Backend should include betId in future for proper real-time updates
-        if (data.roundId === currentRoundIdRef.current) {
-          try {
-            const api = createGamesApi(token);
-            const round = await api.getCurrentRound();
-            if (round.roundId === data.roundId) {
-              setStoreCurrentBets(round.bets || []);
-            }
-          } catch (error) {
-            console.error("Failed to refetch bets after bet placed:", error);
-          }
-        }
+      onBetPlaced: (data) => {
+        console.log(
+          "[WS] betPlaced",
+          data,
+          "currentRound:",
+          currentRoundIdRef.current,
+        );
+        if (
+          currentRoundIdRef.current &&
+          data.roundId !== currentRoundIdRef.current
+        )
+          return;
+        const bet: Bet = {
+          id: data.betId,
+          roundId: data.roundId,
+          playerId: data.playerId,
+          amountCents: data.amountCents,
+          amountDecimal: (data.amountCents / 100).toFixed(2),
+          status: BetStatus.PENDING,
+          cashOutMultiplier: null,
+          payoutCents: null,
+          payoutDecimal: null,
+          cashedOutAt: null,
+        };
+        console.log("[WS] adding bet to store", bet.id);
+        storeAddBet(bet);
       },
-      onPlayerCashedOut: async (data) => {
-        // Refetch round data to get updated bets list
-        if (data.roundId === currentRoundIdRef.current) {
-          try {
-            const api = createGamesApi(token);
-            const round = await api.getCurrentRound();
-            if (round.roundId === data.roundId) {
-              setStoreCurrentBets(round.bets || []);
-            }
-          } catch (error) {
-            console.error("Failed to refetch bets after cash out:", error);
-          }
-        }
+      onPlayerCashedOut: (data) => {
+        if (
+          currentRoundIdRef.current &&
+          data.roundId !== currentRoundIdRef.current
+        )
+          return;
+        storeUpdateBet(data.betId, {
+          status: BetStatus.CASHED_OUT,
+          cashOutMultiplier: data.multiplier,
+          payoutCents: data.payoutCents,
+          payoutDecimal: (data.payoutCents / 100).toFixed(2),
+          cashedOutAt: new Date(),
+        });
+      },
+      onBetConfirmed: (data) => {
+        if (
+          currentRoundIdRef.current &&
+          data.roundId !== currentRoundIdRef.current
+        )
+          return;
+        storeUpdateBet(data.betId, { status: BetStatus.ACTIVE });
+      },
+      onBetCancelled: (data) => {
+        if (
+          currentRoundIdRef.current &&
+          data.roundId !== currentRoundIdRef.current
+        )
+          return;
+        storeUpdateBet(data.betId, { status: BetStatus.CANCELLED });
       },
     });
 
@@ -228,6 +262,8 @@ export function useGameWebSocket(
     setStoreMultiplier,
     setStoreCrash,
     setStoreCurrentBets,
+    storeAddBet,
+    storeUpdateBet,
   ]);
 
   const disconnect = useCallback(() => {

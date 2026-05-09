@@ -1,21 +1,42 @@
 "use client";
 
-import { useGameStore } from "@/infrastructure/store/game-store";
+import { useEffect, useRef } from "react";
+import { useGameStore } from "@/store/game-store";
 import { formatMoney } from "@/shared/utils/money";
-import { Users, Activity } from "lucide-react";
+import { Users } from "lucide-react";
+import type { Bet } from "@/types/game.types";
+
+const MAX_VISIBLE_BETS = 15;
 
 export default function BetsList() {
   const { currentBets } = useGameStore();
+  const animatedIdsRef = useRef<Set<string>>(new Set());
+
+  // Filter out cancelled bets, show newest first, limit to MAX_VISIBLE_BETS
+  const visibleBets: Bet[] = currentBets
+    .filter((bet) => bet.status !== "CANCELLED")
+    .slice(-MAX_VISIBLE_BETS)
+    .reverse();
+
+  // Track which bet IDs have already been animated
+  useEffect(() => {
+    const currentIds = new Set(currentBets.map((b) => b.id));
+    const known = animatedIdsRef.current;
+    // Remove IDs that no longer exist (new round)
+    for (const id of known) {
+      if (!currentIds.has(id)) {
+        known.delete(id);
+      }
+    }
+  }, [currentBets]);
 
   return (
     <div className="panel-cyber rounded-lg p-5">
-      {/* Header - "THE PULSE" */}
+      {/* Header */}
       <div className="flex items-center justify-end mb-4">
         <div className="flex items-center gap-1.5 text-text-muted">
           <Users className="w-4 h-4" />
-          <span className="text-sm font-terminal">
-            {currentBets?.length || 0}
-          </span>
+          <span className="text-sm font-terminal">{visibleBets.length}</span>
         </div>
       </div>
 
@@ -28,7 +49,7 @@ export default function BetsList() {
 
       {/* Bets List */}
       <div className="space-y-1 min-h-64 overflow-y-auto mt-2">
-        {!currentBets?.length ? (
+        {!visibleBets.length ? (
           <div className="text-center py-8">
             <p className="text-text-muted font-terminal text-sm">
               No active bets
@@ -38,49 +59,55 @@ export default function BetsList() {
             </p>
           </div>
         ) : (
-          currentBets.map((bet) => (
-            <div
-              key={bet.id}
-              className="grid grid-cols-3 gap-2 px-3 py-2 bg-surface/30 hover:bg-surface/50 border-l-2 border-transparent hover:border-primary transition-all rounded items-center"
-            >
-              {/* Player Name - Truncated */}
-              <span
-                className="font-terminal text-sm text-text-primary truncate"
-                title={bet.playerId}
+          visibleBets.map((bet) => {
+            const isNew = !animatedIdsRef.current.has(bet.id);
+            if (isNew) {
+              animatedIdsRef.current.add(bet.id);
+            }
+            return (
+              <div
+                key={bet.id}
+                className={`grid grid-cols-3 gap-2 px-3 py-2 bg-surface/30 hover:bg-surface/50 border-l-2 border-transparent hover:border-primary transition-colors rounded items-center ${isNew ? "animate-bet-slide-in" : ""}`}
               >
-                {bet.playerId.slice(0, 8)}...
-              </span>
+                {/* Player Name - Truncated */}
+                <span
+                  className="font-terminal text-sm text-text-primary truncate"
+                  title={bet.playerId}
+                >
+                  {bet.playerId.slice(0, 8)}...
+                </span>
 
-              {/* Bet Amount */}
-              <span className="font-terminal text-sm text-text-primary text-center">
-                {formatMoney(bet.amountCents)}
-              </span>
+                {/* Bet Amount */}
+                <span className="font-terminal text-sm text-text-primary text-center">
+                  {formatMoney(bet.amountCents)}
+                </span>
 
-              {/* Payout Multiplier */}
-              {bet.status === "CASHED_OUT" && bet.cashOutMultiplier ? (
-                <span className="font-terminal text-sm text-primary text-right">
-                  @{bet.cashOutMultiplier.toFixed(2)}x
-                </span>
-              ) : bet.status === "ACTIVE" ? (
-                <span className="font-terminal text-sm text-warning text-right">
-                  Playing
-                </span>
-              ) : (
-                <span className="font-terminal text-sm text-text-muted text-right">
-                  —
-                </span>
-              )}
-            </div>
-          ))
+                {/* Payout Multiplier */}
+                {bet.status === "CASHED_OUT" && bet.cashOutMultiplier ? (
+                  <span className="font-terminal text-sm text-primary text-right">
+                    @{bet.cashOutMultiplier.toFixed(2)}x
+                  </span>
+                ) : bet.status === "ACTIVE" ? (
+                  <span className="font-terminal text-sm text-warning text-right">
+                    Playing
+                  </span>
+                ) : (
+                  <span className="font-terminal text-sm text-text-muted text-right">
+                    —
+                  </span>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 
       {/* Footer Stats */}
-      {currentBets && currentBets.length > 0 && (
+      {visibleBets.length > 0 && (
         <div className="mt-4 pt-3 border-t border-border">
           <div className="flex justify-between text-xs font-terminal text-text-muted">
             <span>Total Bets:</span>
-            <span className="text-text-primary">{currentBets.length}</span>
+            <span className="text-text-primary">{visibleBets.length}</span>
           </div>
         </div>
       )}

@@ -1,15 +1,23 @@
-'use client';
+"use client";
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSession } from 'next-auth/react';
-import { createGamesApi } from '../infrastructure/api/games-api';
-import { useGameStore } from '../infrastructure/store/game-store';
-import { toast } from 'sonner';
-import { v4 as uuidv4 } from 'uuid';
-import { BetStatus, RoundStatus, type Round, type Bet } from '../domain/types/game.types';
-import type { PlaceBetResponse, CashOutResponse } from '../shared/schemas/api-schemas';
-import type { ApiError } from '../infrastructure/api/http-client';
-import { getErrorMessage } from '../shared/constants/error-codes';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
+import { createGamesApi } from "@/infrastructure/api/games-api";
+import { useGameStore } from "@/store/game-store";
+import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
+import {
+  BetStatus,
+  RoundStatus,
+  type Round,
+  type Bet,
+} from "@/types/game.types";
+import type {
+  PlaceBetResponse,
+  CashOutResponse,
+} from "@/shared/schemas/api-schemas";
+import type { ApiError } from "../infrastructure/api/http-client";
+import { getErrorMessage } from "@/shared/constants/error-codes";
 
 /**
  * Game operations hook
@@ -31,12 +39,13 @@ import { getErrorMessage } from '../shared/constants/error-codes';
 export function useGame() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
-  const { setMyActiveBet, updateBetStatus, myActiveBet, roundStatus } = useGameStore();
+  const { setMyActiveBet, updateBetStatus, myActiveBet, roundStatus } =
+    useGameStore();
 
   // Current round query with smart polling
   // Only poll during BETTING phase - ACTIVE phase is handled by WebSocket
   const currentRoundQuery = useQuery<Round>({
-    queryKey: ['current-round'],
+    queryKey: ["current-round"],
     queryFn: () => {
       const api = createGamesApi(session?.accessToken);
       return api.getCurrentRound();
@@ -61,13 +70,13 @@ export function useGame() {
       return api.placeBet(amountCents);
     },
     onSuccess: (data: PlaceBetResponse) => {
-      toast.success('Bet placed!');
+      toast.success("Bet placed!");
 
       // Update local store with new bet
       const newBet: Bet = {
         id: data.betId,
         roundId: data.roundId,
-        playerId: session?.playerId || '',
+        playerId: session?.playerId || "",
         amountCents: data.amountCents,
         amountDecimal: (data.amountCents / 100).toFixed(2),
         status: data.status,
@@ -80,8 +89,8 @@ export function useGame() {
       setMyActiveBet(newBet);
 
       // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['wallet'] });
-      queryClient.invalidateQueries({ queryKey: ['current-round'] });
+      queryClient.invalidateQueries({ queryKey: ["wallet"] });
+      queryClient.invalidateQueries({ queryKey: ["current-round"] });
     },
     onError: (error: ApiError) => {
       toast.error(getErrorMessage(error.code, error.message));
@@ -91,7 +100,7 @@ export function useGame() {
   // Cash out mutation
   const cashOutMutation = useMutation<CashOutResponse, ApiError, void>({
     mutationFn: () => {
-      if (!myActiveBet) throw new Error('No active bet to cash out');
+      if (!myActiveBet) throw new Error("No active bet to cash out");
 
       const api = createGamesApi(session?.accessToken);
       return api.cashOut(uuidv4(), myActiveBet.roundId);
@@ -107,8 +116,8 @@ export function useGame() {
       });
 
       // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['wallet'] });
-      queryClient.invalidateQueries({ queryKey: ['current-round'] });
+      queryClient.invalidateQueries({ queryKey: ["wallet"] });
+      queryClient.invalidateQueries({ queryKey: ["current-round"] });
     },
     onError: (error: ApiError) => {
       toast.error(getErrorMessage(error.code, error.message));

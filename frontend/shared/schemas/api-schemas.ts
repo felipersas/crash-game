@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { RoundStatus, BetStatus } from '../../domain/types/game.types';
+import { z } from "zod";
+import { RoundStatus, BetStatus } from "@/types/game.types";
 
 // Money schema (both formats for safety)
 export const moneySchema = z.object({
@@ -146,5 +146,7 @@ export const getMyBetsResponseSchema = z.object({
 export type PlaceBetResponse = z.infer<typeof placeBetResponseSchema>;
 export type CashOutResponse = z.infer<typeof cashOutResponseSchema>;
 export type VerifyRoundResponse = z.infer<typeof verifyRoundResponseSchema>;
-export type RoundHistoryResponse = z.infer<typeof getRoundHistoryResponseSchema>;
+export type RoundHistoryResponse = z.infer<
+  typeof getRoundHistoryResponseSchema
+>;
 export type MyBetsResponse = z.infer<typeof getMyBetsResponseSchema>;

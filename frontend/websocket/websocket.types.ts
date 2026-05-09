@@ -9,6 +9,8 @@ export interface ServerToClientEvents {
   multiplierUpdate: (data: MultiplierUpdateEvent) => void;
   crash: (data: CrashEvent) => void;
   betPlaced: (data: BetPlacedEvent) => void;
+  betConfirmed: (data: BetConfirmedEvent) => void;
+  betCancelled: (data: BetCancelledEvent) => void;
   playerCashedOut: (data: PlayerCashedOutEvent) => void;
 }
 
@@ -35,12 +37,29 @@ export interface CrashEvent {
 
 export interface BetPlacedEvent {
   roundId: string;
+  betId: string;
   playerId: string;
   amountCents: number;
 }
 
+export interface BetConfirmedEvent {
+  roundId: string;
+  betId: string;
+  playerId: string;
+  amountCents: number;
+}
+
+export interface BetCancelledEvent {
+  roundId: string;
+  betId: string;
+  playerId: string;
+  amountCents: number;
+  reason: string;
+}
+
 export interface PlayerCashedOutEvent {
   roundId: string;
+  betId: string;
   playerId: string;
   multiplier: number;
   payoutCents: number;

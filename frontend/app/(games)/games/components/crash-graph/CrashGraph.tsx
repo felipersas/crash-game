@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState, useRef } from "react";
 import { formatMultiplier } from "@/shared/utils/money";
-import { useGameStore } from "@/infrastructure/store/game-store";
+import { useGameStore } from "@/store/game-store";
 import { useRoundHistory } from "@/hooks/useRoundHistory";
 
 interface Props {
@@ -134,7 +134,10 @@ export default function CrashGraph({ multiplier, phase }: Props) {
 
           {/* Seed hash display during betting */}
           {isBetting && currentSeedHash && (
-            <p className="text-[10px] text-text-muted font-terminal mt-2 truncate max-w-xs" title={currentSeedHash}>
+            <p
+              className="text-[10px] text-text-muted font-terminal mt-2 truncate max-w-xs"
+              title={currentSeedHash}
+            >
               Hash: {currentSeedHash.slice(0, 16)}...
             </p>
           )}
@@ -147,15 +150,33 @@ export default function CrashGraph({ multiplier, phase }: Props) {
               <motion.div
                 className="flex items-center justify-center gap-3"
                 animate={{ opacity: timeRemaining <= 3 ? [1, 0.5, 1] : 1 }}
-                transition={{ duration: 0.5, repeat: timeRemaining <= 3 ? Infinity : 0 }}
+                transition={{
+                  duration: 0.5,
+                  repeat: timeRemaining <= 3 ? Infinity : 0,
+                }}
               >
                 <div className="relative w-16 h-16">
                   <svg className="w-full h-full transform -rotate-90">
-                    <circle cx="32" cy="32" r="28" fill="none" stroke="hsl(var(--surface-bright))" strokeWidth="4" />
+                    <circle
+                      cx="32"
+                      cy="32"
+                      r="28"
+                      fill="none"
+                      stroke="hsl(var(--surface-bright))"
+                      strokeWidth="4"
+                    />
                     <motion.circle
-                      cx="32" cy="32" r="28" fill="none"
-                      stroke={timeRemaining <= 3 ? "hsl(var(--error))" : "hsl(var(--primary))"}
-                      strokeWidth="4" strokeLinecap="round"
+                      cx="32"
+                      cy="32"
+                      r="28"
+                      fill="none"
+                      stroke={
+                        timeRemaining <= 3
+                          ? "hsl(var(--error))"
+                          : "hsl(var(--primary))"
+                      }
+                      strokeWidth="4"
+                      strokeLinecap="round"
                       initial={{ pathLength: 1 }}
                       animate={{ pathLength: Math.max(0, timeRemaining / 10) }}
                       style={{ strokeDasharray: "175.93", strokeDashoffset: 0 }}
@@ -191,10 +212,16 @@ export default function CrashGraph({ multiplier, phase }: Props) {
       <div className="h-8 bg-surface border-t border-border flex items-center justify-between px-4">
         <div className="flex items-center gap-4 text-xs font-terminal text-text-muted">
           <span>
-            ROUND_ID: <span className="text-primary">{currentRoundId ? `${currentRoundId.slice(0, 8)}...` : "---"}</span>
+            ROUND_ID:{" "}
+            <span className="text-primary">
+              {currentRoundId ? `${currentRoundId.slice(0, 8)}...` : "---"}
+            </span>
           </span>
           <span>
-            PLAYERS: <span className="text-text-primary">{currentBets?.length ?? 0}</span>
+            PLAYERS:{" "}
+            <span className="text-text-primary">
+              {currentBets?.length ?? 0}
+            </span>
           </span>
         </div>
       </div>

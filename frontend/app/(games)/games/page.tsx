@@ -4,8 +4,8 @@ import CrashGraph from "./components/crash-graph/CrashGraph";
 import BetControls from "./components/bet-controls/BetControls";
 import BetsList from "./components/bets-list/BetsList";
 import RoundHistory from "./components/round-history/RoundHistory";
-import { useGameStore } from "@/infrastructure/store/game-store";
-import { RoundStatus } from "@/domain/types/game.types";
+import { useGameStore } from "@/store/game-store";
+import { RoundStatus } from "@/types/game.types";
 import { useGameWebSocket } from "@/hooks/useGameWebSocket";
 import { useSession } from "next-auth/react";
 

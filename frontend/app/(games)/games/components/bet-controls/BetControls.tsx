@@ -5,11 +5,11 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { useGame } from "@/hooks/useGame";
-import { useGameStore } from "@/infrastructure/store/game-store";
+import { useGameStore } from "@/store/game-store";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { Input } from "@/components/ui/input";
 import { calculatePayout, formatMoney } from "@/shared/utils/money";
-import { RoundStatus } from "@/domain/types/game.types";
+import { RoundStatus } from "@/types/game.types";
 import { BetButton } from "./BetButton";
 
 export default function BetControls() {

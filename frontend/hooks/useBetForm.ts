@@ -1,14 +1,17 @@
-'use client';
+"use client";
 
 /**
  * useBetForm - Bet placement form hook
  */
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { betFormSchema, BetFormSchema } from '../shared/schemas/bet-form.schema';
-import { useWallet } from './useWallet';
-import { GAME_CONSTANTS } from '../shared/constants/game.constants';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  betFormSchema,
+  BetFormSchema,
+} from "../shared/schemas/bet-form.schema";
+import { useWallet } from "./useWallet";
+import { GAME_CONSTANTS } from "../shared/constants/game.constants";
 
 export function useBetForm() {
   const { balance } = useWallet();
@@ -17,13 +20,13 @@ export function useBetForm() {
   const form = useForm<BetFormSchema>({
     resolver: zodResolver(betFormSchema),
     defaultValues: {
-      amount: '',
+      amount: "",
     },
-    mode: 'onChange',
+    mode: "onChange",
   });
 
   // Calculate potential payout based on input
-  const amountValue = form.watch('amount');
+  const amountValue = form.watch("amount");
   const potentialPayout = amountValue
     ? Math.round(parseFloat(amountValue) * 100)
     : null;

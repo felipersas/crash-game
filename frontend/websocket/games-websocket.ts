@@ -19,6 +19,8 @@ export interface GamesWebSocketConfig {
   onMultiplierUpdate?: (data: Parameters<ServerToClientEvents['multiplierUpdate']>[0]) => void;
   onCrash?: (data: Parameters<ServerToClientEvents['crash']>[0]) => void;
   onBetPlaced?: (data: Parameters<ServerToClientEvents['betPlaced']>[0]) => void;
+  onBetConfirmed?: (data: Parameters<ServerToClientEvents['betConfirmed']>[0]) => void;
+  onBetCancelled?: (data: Parameters<ServerToClientEvents['betCancelled']>[0]) => void;
   onPlayerCashedOut?: (data: Parameters<ServerToClientEvents['playerCashedOut']>[0]) => void;
 }
 
@@ -106,6 +108,14 @@ export class GamesWebSocket {
 
     this.socket.on('betPlaced', (data) => {
       this.config.onBetPlaced?.(data);
+    });
+
+    this.socket.on('betConfirmed', (data) => {
+      this.config.onBetConfirmed?.(data);
+    });
+
+    this.socket.on('betCancelled', (data) => {
+      this.config.onBetCancelled?.(data);
     });
 
     this.socket.on('playerCashedOut', (data) => {

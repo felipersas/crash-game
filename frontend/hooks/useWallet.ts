@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useSession } from 'next-auth/react';
-import { createWalletsApi } from '../infrastructure/api/wallets-api';
-import type { Wallet } from '../domain/types/game.types';
-import type { ApiError } from '../infrastructure/api/http-client';
-import { getErrorMessage } from '../shared/constants/error-codes';
-import { toast } from 'sonner';
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
+import { createWalletsApi } from "../infrastructure/api/wallets-api";
+import type { Wallet } from "../types/game.types";
+import type { ApiError } from "../infrastructure/api/http-client";
+import { getErrorMessage } from "../shared/constants/error-codes";
+import { toast } from "sonner";
 
 /**
  * Wallet hook
@@ -25,7 +25,7 @@ export function useWallet() {
   const { data: session } = useSession();
 
   const query = useQuery<Wallet>({
-    queryKey: ['wallet'],
+    queryKey: ["wallet"],
     queryFn: () => {
       const api = createWalletsApi(session?.accessToken);
       return api.getWallet();
@@ -38,13 +38,13 @@ export function useWallet() {
   useEffect(() => {
     if (query.isError) {
       const error = query.error as unknown as ApiError;
-      toast.error(getErrorMessage(error.code, 'Failed to load wallet'));
+      toast.error(getErrorMessage(error.code, "Failed to load wallet"));
     }
   }, [query.isError, query.error]);
 
   return {
     wallet: query.data,
-    balance: query.data?.balance ?? '0.00',
+    balance: query.data?.balance ?? "0.00",
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

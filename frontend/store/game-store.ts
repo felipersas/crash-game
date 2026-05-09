@@ -2,11 +2,11 @@
  * Game State Management (Zustand)
  */
 
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
-import { RoundStatus, Bet } from '../../domain/types/game.types';
-import type { ConnectionStatus } from '../../infrastructure/websocket/websocket.types';
-import { GAME_CONSTANTS } from '../../shared/constants/game.constants';
+import { create } from "zustand";
+import { devtools } from "zustand/middleware";
+import { RoundStatus, Bet } from "@/types/game.types";
+import type { ConnectionStatus } from "@/websocket/websocket.types";
+import { GAME_CONSTANTS } from "@/shared/constants/game.constants";
 
 interface GameState {
   isConnected: boolean;
@@ -22,18 +22,26 @@ interface GameState {
   getBettingTimeRemaining: () => number; // seconds remaining
   getBettingProgress: () => number; // 0-1 progress for bar
 
-  setConnectionStatus: (status: GameState['connectionStatus']) => void;
+  setConnectionStatus: (status: GameState["connectionStatus"]) => void;
   setConnected: (connected: boolean) => void;
-  setRoundStarted: (roundId: string, seedHash: string, bettingEndTime: Date) => void;
+  setRoundStarted: (
+    roundId: string,
+    seedHash: string,
+    bettingEndTime: Date,
+  ) => void;
   setBettingEnded: () => void;
   setMultiplier: (multiplier: number) => void;
   setCrash: (crashPoint: number) => void;
   setMyActiveBet: (bet: Bet | null) => void;
-  updateBetStatus: (betId: string, status: Bet['status'], cashOutData?: {
-    multiplier: number;
-    payoutCents: number;
-    payoutDecimal: string;
-  }) => void;
+  updateBetStatus: (
+    betId: string,
+    status: Bet["status"],
+    cashOutData?: {
+      multiplier: number;
+      payoutCents: number;
+      payoutDecimal: string;
+    },
+  ) => void;
   setCurrentBets: (bets: Bet[]) => void;
   addBet: (bet: Bet) => void;
   updateBet: (betId: string, updates: Partial<Bet>) => void;
@@ -42,7 +50,7 @@ interface GameState {
 
 const initialState = {
   isConnected: false,
-  connectionStatus: 'disconnected' as const,
+  connectionStatus: "disconnected" as const,
   currentRoundId: null,
   roundStatus: RoundStatus.BETTING,
   liveMultiplier: 1.0,
@@ -76,8 +84,7 @@ export const useGameStore = create<GameState>()(
           bettingEndTime: null,
         }),
 
-      setMultiplier: (multiplier) =>
-        set({ liveMultiplier: multiplier }),
+      setMultiplier: (multiplier) => set({ liveMultiplier: multiplier }),
 
       setCrash: (crashPoint) =>
         set({
@@ -116,36 +123,52 @@ export const useGameStore = create<GameState>()(
       setCurrentBets: (bets) => set({ currentBets: bets }),
 
       addBet: (bet) =>
-        set((state) => ({
-          currentBets: [...state.currentBets, bet],
-        })),
+        set((state) => {
+          if (state.currentBets.some((b) => b.id === bet.id)) return {};
+          return { currentBets: [...state.currentBets, bet] };
+        }),
 
       updateBet: (betId, updates) =>
         set((state) => ({
           currentBets: state.currentBets.map((bet) =>
-            bet.id === betId ? { ...bet, ...updates } : bet
+            bet.id === betId ? { ...bet, ...updates } : bet,
           ),
         })),
 
       // Computed getters
       getBettingTimeRemaining: () => {
         const state = get();
-        if (!state.bettingEndTime || state.roundStatus !== RoundStatus.BETTING) {
+        if (
+          !state.bettingEndTime ||
+          state.roundStatus !== RoundStatus.BETTING
+        ) {
           return 0;
         }
-        const remaining = Math.max(0, (new Date(state.bettingEndTime).getTime() - Date.now()) / 1000);
+        const remaining = Math.max(
+          0,
+          (new Date(state.bettingEndTime).getTime() - Date.now()) / 1000,
+        );
         return remaining;
       },
 
       getBettingProgress: () => {
         const state = get();
-        if (!state.bettingEndTime || state.roundStatus !== RoundStatus.BETTING) {
+        if (
+          !state.bettingEndTime ||
+          state.roundStatus !== RoundStatus.BETTING
+        ) {
           return 0;
         }
-        const elapsed = Date.now() - (new Date(state.bettingEndTime).getTime() - GAME_CONSTANTS.BETTING_DURATION_MS);
-        return Math.min(1, Math.max(0, elapsed / GAME_CONSTANTS.BETTING_DURATION_MS));
+        const elapsed =
+          Date.now() -
+          (new Date(state.bettingEndTime).getTime() -
+            GAME_CONSTANTS.BETTING_DURATION_MS);
+        return Math.min(
+          1,
+          Math.max(0, elapsed / GAME_CONSTANTS.BETTING_DURATION_MS),
+        );
       },
     }),
-    { name: 'GameStore' }
-  )
+    { name: "GameStore" },
+  ),
 );

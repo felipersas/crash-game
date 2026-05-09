@@ -1,30 +1,38 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useSession } from 'next-auth/react';
-import Link from 'next/link';
-import { ArrowLeft, Wallet, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { useMyBets } from '@/hooks/useMyBets';
-import { formatMoney, formatMultiplier } from '@/shared/utils/money';
-import { BetStatus } from '@/domain/types/game.types';
+import { useState } from "react";
+import { useSession } from "next-auth/react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  Wallet,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+} from "lucide-react";
+import { useMyBets } from "@/hooks/useMyBets";
+import { formatMoney, formatMultiplier } from "@/shared/utils/money";
+import { BetStatus } from "@/types/game.types";
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
-    [BetStatus.CASHED_OUT]: 'bg-primary/20 text-primary',
-    [BetStatus.LOST]: 'bg-error/20 text-error',
-    [BetStatus.PENDING]: 'bg-warning/20 text-warning',
-    [BetStatus.ACTIVE]: 'bg-warning/20 text-warning',
-    [BetStatus.CANCELLED]: 'bg-surface-bright/30 text-text-muted',
+    [BetStatus.CASHED_OUT]: "bg-primary/20 text-primary",
+    [BetStatus.LOST]: "bg-error/20 text-error",
+    [BetStatus.PENDING]: "bg-warning/20 text-warning",
+    [BetStatus.ACTIVE]: "bg-warning/20 text-warning",
+    [BetStatus.CANCELLED]: "bg-surface-bright/30 text-text-muted",
   };
   const labels: Record<string, string> = {
-    [BetStatus.CASHED_OUT]: 'WON',
-    [BetStatus.LOST]: 'LOST',
-    [BetStatus.PENDING]: 'PENDING',
-    [BetStatus.ACTIVE]: 'ACTIVE',
-    [BetStatus.CANCELLED]: 'CANCELLED',
+    [BetStatus.CASHED_OUT]: "WON",
+    [BetStatus.LOST]: "LOST",
+    [BetStatus.PENDING]: "PENDING",
+    [BetStatus.ACTIVE]: "ACTIVE",
+    [BetStatus.CANCELLED]: "CANCELLED",
   };
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-terminal uppercase ${map[status] || 'bg-surface-bright/30 text-text-muted'}`}>
+    <span
+      className={`inline-block px-2 py-0.5 rounded text-xs font-terminal uppercase ${map[status] || "bg-surface-bright/30 text-text-muted"}`}
+    >
       {labels[status] || status}
     </span>
   );
@@ -35,11 +43,16 @@ export default function MyBetsPage() {
   const [page, setPage] = useState(1);
   const { data, isLoading } = useMyBets({ page, limit: 20 });
 
-  if (authStatus === 'unauthenticated') {
+  if (authStatus === "unauthenticated") {
     return (
       <div className="container mx-auto px-4 py-12 text-center space-y-4">
-        <p className="font-terminal text-text-muted">You need to be logged in to view your bets.</p>
-        <Link href="/login" className="btn-cyber-primary px-6 py-2 rounded-lg text-sm font-terminal inline-block">
+        <p className="font-terminal text-text-muted">
+          You need to be logged in to view your bets.
+        </p>
+        <Link
+          href="/login"
+          className="btn-cyber-primary px-6 py-2 rounded-lg text-sm font-terminal inline-block"
+        >
           Log In
         </Link>
       </div>
@@ -86,8 +99,8 @@ export default function MyBetsPage() {
             label="Profit/Loss"
             value={formatMoney(Math.abs(profitValue))}
             icon={<Minus className="w-4 h-4" />}
-            valueClass={profitValue >= 0 ? 'text-primary' : 'text-error'}
-            prefix={profitValue >= 0 ? '+' : '-'}
+            valueClass={profitValue >= 0 ? "text-primary" : "text-error"}
+            prefix={profitValue >= 0 ? "+" : "-"}
           />
         </div>
       )}
@@ -125,21 +138,35 @@ export default function MyBetsPage() {
               key={bet.id}
               className="grid grid-cols-6 gap-2 px-4 py-3 border-b border-border/50 hover:bg-surface/30 transition-colors items-center"
             >
-              <span className="font-terminal text-sm text-text-muted truncate" title={bet.roundId}>
+              <span
+                className="font-terminal text-sm text-text-muted truncate"
+                title={bet.roundId}
+              >
                 {bet.roundId.slice(0, 8)}...
               </span>
               <span className="font-terminal text-sm text-text-primary">
                 {formatMoney(bet.amountCents)}
               </span>
               <span className="font-terminal text-sm text-text-primary">
-                {bet.cashOutMultiplier ? formatMultiplier(bet.cashOutMultiplier) : '-'}
+                {bet.cashOutMultiplier
+                  ? formatMultiplier(bet.cashOutMultiplier)
+                  : "-"}
               </span>
-              <span className={`font-terminal text-sm ${(bet.profitCents ?? 0) >= 0 ? 'text-primary' : 'text-error'}`}>
-                {bet.profitCents != null ? formatMoney(bet.profitCents) : '-'}
+              <span
+                className={`font-terminal text-sm ${(bet.profitCents ?? 0) >= 0 ? "text-primary" : "text-error"}`}
+              >
+                {bet.profitCents != null ? formatMoney(bet.profitCents) : "-"}
               </span>
               <span>{statusBadge(bet.status)}</span>
-              <span className="font-terminal text-xs text-text-muted text-right" title={bet.placedAt ? new Date(bet.placedAt).toLocaleString() : '-'}>
-                {bet.placedAt ? new Date(bet.placedAt).toLocaleDateString() : '-'}
+              <span
+                className="font-terminal text-xs text-text-muted text-right"
+                title={
+                  bet.placedAt ? new Date(bet.placedAt).toLocaleString() : "-"
+                }
+              >
+                {bet.placedAt
+                  ? new Date(bet.placedAt).toLocaleDateString()
+                  : "-"}
               </span>
             </div>
           ))
@@ -176,8 +203,8 @@ function SummaryCard({
   label,
   value,
   icon,
-  valueClass = 'text-text-primary',
-  prefix = '',
+  valueClass = "text-text-primary",
+  prefix = "",
 }: {
   label: string;
   value: string;
@@ -189,10 +216,13 @@ function SummaryCard({
     <div className="panel-cyber p-4 space-y-2">
       <div className="flex items-center gap-2 text-text-muted">
         {icon}
-        <span className="text-xs font-terminal uppercase tracking-wider">{label}</span>
+        <span className="text-xs font-terminal uppercase tracking-wider">
+          {label}
+        </span>
       </div>
       <span className={`text-lg font-bold font-terminal ${valueClass}`}>
-        {prefix}{value}
+        {prefix}
+        {value}
       </span>
     </div>
   );
