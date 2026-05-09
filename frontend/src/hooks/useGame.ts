@@ -67,7 +67,7 @@ export function useGame() {
       const newBet: Bet = {
         id: data.betId,
         roundId: data.roundId,
-        playerId: session?.user?.playerId || '',
+        playerId: session?.playerId || '',
         amountCents: data.amountCents,
         amountDecimal: (data.amountCents / 100).toFixed(2),
         status: data.status,

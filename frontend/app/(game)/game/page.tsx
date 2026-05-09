@@ -18,10 +18,11 @@ export default function GameContent() {
   const { roundStatus, liveMultiplier } = useGameStore();
   const { data: session } = useSession();
 
-  // Establish WebSocket connection
+  // Establish WebSocket connection only after session is loaded
   useGameWebSocket({
     token: session?.accessToken,
-    enabled: true,
+    playerId: session?.playerId,
+    enabled: !!session?.accessToken,
   });
 
   // Map RoundStatus enum to component props

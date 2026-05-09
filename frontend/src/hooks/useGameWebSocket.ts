@@ -17,6 +17,7 @@ import { useGameStore } from "../infrastructure/store/game-store";
 
 export interface UseGameWebSocketOptions {
   token?: string;
+  playerId?: string;
   enabled?: boolean;
 }
 
@@ -31,7 +32,7 @@ export interface UseGameWebSocketReturn {
 export function useGameWebSocket(
   options: UseGameWebSocketOptions = {},
 ): UseGameWebSocketReturn {
-  const { token, enabled = true } = options;
+  const { token, playerId, enabled = true } = options;
   const wsRef = useRef<GamesWebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<
@@ -96,6 +97,21 @@ export function useGameWebSocket(
             setStoreCurrentBets(round.bets || []);
             break;
         }
+
+        // Recover player's bet on page reload/reconnect
+        // Include CASHED_OUT so "You Won!" displays; only skip terminal losses
+        console.log(playerId);
+        if (playerId && round.bets?.length) {
+          const myBet = round.bets.find(
+            (b) =>
+              b.playerId === playerId &&
+              b.status !== "LOST" &&
+              b.status !== "CANCELLED",
+          );
+          if (myBet) {
+            setStoreMyActiveBet(myBet);
+          }
+        }
       } catch (error) {
         console.error("Failed to sync current round:", error);
       }
@@ -106,6 +122,8 @@ export function useGameWebSocket(
       setStoreMultiplier,
       setStoreCrash,
       setStoreCurrentBets,
+      setStoreMyActiveBet,
+      playerId,
     ],
   );
 
