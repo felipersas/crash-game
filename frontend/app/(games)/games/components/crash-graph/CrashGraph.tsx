@@ -81,7 +81,7 @@ export default function CrashGraph({ multiplier, phase }: Props) {
 
   return (
     <motion.div
-      className={`panel-cyber rounded-lg overflow-hidden relative ${shouldShake ? "animate-glitch" : ""}`}
+      className={`panel-cyber rounded-lg overflow-hidden relative h-full flex flex-col ${shouldShake ? "animate-glitch" : ""}`}
       animate={shouldShake ? { x: [-5, 5, -5, 5, 0] } : {}}
       transition={{ duration: 0.3 }}
     >
@@ -120,7 +120,7 @@ export default function CrashGraph({ multiplier, phase }: Props) {
       </AnimatePresence>
 
       {/* Main Graph Area */}
-      <div className="relative h-64 md:h-80 flex items-center justify-center">
+      <div className="relative flex-1 min-h-64 md:min-h-80 flex items-center justify-center">
         <div className="absolute inset-0 cyber-grid opacity-30" />
 
         <div className="relative z-10 text-center">

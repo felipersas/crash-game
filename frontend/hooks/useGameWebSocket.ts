@@ -19,6 +19,8 @@ import {
   type Round,
 } from "@/types/game.types";
 import { useGameStore } from "@/store/game-store";
+import { toast } from "sonner";
+import { formatMoney } from "@/shared/utils/money";
 
 export interface UseGameWebSocketOptions {
   token?: string;
@@ -239,6 +241,17 @@ export function useGameWebSocket(
         )
           return;
         storeUpdateBet(data.betId, { status: BetStatus.ACTIVE });
+        // Update myActiveBet if it's our bet
+        if (data.playerId === playerId) {
+          const state = useGameStore.getState();
+          if (state.myActiveBet?.id === data.betId) {
+            state.updateBetStatus(data.betId, BetStatus.ACTIVE);
+          }
+          toast.success("Bet Confirmed!", {
+            description: `${formatMoney(data.amountCents)} is now active`,
+            duration: 3000,
+          });
+        }
       },
       onBetCancelled: (data) => {
         if (
@@ -247,6 +260,17 @@ export function useGameWebSocket(
         )
           return;
         storeUpdateBet(data.betId, { status: BetStatus.CANCELLED });
+        // Clear myActiveBet if it's our bet
+        if (data.playerId === playerId) {
+          const state = useGameStore.getState();
+          if (state.myActiveBet?.id === data.betId) {
+            state.setMyActiveBet(null);
+          }
+          toast.error("Bet Cancelled", {
+            description: data.reason,
+            duration: 4000,
+          });
+        }
       },
     });
 

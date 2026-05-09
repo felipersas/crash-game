@@ -28,7 +28,7 @@ export default function GameContent() {
 
   return (
     <div className="container mx-auto min-h-screen px-4 pb-4">
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
         {/* Center - Crash Graph (first on mobile) */}
         <div className="md:col-span-6 md:order-2">
           <CrashGraph multiplier={liveMultiplier} phase={roundPhase} />

@@ -91,10 +91,6 @@ export default function BetControls() {
   const handlePlaceBet = () => {
     const cents = Math.round(parseFloat(amount) * 100);
     placeBet(cents);
-    toast.success("Bet Placed", {
-      description: `Betting ${formatMoney(cents)} on this round`,
-      duration: 2000,
-    });
   };
 
   const potentialWin = myActiveBet
@@ -116,7 +112,7 @@ export default function BetControls() {
   };
 
   return (
-    <div className="panel-cyber rounded-lg p-6 space-y-4">
+    <div className="panel-cyber rounded-lg p-6 space-y-4 h-full flex flex-col">
       {/* Username display */}
       {isAuthenticated && (
         <div className="flex items-center gap-2 pb-3 border-b border-border">
@@ -216,6 +212,20 @@ export default function BetControls() {
             "BET"
           )}
         </button>
+      )}
+
+      {myActiveBet && myActiveBet.status === "PENDING" && (
+        <div className="text-center py-4">
+          <span className="flex items-center justify-center gap-2">
+            <span className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span className="text-text-muted font-terminal text-sm uppercase tracking-wider">
+              Confirming bet...
+            </span>
+          </span>
+          <p className="text-text-muted font-terminal text-xs mt-2">
+            {formatMoney(myActiveBet.amountCents)} pending
+          </p>
+        </div>
       )}
 
       {canCashOut && (
