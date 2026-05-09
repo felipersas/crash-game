@@ -15,6 +15,9 @@ interface GameState {
   bettingEndTime: Date | null;
   myActiveBet: Bet | null;
   currentBets: Bet[];
+  // Computed values
+  getBettingTimeRemaining: () => number; // seconds remaining
+  getBettingProgress: () => number; // 0-1 progress for bar
 
   setConnectionStatus: (status: GameState['connectionStatus']) => void;
   setConnected: (connected: boolean) => void;
@@ -34,22 +37,26 @@ interface GameState {
   resetRound: () => void;
 }
 
+const initialState = {
+  isConnected: false,
+  connectionStatus: 'disconnected' as const,
+  currentRoundId: null,
+  roundStatus: RoundStatus.BETTING,
+  liveMultiplier: 1.0,
+  bettingEndTime: null,
+  myActiveBet: null,
+  currentBets: [],
+};
+
 export const useGameStore = create<GameState>()(
-  devtools(
-    (set) => ({
-      isConnected: false,
-      connectionStatus: 'disconnected',
-      currentRoundId: null,
-      roundStatus: RoundStatus.BETTING,
-      liveMultiplier: 1.0,
-      bettingEndTime: null,
-      myActiveBet: null,
-      currentBets: [],
-      
+  devtools<GameState>(
+    (set, get) => ({
+      ...initialState,
+
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       setConnected: (connected) => set({ isConnected: connected }),
-      
-      setRoundStarted: (roundId, seedHash, bettingEndTime) =>
+
+      setRoundStarted: (roundId, _seedHash, bettingEndTime) =>
         set({
           currentRoundId: roundId,
           roundStatus: RoundStatus.BETTING,
@@ -57,30 +64,30 @@ export const useGameStore = create<GameState>()(
           bettingEndTime,
           myActiveBet: null,
         }),
-      
+
       setBettingEnded: () =>
         set({
           roundStatus: RoundStatus.ACTIVE,
           bettingEndTime: null,
         }),
-      
+
       setMultiplier: (multiplier) =>
         set({ liveMultiplier: multiplier }),
-      
+
       setCrash: (crashPoint) =>
         set({
           roundStatus: RoundStatus.CRASHED,
           liveMultiplier: crashPoint,
         }),
-      
+
       setMyActiveBet: (bet) => set({ myActiveBet: bet }),
-      
+
       updateBetStatus: (betId, status, cashOutData) =>
         set((state) => {
           if (state.myActiveBet?.id === betId) {
             return {
               myActiveBet: {
-                ...state.myActiveBet,
+                ...state.myActiveBet!,
                 status,
                 ...(cashOutData && {
                   cashOutMultiplier: cashOutData.multiplier,
@@ -91,9 +98,9 @@ export const useGameStore = create<GameState>()(
               },
             };
           }
-          return state;
+          return {};
         }),
-      
+
       resetRound: () =>
         set({
           currentRoundId: null,
@@ -117,6 +124,26 @@ export const useGameStore = create<GameState>()(
             bet.id === betId ? { ...bet, ...updates } : bet
           ),
         })),
+
+      // Computed getters
+      getBettingTimeRemaining: () => {
+        const state = get();
+        if (!state.bettingEndTime || state.roundStatus !== RoundStatus.BETTING) {
+          return 0;
+        }
+        const remaining = Math.max(0, (new Date(state.bettingEndTime).getTime() - Date.now()) / 1000);
+        return remaining;
+      },
+
+      getBettingProgress: () => {
+        const state = get();
+        if (!state.bettingEndTime || state.roundStatus !== RoundStatus.BETTING) {
+          return 0;
+        }
+        const BETTING_WINDOW_MS = 10000;
+        const elapsed = Date.now() - (new Date(state.bettingEndTime).getTime() - BETTING_WINDOW_MS);
+        return Math.min(1, Math.max(0, elapsed / BETTING_WINDOW_MS));
+      },
     }),
     { name: 'GameStore' }
   )
