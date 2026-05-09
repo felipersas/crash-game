@@ -70,7 +70,8 @@ export function useGame() {
       return api.placeBet(amountCents);
     },
     onSuccess: (data: PlaceBetResponse) => {
-      toast.success("Bet placed!");
+      // Bet is PENDING — don't show success yet.
+      // Real confirmation/cancellation comes via WebSocket events.
 
       // Update local store with new bet
       const newBet: Bet = {

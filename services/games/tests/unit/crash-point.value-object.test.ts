@@ -40,7 +40,7 @@ describe('CrashPoint Value Object', () => {
 
   describe('Creation from Seed', () => {
     test('should generate crash point from valid seed', async () => {
-      const seed = 'test-seed-for-crash-point-generation';
+      const seed = 'aa'.repeat(32); // valid 64-char hex seed
       const crashPoint = await CrashPoint.fromSeed(seed);
 
       expect(crashPoint.getValue()).toBeGreaterThanOrEqual(1.0);
@@ -55,7 +55,7 @@ describe('CrashPoint Value Object', () => {
     });
 
     test('should generate deterministic crash points from same seed', async () => {
-      const seed = 'deterministic-seed-12345';
+      const seed = 'bb'.repeat(32); // valid 64-char hex seed
       const cp1 = await CrashPoint.fromSeed(seed);
       const cp2 = await CrashPoint.fromSeed(seed);
 
@@ -63,8 +63,8 @@ describe('CrashPoint Value Object', () => {
     });
 
     test('should generate different crash points from different seeds', async () => {
-      const cp1 = await CrashPoint.fromSeed('seed-one-long-enough');
-      const cp2 = await CrashPoint.fromSeed('seed-two-long-enough');
+      const cp1 = await CrashPoint.fromSeed('aabbccdd'.repeat(8));
+      const cp2 = await CrashPoint.fromSeed('11223344'.repeat(8));
 
       expect(cp1.getValue()).not.toBe(cp2.getValue());
     });
@@ -133,7 +133,7 @@ describe('CrashPoint Value Object', () => {
     test('should apply 4% house edge (crash points tend lower)', async () => {
       // Generate many crash points and verify average is below theoretical fair value
       // With 4% house edge, expected value should be around 0.96 / 0.99 ≈ 0.97x the fair value
-      const seeds = Array.from({ length: 100 }, (_, i) => `seed-for-testing-${i}-longer-than-10-chars`);
+      const seeds = Array.from({ length: 100 }, (_, i) => i.toString(16).padStart(2, '0').repeat(32));
       const crashPoints = await Promise.all(
         seeds.map(seed => CrashPoint.fromSeed(seed))
       );
@@ -148,7 +148,7 @@ describe('CrashPoint Value Object', () => {
 
     test('should generate deterministic crash points from same seed', async () => {
       // This test verifies the randomness in the algorithm
-      const seed = 'test-seed-house-edge-long-enough';
+      const seed = 'cc'.repeat(32); // valid 64-char hex seed
       const crashPoints = await Promise.all(
         Array(10).fill(0).map(() => CrashPoint.fromSeed(seed))
       );
@@ -163,7 +163,7 @@ describe('CrashPoint Value Object', () => {
     test('should enforce minimum crash point of 1.00x', async () => {
       // Even with seeds that would mathematically result in values below 1.00,
       // the crash point should be clamped to 1.00
-      const seeds = Array.from({ length: 50 }, (_, i) => `seed-min-${i}`);
+      const seeds = Array.from({ length: 50 }, (_, i) => (i + 100).toString(16).padStart(2, '0').repeat(32));
       const crashPoints = await Promise.all(
         seeds.map(seed => CrashPoint.fromSeed(seed))
       );

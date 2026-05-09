@@ -127,17 +127,17 @@ services:
 consumers:
   - username: keycloak-crash-game
     jwt_secrets:
-      - key: sc0nlmCmygXw-bQYRlEb20etnPnlaFBbaM4irnSwyTM
+      - key: Cd1rriM6-PuedGB37Cal69lVyQt3TyX66KHz18LAo5k
         algorithm: RS256
         rsa_public_key: |-
           -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4aQfhMoZR8/fC5pyI0lO
-          lEsLjZGHW6+qExaAvcdTiJaUVc+QcoRJESex1VhW/YReEW61WWMe2gNHH+nSDFBN
-          ablxfKIl3OiDGo/Iqsh7d5NOX4IV0RrEZZyUhvyH16eJTZhI4ho4vNbKHQJKm5Lh
-          TgL6gLUYfwq1/n6Zql6WzV3UnwDzXp7QTEQWCEdoakJOfqvMEWmCY0WT+Zm9zub9
-          BtF/I1oDEKxiWX/h6thRtLRX+gb4hItU75fMSvf6HpzZnF2hlrc7fKsGcBSkiVSv
-          YQwfl7/CwI4huDfk7DYBSqOwsj70lCySNR8dAQ+FXYZLMJ7kMdiRdSlbZcQSO9TH
-          gQIDAQAB
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyZFSSxyoP6azbUfABJa1
+          KVwOdJ/dTRqwsEqZfMAYK5vfLseTyGIVtfr7AHg1PbRESgDUezs+aDMikaPIX6VY
+          5LMwtpW1TIVOcmkkA6yTJgD3Qk7OaSbpn/FpBdi66v4l5Ail4fDdjsIoFnKAxlI2
+          UBTI3TgNjXtIMJsKyr34t82QVT0c1mkOiRWVmJGLm/YfU1/Fia9pt6vF3O6BeEyX
+          v3e9k2iXINT2deWCvwO9xYFetAe2392/7Pn9oVAhIYnTuC/bVdpY3FKoCXXYz7XZ
+          dBIQaBxTq/+HqrKRn9PRsjIdsUe0r0Zl/MJ/FxsBS4W5ICXMw6MAL5LNHvZKibmm
+          oQIDAQAB
           -----END PUBLIC KEY-----
   - username: skip-auth
     jwt_secrets:

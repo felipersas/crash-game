@@ -49,6 +49,7 @@ export class RoundEventListeners {
   handleBetPlaced(event: BetPlacedEvent): void {
     this.gamesGateway.broadcastBetPlaced(
       event.roundId,
+      event.betId,
       event.playerId,
       event.amount,
     );
@@ -88,6 +89,7 @@ export class RoundEventListeners {
   handlePlayerCashedOut(event: PlayerCashedOutEvent): void {
     this.gamesGateway.broadcastPlayerCashedOut(
       event.roundId,
+      event.betId,
       event.playerId,
       event.cashOutMultiplier,
       event.winAmount,
