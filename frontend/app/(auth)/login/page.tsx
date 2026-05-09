@@ -14,7 +14,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   if (status === "authenticated") {
-    router.push("/game");
+    router.push("/games");
     return null;
   }
 

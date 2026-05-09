@@ -1,48 +1,49 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 import { useGame } from "@/hooks/useGame";
 import { useGameStore } from "@/infrastructure/store/game-store";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { Input } from "@/components/ui/input";
 import { calculatePayout, formatMoney } from "@/shared/utils/money";
 import { RoundStatus } from "@/domain/types/game.types";
+import { BetButton } from "./BetButton";
 
 export default function BetControls() {
   const { placeBet, isPlacingBet, cashOut, isCashingOut } = useGame();
   const { myActiveBet, roundStatus, liveMultiplier } = useGameStore();
   const { playWin, playCrash } = useGameSounds();
+  const { data: session, status: authStatus } = useSession();
+
+  const isAuthenticated = authStatus === "authenticated";
 
   const [amount, setAmount] = useState("10.00");
   const [autoCashOut, setAutoCashOut] = useState("2.00");
-  const [activeTab, setActiveTab] = useState<"manual" | "auto">("manual");
 
-  // Track previous state for toast notifications
   const prevRoundStatus = useRef(roundStatus);
   const prevMyActiveBet = useRef(myActiveBet);
   const hasShownWinToast = useRef(false);
   const hasShownLossToast = useRef(false);
 
-  // Derive phase states from roundStatus enum
   const isBettingPhase = roundStatus === RoundStatus.BETTING;
   const isActivePhase = roundStatus === RoundStatus.ACTIVE;
   const isCrashed = roundStatus === RoundStatus.CRASHED;
 
   const hasCashedOut = myActiveBet?.status === "CASHED_OUT";
-  const canBet = isBettingPhase && !myActiveBet;
+  const canBet = isBettingPhase && !myActiveBet && isAuthenticated;
   const canCashOut = isActivePhase && myActiveBet && !hasCashedOut;
 
-  // Win/Loss toast notifications
   useEffect(() => {
-    // Check for cash out (win)
     if (
       prevMyActiveBet.current?.status !== "CASHED_OUT" &&
       myActiveBet?.status === "CASHED_OUT" &&
       !hasShownWinToast.current
     ) {
-      const winAmount = myActiveBet.cashOutAmountCents
-        ? formatMoney(myActiveBet.cashOutAmountCents)
+      const winAmount = myActiveBet.payoutCents
+        ? formatMoney(myActiveBet.payoutCents)
         : formatMoney(
             calculatePayout(
               myActiveBet.amountCents,
@@ -59,7 +60,6 @@ export default function BetControls() {
       hasShownLossToast.current = false;
     }
 
-    // Check for crash (loss)
     if (
       prevRoundStatus.current !== RoundStatus.CRASHED &&
       roundStatus === RoundStatus.CRASHED &&
@@ -76,7 +76,6 @@ export default function BetControls() {
       hasShownWinToast.current = false;
     }
 
-    // Reset toasts when new betting starts
     if (
       roundStatus === RoundStatus.BETTING &&
       prevRoundStatus.current !== RoundStatus.BETTING
@@ -117,22 +116,37 @@ export default function BetControls() {
   };
 
   return (
-    <div className="panel-cyber rounded-lg p-6 space-y-6 h-80 md:h-82">
-      {/* Tabs */}
-      <div className="flex gap-1 bg-primary p-1 rounded">
-        <button
-          onClick={() => {
-            setActiveTab("manual");
-          }}
-          className={`flex-1 py-2 px-4 text-sm font-bold uppercase tracking-wider rounded transition-all ${
-            activeTab === "manual"
-              ? "bg-primary text-black shadow-lg shadow-primary/20"
-              : "text-text-muted hover:text-text-primary"
-          }`}
-        >
-          Manual
-        </button>
-      </div>
+    <div className="panel-cyber rounded-lg p-6 space-y-4">
+      {/* Username display */}
+      {isAuthenticated && (
+        <div className="flex items-center gap-2 pb-3 border-b border-border">
+          <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+            <span className="text-xs font-terminal text-primary">
+              {(session?.user?.username || session?.playerId || "P")
+                .charAt(0)
+                .toUpperCase()}
+            </span>
+          </div>
+          <span className="text-sm font-terminal text-text-primary truncate">
+            {session?.user?.username || session?.playerId?.slice(0, 8)}
+          </span>
+        </div>
+      )}
+
+      {/* Unauthenticated banner */}
+      {!isAuthenticated && (
+        <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 text-center">
+          <p className="text-sm font-terminal text-warning mb-2">
+            Log in to place bets
+          </p>
+          <Link
+            href="/login"
+            className="btn-cyber-primary px-4 py-1.5 rounded-lg text-xs font-terminal inline-block"
+          >
+            Login
+          </Link>
+        </div>
+      )}
 
       {/* Amount Input */}
       <div className="space-y-2">
@@ -155,54 +169,36 @@ export default function BetControls() {
           </span>
         </div>
 
-        {/* Quick Actions */}
         {canBet && (
           <div className="flex gap-2">
-            <button
-              onClick={handleHalfBet}
-              className="flex-1 py-2 text-xs font-terminal text-text-muted border border-border hover:border-primary hover:text-primary transition-colors rounded"
-            >
-              1/2
-            </button>
-            <button
-              onClick={handleDoubleBet}
-              className="flex-1 py-2 text-xs font-terminal text-text-muted border border-border hover:border-primary hover:text-primary transition-colors rounded"
-            >
-              2x
-            </button>
-            <button
-              onClick={handleMaxBet}
-              className="flex-1 py-2 text-xs font-terminal text-text-muted border border-border hover:border-primary hover:text-primary transition-colors rounded"
-            >
-              MAX
-            </button>
+            <BetButton onAction={handleHalfBet}>1/2</BetButton>
+            <BetButton onAction={handleDoubleBet}>2x</BetButton>
+            <BetButton onAction={handleMaxBet}>MAX</BetButton>
           </div>
         )}
       </div>
 
-      {/* Auto Cash Out */}
-      {activeTab === "auto" && (
-        <div className="space-y-2">
-          <label className="text-xs font-terminal text-text-muted uppercase tracking-wider">
-            Auto Cash Out
-          </label>
-          <div className="relative">
-            <Input
-              value={autoCashOut}
-              onChange={(e) => setAutoCashOut(e.target.value)}
-              type="number"
-              step="0.01"
-              min="1.01"
-              max="1000"
-              className="input-cyber pr-8"
-              disabled={!canBet}
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted font-terminal text-sm">
-              x
-            </span>
-          </div>
+      {/* Auto Cash Out - always visible */}
+      <div className="space-y-2">
+        <label className="text-xs font-terminal text-text-muted uppercase tracking-wider">
+          Auto Cash Out
+        </label>
+        <div className="relative">
+          <Input
+            value={autoCashOut}
+            onChange={(e) => setAutoCashOut(e.target.value)}
+            type="number"
+            step="0.01"
+            min="1.01"
+            max="1000"
+            className="input-cyber pr-8"
+            disabled={!canBet}
+          />
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted font-terminal text-sm">
+            x
+          </span>
         </div>
-      )}
+      </div>
 
       {/* Main CTA Button */}
       {canBet && (
@@ -237,9 +233,7 @@ export default function BetControls() {
             </span>
           </div>
           <button
-            onClick={() => {
-              cashOut();
-            }}
+            onClick={() => cashOut()}
             disabled={isCashingOut}
             className="w-full btn-cyber-primary py-4 text-lg font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed animate-pulse-glow"
           >
@@ -255,14 +249,13 @@ export default function BetControls() {
         </div>
       )}
 
-      {/* Already cashed out — show win immediately during active phase */}
       {isActivePhase && hasCashedOut && (
         <div className="text-center py-4">
           <p className="text-primary font-terminal text-sm uppercase tracking-wider">
             You Won!
           </p>
           <p className="text-text-primary font-terminal text-lg mt-1">
-            {formatMoney(myActiveBet!.cashOutAmountCents || 0)}
+            {formatMoney(myActiveBet!.payoutCents || 0)}
           </p>
           <p className="text-text-muted font-terminal text-xs mt-1">
             at {myActiveBet!.cashOutMultiplier?.toFixed(2)}x
@@ -287,7 +280,7 @@ export default function BetControls() {
             You Won!
           </p>
           <p className="text-text-primary font-terminal text-lg mt-1">
-            {formatMoney(myActiveBet!.cashOutAmountCents || 0)}
+            {formatMoney(myActiveBet!.payoutCents || 0)}
           </p>
           <p className="text-text-muted font-terminal text-xs mt-1">
             at {myActiveBet!.cashOutMultiplier?.toFixed(2)}x

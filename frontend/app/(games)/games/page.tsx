@@ -1,10 +1,5 @@
 "use client";
 
-/**
- * Game Page - Main game interface
- */
-
-import GameLayout from "./components/game-layout/GameLayout";
 import CrashGraph from "./components/crash-graph/CrashGraph";
 import BetControls from "./components/bet-controls/BetControls";
 import BetsList from "./components/bets-list/BetsList";
@@ -18,14 +13,12 @@ export default function GameContent() {
   const { roundStatus, liveMultiplier } = useGameStore();
   const { data: session } = useSession();
 
-  // Establish WebSocket connection only after session is loaded
   useGameWebSocket({
     token: session?.accessToken,
     playerId: session?.playerId,
     enabled: !!session?.accessToken,
   });
 
-  // Map RoundStatus enum to component props
   const roundPhase =
     roundStatus === RoundStatus.BETTING
       ? "betting"
@@ -35,17 +28,25 @@ export default function GameContent() {
 
   return (
     <div className="container mx-auto min-h-screen px-4 pb-4">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Left Panel - Bet Controls (top) + History (bottom) */}
-        <div className="lg:col-span-4 space-y-4">
-          <BetControls />
-          <RoundHistory />
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        {/* Center - Crash Graph (first on mobile) */}
+        <div className="md:col-span-6 md:order-2">
+          <CrashGraph multiplier={liveMultiplier} phase={roundPhase} />
         </div>
 
-        {/* Right Panel - Crash Graph (top) + Active Bets (bottom) */}
-        <div className="lg:col-span-8 space-y-4">
-          <CrashGraph multiplier={liveMultiplier} phase={roundPhase} />
+        {/* Left Panel - Bet Controls (second on mobile) */}
+        <div className="md:col-span-3 md:order-1">
+          <BetControls />
+        </div>
+
+        {/* Right Panel - Active Bets (third on mobile) */}
+        <div className="md:col-span-3 md:order-3">
           <BetsList />
+        </div>
+
+        {/* Footer - Round History (last) */}
+        <div className="md:col-span-12 md:order-4">
+          <RoundHistory />
         </div>
       </div>
     </div>
