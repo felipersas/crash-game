@@ -12,7 +12,7 @@ import { RoundStatus } from "@/domain/types/game.types";
 export default function BetControls() {
   const { placeBet, isPlacingBet, cashOut, isCashingOut } = useGame();
   const { myActiveBet, roundStatus, liveMultiplier } = useGameStore();
-  const { playWin, playLose, playPlaceBet, playButtonClick } = useGameSounds();
+  const { playWin, playCrash } = useGameSounds();
 
   const [amount, setAmount] = useState("10.00");
   const [autoCashOut, setAutoCashOut] = useState("2.00");
@@ -70,7 +70,7 @@ export default function BetControls() {
         description: `You lost ${formatMoney(myActiveBet.amountCents)} at ${liveMultiplier.toFixed(2)}x`,
         duration: 4000,
       });
-      playLose();
+      playCrash();
       hasShownLossToast.current = true;
       hasShownWinToast.current = false;
     }
@@ -91,7 +91,6 @@ export default function BetControls() {
   const handlePlaceBet = () => {
     const cents = Math.round(parseFloat(amount) * 100);
     placeBet(cents);
-    playPlaceBet();
     toast.success("Bet Placed", {
       description: `Betting ${formatMoney(cents)} on this round`,
       duration: 2000,
@@ -105,28 +104,24 @@ export default function BetControls() {
   const handleHalfBet = () => {
     const current = parseFloat(amount) || 0;
     setAmount(Math.max(1, current / 2).toFixed(2));
-    playButtonClick();
   };
 
   const handleDoubleBet = () => {
     const current = parseFloat(amount) || 0;
     setAmount(Math.min(1000, current * 2).toFixed(2));
-    playButtonClick();
   };
 
   const handleMaxBet = () => {
     setAmount("1000.00");
-    playButtonClick();
   };
 
   return (
     <div className="panel-cyber rounded-lg p-6 space-y-6 h-80 md:h-82">
       {/* Tabs */}
-      <div className="flex gap-1 bg-surface/50 p-1 rounded">
+      <div className="flex gap-1 bg-primary p-1 rounded">
         <button
           onClick={() => {
             setActiveTab("manual");
-            playButtonClick();
           }}
           className={`flex-1 py-2 px-4 text-sm font-bold uppercase tracking-wider rounded transition-all ${
             activeTab === "manual"
@@ -236,14 +231,13 @@ export default function BetControls() {
           </div>
           <div className="flex justify-between text-sm font-terminal">
             <span className="text-text-muted">Potential:</span>
-            <span className="text-primary glow-primary-subtle">
+            <span className="text-primary">
               {formatMoney(potentialWin || 0)}
             </span>
           </div>
           <button
             onClick={() => {
               cashOut();
-              playButtonClick();
             }}
             disabled={isCashingOut}
             className="w-full btn-cyber-primary py-4 text-lg font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed animate-pulse-glow"
@@ -262,7 +256,7 @@ export default function BetControls() {
 
       {isCrashed && myActiveBet && myActiveBet.status !== "CASHED_OUT" && (
         <div className="text-center py-4">
-          <p className="text-error font-terminal text-sm uppercase tracking-wider glow-error">
+          <p className="text-error font-terminal text-sm uppercase tracking-wider">
             Crashed at {liveMultiplier.toFixed(2)}x
           </p>
           <p className="text-text-muted font-terminal text-xs mt-1">
@@ -273,7 +267,7 @@ export default function BetControls() {
 
       {isCrashed && myActiveBet?.status === "CASHED_OUT" && (
         <div className="text-center py-4">
-          <p className="text-primary font-terminal text-sm uppercase tracking-wider glow-primary-subtle">
+          <p className="text-primary font-terminal text-sm uppercase tracking-wider">
             You Won!
           </p>
           <p className="text-text-primary font-terminal text-lg mt-1">
