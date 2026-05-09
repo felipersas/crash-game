@@ -1,6 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Inject } from '@nestjs/common';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
 import { BetStatus } from '@prisma/client';
