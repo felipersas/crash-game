@@ -28,12 +28,18 @@ export function Providers({ children }: { children: ReactNode }) {
         {children}
         <Toaster
           position="top-center"
+          theme="dark"
           richColors
           closeButton
-          duration={3000}
+          duration={4000}
           toastOptions={{
             classNames: {
-              toast: 'casino-toast',
+              toast: 'cyber-toast',
+              title: 'cyber-toast-title',
+              description: 'cyber-toast-description',
+              actionButton: 'cyber-toast-action',
+              cancelButton: 'cyber-toast-cancel',
+              closeButton: 'cyber-toast-close',
             },
           }}
         />
