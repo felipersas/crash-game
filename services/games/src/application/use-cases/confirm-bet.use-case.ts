@@ -1,8 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
-import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
+import type { IEventPublisher } from '@crash/messaging';
+import { BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 import { BetNotFoundError } from '@/domain/errors/domain.errors';
+import { createBetConfirmedEvent } from '@/domain/events/round.events';
 
 export interface ConfirmBetInput {
   roundId: string;
@@ -21,6 +23,7 @@ export interface ConfirmBetOutput {
  *
  * Confirms a bet after successful wallet debit.
  * Transitions the bet from PENDING to ACTIVE state.
+ * Emits BetConfirmedEvent for WebSocket notification to clients.
  *
  * Now uses BetRepository directly for better concurrency.
  */
@@ -28,6 +31,7 @@ export interface ConfirmBetOutput {
 export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOutput> {
   constructor(
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
+    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
   ) {}
 
   async execute(input: ConfirmBetInput): Promise<ConfirmBetOutput> {
@@ -46,6 +50,16 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
 
     // Save bet state change
     await this.betRepository.update(bet);
+
+    // Emit event for WebSocket notification
+    const event = createBetConfirmedEvent(
+      input.roundId,
+      input.betId,
+      input.playerId,
+      bet.getAmount().toCents(),
+      1, // version for the event
+    );
+    await this.eventPublisher.publishBatch([event]);
 
     return {
       betId: input.betId,

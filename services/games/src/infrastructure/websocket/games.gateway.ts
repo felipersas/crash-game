@@ -21,6 +21,8 @@ export interface ServerToClientEvents {
   multiplierUpdate: (data: { roundId: string; multiplier: number }) => void;
   crash: (data: { roundId: string; crashPoint: number; seed: string }) => void;
   betPlaced: (data: { roundId: string; playerId: string; amountCents: bigint }) => void;
+  betConfirmed: (data: { roundId: string; betId: string; playerId: string; amountCents: bigint }) => void;
+  betCancelled: (data: { roundId: string; betId: string; playerId: string; amountCents: bigint; reason: string }) => void;
   playerCashedOut: (data: { roundId: string; playerId: string; multiplier: number; payoutCents: bigint }) => void;
 }
 
@@ -97,6 +99,31 @@ export class GamesGateway
       roundId,
       playerId,
       amountCents,
+    });
+  }
+
+  /**
+   * Broadcast bet confirmed event - bet is now active after wallet confirmation.
+   */
+  broadcastBetConfirmed(roundId: string, betId: string, playerId: string, amountCents: bigint) {
+    this.server.emit('betConfirmed', {
+      roundId,
+      betId,
+      playerId,
+      amountCents,
+    });
+  }
+
+  /**
+   * Broadcast bet cancelled event - bet was rejected by wallet service.
+   */
+  broadcastBetCancelled(roundId: string, betId: string, playerId: string, amountCents: bigint, reason: string) {
+    this.server.emit('betCancelled', {
+      roundId,
+      betId,
+      playerId,
+      amountCents,
+      reason,
     });
   }
 

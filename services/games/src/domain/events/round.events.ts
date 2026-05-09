@@ -92,6 +92,33 @@ export interface WalletDebitFailedEvent extends DomainEvent {
 }
 
 /**
+ * Emitted when a bet is confirmed after successful wallet debit.
+ * Used to notify clients via WebSocket that their bet is now active.
+ */
+export interface BetConfirmedEvent extends DomainEvent {
+  readonly eventType: 'BetConfirmed';
+  readonly roundId: string;
+  readonly betId: string;
+  readonly playerId: string;
+  readonly amount: bigint;
+  timestamp: Date;
+}
+
+/**
+ * Emitted when a bet is cancelled after wallet debit failure.
+ * Used to notify clients via WebSocket that their bet was rejected.
+ */
+export interface BetCancelledEvent extends DomainEvent {
+  readonly eventType: 'BetCancelled';
+  readonly roundId: string;
+  readonly betId: string;
+  readonly playerId: string;
+  readonly amount: bigint;
+  readonly reason: string;
+  timestamp: Date;
+}
+
+/**
  * Union type of all game domain events.
  */
 export type GameDomainEvent =
@@ -101,7 +128,9 @@ export type GameDomainEvent =
   | PlayerCashedOutEvent
   | RoundCrashedEvent
   | WalletDebitedEvent
-  | WalletDebitFailedEvent;
+  | WalletDebitFailedEvent
+  | BetConfirmedEvent
+  | BetCancelledEvent;
 
 /**
  * Helper factory to create domain events with common fields.
@@ -234,6 +263,44 @@ export function createWalletDebitFailedEvent(
   return {
     ...createBaseEvent(roundId, version),
     eventType: 'WalletDebitFailed',
+    roundId,
+    betId,
+    playerId,
+    amount,
+    reason,
+    timestamp: new Date(),
+  };
+}
+
+export function createBetConfirmedEvent(
+  roundId: string,
+  betId: string,
+  playerId: string,
+  amount: bigint,
+  version: number,
+): BetConfirmedEvent {
+  return {
+    ...createBaseEvent(roundId, version),
+    eventType: 'BetConfirmed',
+    roundId,
+    betId,
+    playerId,
+    amount,
+    timestamp: new Date(),
+  };
+}
+
+export function createBetCancelledEvent(
+  roundId: string,
+  betId: string,
+  playerId: string,
+  amount: bigint,
+  reason: string,
+  version: number,
+): BetCancelledEvent {
+  return {
+    ...createBaseEvent(roundId, version),
+    eventType: 'BetCancelled',
     roundId,
     betId,
     playerId,

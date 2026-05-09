@@ -8,6 +8,8 @@ import type {
   BetPlacedEvent,
   PlayerCashedOutEvent,
   RoundCrashedEvent,
+  BetConfirmedEvent,
+  BetCancelledEvent,
 } from '@/domain/events/round.events';
 
 /**
@@ -49,6 +51,33 @@ export class RoundEventListeners {
       event.roundId,
       event.playerId,
       event.amount,
+    );
+  }
+
+  /**
+   * Broadcast bet confirmed event - wallet successfully debited.
+   */
+  @OnEvent('BetConfirmed')
+  handleBetConfirmed(event: BetConfirmedEvent): void {
+    this.gamesGateway.broadcastBetConfirmed(
+      event.roundId,
+      event.betId,
+      event.playerId,
+      event.amount,
+    );
+  }
+
+  /**
+   * Broadcast bet cancelled event - wallet debit failed.
+   */
+  @OnEvent('BetCancelled')
+  handleBetCancelled(event: BetCancelledEvent): void {
+    this.gamesGateway.broadcastBetCancelled(
+      event.roundId,
+      event.betId,
+      event.playerId,
+      event.amount,
+      event.reason,
     );
   }
 
