@@ -29,8 +29,9 @@ export default function BetControls() {
   const isActivePhase = roundStatus === RoundStatus.ACTIVE;
   const isCrashed = roundStatus === RoundStatus.CRASHED;
 
+  const hasCashedOut = myActiveBet?.status === "CASHED_OUT";
   const canBet = isBettingPhase && !myActiveBet;
-  const canCashOut = isActivePhase && myActiveBet;
+  const canCashOut = isActivePhase && myActiveBet && !hasCashedOut;
 
   // Win/Loss toast notifications
   useEffect(() => {
@@ -254,6 +255,21 @@ export default function BetControls() {
         </div>
       )}
 
+      {/* Already cashed out — show win immediately during active phase */}
+      {isActivePhase && hasCashedOut && (
+        <div className="text-center py-4">
+          <p className="text-primary font-terminal text-sm uppercase tracking-wider">
+            You Won!
+          </p>
+          <p className="text-text-primary font-terminal text-lg mt-1">
+            {formatMoney(myActiveBet!.cashOutAmountCents || 0)}
+          </p>
+          <p className="text-text-muted font-terminal text-xs mt-1">
+            at {myActiveBet!.cashOutMultiplier?.toFixed(2)}x
+          </p>
+        </div>
+      )}
+
       {isCrashed && myActiveBet && myActiveBet.status !== "CASHED_OUT" && (
         <div className="text-center py-4">
           <p className="text-error font-terminal text-sm uppercase tracking-wider">
@@ -265,16 +281,16 @@ export default function BetControls() {
         </div>
       )}
 
-      {isCrashed && myActiveBet?.status === "CASHED_OUT" && (
+      {isCrashed && hasCashedOut && (
         <div className="text-center py-4">
           <p className="text-primary font-terminal text-sm uppercase tracking-wider">
             You Won!
           </p>
           <p className="text-text-primary font-terminal text-lg mt-1">
-            {formatMoney(myActiveBet.cashOutAmountCents || 0)}
+            {formatMoney(myActiveBet!.cashOutAmountCents || 0)}
           </p>
           <p className="text-text-muted font-terminal text-xs mt-1">
-            at {myActiveBet.cashOutMultiplier?.toFixed(2)}x
+            at {myActiveBet!.cashOutMultiplier?.toFixed(2)}x
           </p>
         </div>
       )}
