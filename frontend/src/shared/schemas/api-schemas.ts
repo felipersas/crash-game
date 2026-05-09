@@ -16,7 +16,7 @@ export const betSchema = z.object({
   amountDecimal: z.string(),
   status: z.nativeEnum(BetStatus),
   cashOutMultiplier: z.number().nonnegative().nullable(),
-  cashOutAmountCents: z.number().int().nonnegative().nullable(),
+  cashOutAmountCents: z.number().int().nonnegative().nullable(), // backend still sends this for current round bets
   cashOutAmountDecimal: z.string().nullable(),
   cashedOutAt: z.coerce.date().nullable(),
 });
@@ -41,12 +41,21 @@ export const roundSummarySchema = z.object({
   startedAt: z.coerce.date().nullable(),
   crashedAt: z.coerce.date().nullable(),
   totalBets: z.number().int().nonnegative(),
+  totalWageredCents: z.number().int().nonnegative().optional(),
 });
 
-// Get round history response
-export const getRoundHistoryResponseSchema = z.object({
-  rounds: z.array(roundSummarySchema),
+// Pagination meta schema
+export const paginationMetaSchema = z.object({
+  page: z.number().int().positive(),
+  limit: z.number().int().positive(),
   total: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+});
+
+// Get round history response (page-based)
+export const getRoundHistoryResponseSchema = z.object({
+  data: z.array(roundSummarySchema),
+  meta: paginationMetaSchema,
 });
 
 // Wallet schema
@@ -91,8 +100,43 @@ export const verifyRoundResponseSchema = z.object({
   roundId: z.string().uuid(),
   seed: z.string(),
   seedHash: z.string(),
+  salt: z.string(),
   crashPoint: z.number().nonnegative(),
   verified: z.boolean(),
+  verificationFormula: z.string().optional(),
+});
+
+// My bet schema
+export const myBetSchema = z.object({
+  id: z.string().uuid(),
+  roundId: z.string().uuid(),
+  amountCents: z.number().int().nonnegative(),
+  amountDecimal: z.string(),
+  cashOutMultiplier: z.number().nonnegative().nullable(),
+  payoutCents: z.number().int().nonnegative().nullable(),
+  payoutDecimal: z.string().nullable(),
+  profitCents: z.number().nullable(),
+  profitDecimal: z.string().nullable(),
+  status: z.nativeEnum(BetStatus),
+  cashedOutAt: z.coerce.date().nullable(),
+  placedAt: z.coerce.date().nullable(),
+});
+
+// Bets summary schema
+export const betsSummarySchema = z.object({
+  totalWageredCents: z.number().int().nonnegative(),
+  totalWageredDecimal: z.string(),
+  wins: z.number().int().nonnegative(),
+  losses: z.number().int().nonnegative(),
+  profitCents: z.number(),
+  profitDecimal: z.string(),
+});
+
+// Get my bets response
+export const getMyBetsResponseSchema = z.object({
+  data: z.array(myBetSchema),
+  meta: paginationMetaSchema,
+  summary: betsSummarySchema,
 });
 
 // ============================================================================
@@ -103,3 +147,4 @@ export type PlaceBetResponse = z.infer<typeof placeBetResponseSchema>;
 export type CashOutResponse = z.infer<typeof cashOutResponseSchema>;
 export type VerifyRoundResponse = z.infer<typeof verifyRoundResponseSchema>;
 export type RoundHistoryResponse = z.infer<typeof getRoundHistoryResponseSchema>;
+export type MyBetsResponse = z.infer<typeof getMyBetsResponseSchema>;

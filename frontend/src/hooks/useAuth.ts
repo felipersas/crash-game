@@ -17,7 +17,7 @@ export function useAuth() {
     playerId: session?.playerId,
     accessToken: session?.accessToken,
     login: () => {
-      signIn('keycloak', { callbackUrl: '/game' });
+      signIn('keycloak', { callbackUrl: '/games' });
     },
     logout: () => signOut({ callbackUrl: '/login' }),
   };

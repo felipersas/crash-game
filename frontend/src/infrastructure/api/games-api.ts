@@ -21,6 +21,7 @@ import type {
   CashOutResponse,
   RoundHistoryResponse,
   VerifyRoundResponse,
+  MyBetsResponse,
 } from '../../shared/schemas/api-schemas';
 
 /**
@@ -103,22 +104,32 @@ export class GamesApi {
   }
 
   /**
-   * Get round history
+   * Get round history (page-based)
    *
-   * @param limit - Max rounds to return (default: 20)
-   * @param offset - Pagination offset (default: 0)
-   * @returns Paginated round history
-   *
-   * @example
-   * ```ts
-   * const history = await api.getRoundHistory(50, 0);
-   * console.log(`Total rounds: ${history.total}`);
-   * ```
+   * @param params - Pagination params { page, limit }
+   * @returns Paginated round history with meta
    */
-  async getRoundHistory(limit = 20, offset = 0): Promise<RoundHistoryResponse> {
+  async getRoundHistory(params: { page?: number; limit?: number } = {}): Promise<RoundHistoryResponse> {
+    const page = params.page ?? 1;
+    const limit = params.limit ?? 20;
     return get(
       this.client,
-      `${API_ENDPOINTS.GAMES.ROUND_HISTORY}?limit=${limit}&offset=${offset}`
+      `${API_ENDPOINTS.GAMES.ROUND_HISTORY}?page=${page}&limit=${limit}`
+    );
+  }
+
+  /**
+   * Get my bets (requires auth)
+   *
+   * @param params - Pagination params { page, limit }
+   * @returns Paginated bets with summary
+   */
+  async getMyBets(params: { page?: number; limit?: number } = {}): Promise<MyBetsResponse> {
+    const page = params.page ?? 1;
+    const limit = params.limit ?? 20;
+    return get(
+      this.client,
+      `${API_ENDPOINTS.GAMES.MY_BETS}?page=${page}&limit=${limit}`
     );
   }
 

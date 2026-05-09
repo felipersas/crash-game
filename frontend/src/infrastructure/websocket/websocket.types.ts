@@ -52,6 +52,3 @@ export type ConnectionStatus =
   | 'connected'
   | 'disconnected'
   | 'error';
-
-// Round phase (for UI state)
-export type RoundPhase = 'betting' | 'active' | 'crashed';

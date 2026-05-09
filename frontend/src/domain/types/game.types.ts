@@ -16,11 +16,6 @@ export enum BetStatus {
   CANCELLED = 'CANCELLED',
 }
 
-export interface Money {
-  cents: bigint;
-  decimal: string;
-}
-
 export interface Round {
   roundId: string;
   status: RoundStatus;
@@ -42,8 +37,8 @@ export interface Bet {
   amountDecimal: string;
   status: BetStatus;
   cashOutMultiplier: number | null;
-  cashOutAmountCents: number | null;
-  cashOutAmountDecimal: string | null;
+  payoutCents: number | null;
+  payoutDecimal: string | null;
   cashedOutAt: Date | null;
 }
 
@@ -54,6 +49,7 @@ export interface RoundSummary {
   startedAt: Date | null;
   crashedAt: Date | null;
   totalBets: number;
+  totalWageredCents?: number;
 }
 
 export interface Wallet {
@@ -63,8 +59,33 @@ export interface Wallet {
   version: number;
 }
 
-export interface UserContext {
-  playerId: string;
-  email: string;
-  username: string;
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface MyBet {
+  id: string;
+  roundId: string;
+  amountCents: number;
+  amountDecimal: string;
+  cashOutMultiplier: number | null;
+  payoutCents: number | null;
+  payoutDecimal: string | null;
+  profitCents: number | null;
+  profitDecimal: string | null;
+  status: BetStatus;
+  cashedOutAt: Date | null;
+  placedAt: Date | null;
+}
+
+export interface BetsSummary {
+  totalWageredCents: number;
+  totalWageredDecimal: string;
+  wins: number;
+  losses: number;
+  profitCents: number;
+  profitDecimal: string;
 }

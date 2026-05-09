@@ -5,14 +5,17 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { RoundStatus, Bet } from '../../domain/types/game.types';
+import type { ConnectionStatus } from '../../infrastructure/websocket/websocket.types';
+import { GAME_CONSTANTS } from '../../shared/constants/game.constants';
 
 interface GameState {
   isConnected: boolean;
-  connectionStatus: 'connecting' | 'connected' | 'disconnected' | 'error';
+  connectionStatus: ConnectionStatus;
   currentRoundId: string | null;
   roundStatus: RoundStatus;
   liveMultiplier: number;
   bettingEndTime: Date | null;
+  currentSeedHash: string | null;
   myActiveBet: Bet | null;
   currentBets: Bet[];
   // Computed values
@@ -44,6 +47,7 @@ const initialState = {
   roundStatus: RoundStatus.BETTING,
   liveMultiplier: 1.0,
   bettingEndTime: null,
+  currentSeedHash: null as string | null,
   myActiveBet: null,
   currentBets: [],
 };
@@ -56,12 +60,13 @@ export const useGameStore = create<GameState>()(
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       setConnected: (connected) => set({ isConnected: connected }),
 
-      setRoundStarted: (roundId, _seedHash, bettingEndTime) =>
+      setRoundStarted: (roundId, seedHash, bettingEndTime) =>
         set({
           currentRoundId: roundId,
           roundStatus: RoundStatus.BETTING,
           liveMultiplier: 1.0,
           bettingEndTime,
+          currentSeedHash: seedHash,
           myActiveBet: null,
         }),
 
@@ -91,8 +96,8 @@ export const useGameStore = create<GameState>()(
                 status,
                 ...(cashOutData && {
                   cashOutMultiplier: cashOutData.multiplier,
-                  cashOutAmountCents: cashOutData.payoutCents,
-                  cashOutAmountDecimal: cashOutData.payoutDecimal,
+                  payoutCents: cashOutData.payoutCents,
+                  payoutDecimal: cashOutData.payoutDecimal,
                   cashedOutAt: new Date(),
                 }),
               },
@@ -103,12 +108,9 @@ export const useGameStore = create<GameState>()(
 
       resetRound: () =>
         set({
-          currentRoundId: null,
-          roundStatus: RoundStatus.BETTING,
-          liveMultiplier: 1.0,
-          bettingEndTime: null,
-          myActiveBet: null,
-          currentBets: [],
+          ...initialState,
+          isConnected: get().isConnected,
+          connectionStatus: get().connectionStatus,
         }),
 
       setCurrentBets: (bets) => set({ currentBets: bets }),
@@ -140,9 +142,8 @@ export const useGameStore = create<GameState>()(
         if (!state.bettingEndTime || state.roundStatus !== RoundStatus.BETTING) {
           return 0;
         }
-        const BETTING_WINDOW_MS = 10000;
-        const elapsed = Date.now() - (new Date(state.bettingEndTime).getTime() - BETTING_WINDOW_MS);
-        return Math.min(1, Math.max(0, elapsed / BETTING_WINDOW_MS));
+        const elapsed = Date.now() - (new Date(state.bettingEndTime).getTime() - GAME_CONSTANTS.BETTING_DURATION_MS);
+        return Math.min(1, Math.max(0, elapsed / GAME_CONSTANTS.BETTING_DURATION_MS));
       },
     }),
     { name: 'GameStore' }

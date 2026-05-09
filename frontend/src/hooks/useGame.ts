@@ -72,8 +72,8 @@ export function useGame() {
         amountDecimal: (data.amountCents / 100).toFixed(2),
         status: data.status,
         cashOutMultiplier: null,
-        cashOutAmountCents: null,
-        cashOutAmountDecimal: null,
+        payoutCents: null,
+        payoutDecimal: null,
         cashedOutAt: null,
       };
 
