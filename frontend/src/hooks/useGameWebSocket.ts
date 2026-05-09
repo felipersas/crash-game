@@ -49,6 +49,7 @@ export function useGameWebSocket(
   const setStoreMultiplier = useGameStore((state) => state.setMultiplier);
   const setStoreCrash = useGameStore((state) => state.setCrash);
   const setStoreCurrentBets = useGameStore((state) => state.setCurrentBets);
+  const setStoreMyActiveBet = useGameStore((state) => state.setMyActiveBet);
 
   // Use ref to avoid stale closures in event handlers
   const currentRoundIdRef = useRef<string | null>(null);

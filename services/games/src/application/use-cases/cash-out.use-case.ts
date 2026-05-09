@@ -48,6 +48,12 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     const bet = await this.loadBet(input.playerId, round.id);
     const payout = round.cashOut(input.playerId);
 
+    // Persist updated bet status (separate from round aggregate)
+    const cashedOutBet = round.getBetByPlayer(input.playerId);
+    if (cashedOutBet) {
+      await this.betRepository.update(cashedOutBet);
+    }
+
     await this.roundRepository.save(round);
     await this.storeIdempotencyResult(input.idempotencyKey, input.playerId, bet, round, payout);
     await this.publishEvents(round);
