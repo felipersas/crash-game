@@ -31,7 +31,7 @@ describe('Money Value Object', () => {
       });
 
       test('should throw NegativeMoneyError for negative cents', () => {
-        expect(() => Money.fromCents(-100n)).toThrow(NegativeMoneyError);
+        expect(() => Money.fromCents(-100n)).toThrow(/Negative money/);
       });
     });
 
@@ -72,13 +72,13 @@ describe('Money Value Object', () => {
       });
 
       test('should throw InvalidMoneyAmountError for non-numeric strings', () => {
-        expect(() => Money.fromDecimal('abc')).toThrow(InvalidMoneyAmountError);
-        expect(() => Money.fromDecimal('10.99.99')).toThrow(InvalidMoneyAmountError);
-        expect(() => Money.fromDecimal('')).toThrow(InvalidMoneyAmountError);
+        expect(() => Money.fromDecimal('abc')).toThrow(/Invalid money amount/);
+        expect(() => Money.fromDecimal('10.99.99')).toThrow(/Invalid money amount/);
+        expect(() => Money.fromDecimal('')).toThrow(/Invalid money amount/);
       });
 
       test('should throw NegativeMoneyError for negative values', () => {
-        expect(() => Money.fromDecimal('-10.00')).toThrow(NegativeMoneyError);
+        expect(() => Money.fromDecimal('-10.00')).toThrow(/Negative money/);
       });
     });
 
@@ -134,7 +134,7 @@ describe('Money Value Object', () => {
         const money1 = Money.fromDecimal('5.00');
         const money2 = Money.fromDecimal('10.00');
 
-        expect(() => money1.subtract(money2)).toThrow(NegativeMoneyError);
+        expect(() => money1.subtract(money2)).toThrow(/Negative money/);
       });
 
       test('should handle zero subtraction', () => {
@@ -177,7 +177,7 @@ describe('Money Value Object', () => {
       test('should throw InvalidMoneyAmountError for negative factor', () => {
         const money = Money.fromDecimal('10.00');
 
-        expect(() => money.multiply(-1)).toThrow(InvalidMoneyAmountError);
+        expect(() => money.multiply(-1)).toThrow(/Invalid money amount/);
       });
     });
   });

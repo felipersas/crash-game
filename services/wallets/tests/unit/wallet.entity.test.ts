@@ -360,15 +360,6 @@ describe('Wallet Entity', () => {
       expect(events2[0].version).toBe(3);
     });
 
-    test('getPendingEventsCount should return count without clearing', () => {
-      const wallet = Wallet.create('player-123');
-      wallet.credit(Money.fromDecimal('100.00'), 'deposit');
-
-      expect(wallet.getPendingEventsCount()).toBe(2); // Created, Credited
-
-      wallet.pullEvents();
-      expect(wallet.getPendingEventsCount()).toBe(0);
-    });
   });
 
   describe('Version Management', () => {

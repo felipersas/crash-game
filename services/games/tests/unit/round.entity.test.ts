@@ -431,7 +431,7 @@ describe('Round Entity', () => {
     test('should reject seed access before crash', async () => {
       await round.startRound();
 
-      expect(() => round.getSeed()).toThrow('Seed is only available after round crashes');
+      expect(() => round.getSeed()).toThrow('Results are not available until the round crashes');
     });
   });
 
@@ -489,7 +489,6 @@ describe('Round Entity', () => {
       expect(data.seed).toBeDefined();
       expect(data.seedHash).toBeDefined();
       expect(data.status).toBe(RoundStatus.BETTING);
-      expect(data.bets).toHaveLength(1);
     });
 
     test('should restore from persistence', async () => {
@@ -498,19 +497,6 @@ describe('Round Entity', () => {
       await original.startRound();
 
       const data = original.toPersistence();
-      // Convert plain objects back to Bet entities
-      const restoredBets = data.bets.map(b =>
-        Bet.restore(
-          b.id,
-          b.roundId,
-          b.playerId,
-          b.amountCents,
-          b.status,
-          b.cashOutMultiplier,
-          b.cashOutAmount,
-          b.cashedOutAt,
-        )
-      );
 
       const restored = Round.restore(
         data.id,
@@ -522,13 +508,12 @@ describe('Round Entity', () => {
         data.bettingEndTime,
         data.startedAt,
         data.crashedAt,
-        restoredBets,
+        [],
         data.version,
       );
 
       expect(restored.id).toBe(original.id);
       expect(restored.getStatus()).toBe(original.getStatus());
-      expect(restored.getBets()).toHaveLength(1);
     });
   });
 

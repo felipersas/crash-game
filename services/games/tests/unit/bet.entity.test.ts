@@ -133,7 +133,7 @@ describe('Bet Entity', () => {
       const bet = Bet.create(roundId, playerId, amount);
 
       expect(() => bet.cashOut(Multiplier.fromValue(2.5))).toThrow(
-        'Cannot cash out bet in PENDING state',
+        'Cannot cash out a bet in PENDING state',
       );
     });
 
@@ -146,7 +146,7 @@ describe('Bet Entity', () => {
       bet.cashOut(multiplier);
 
       expect(() => bet.cashOut(Multiplier.fromValue(3.0))).toThrow(
-        'Cannot cash out bet in CASHED_OUT state',
+        'Cannot cash out a bet in CASHED_OUT state',
       );
     });
 
@@ -157,7 +157,7 @@ describe('Bet Entity', () => {
       bet.markAsLost();
 
       expect(() => bet.cashOut(Multiplier.fromValue(2.5))).toThrow(
-        'Cannot cash out bet in LOST state',
+        'Cannot cash out a bet in LOST state',
       );
     });
   });
@@ -190,7 +190,7 @@ describe('Bet Entity', () => {
       bet.cashOut(Multiplier.fromValue(2.5));
 
       expect(() => bet.markAsLost()).toThrow(
-        'Cannot mark bet as LOST when in CASHED_OUT state',
+        'Cannot mark as lost a bet in CASHED_OUT state',
       );
     });
 
@@ -201,7 +201,7 @@ describe('Bet Entity', () => {
       bet.markAsLost();
 
       expect(() => bet.markAsLost()).toThrow(
-        'Cannot mark bet as LOST when in LOST state',
+        'Cannot mark as lost a bet in LOST state',
       );
     });
   });
