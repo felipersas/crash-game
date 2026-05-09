@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Hash, Shield } from 'lucide-react';
+import { ArrowLeft, Shield } from 'lucide-react';
 import { useRoundHistory } from '@/hooks/useRoundHistory';
-import { formatMultiplier, formatMoney } from '@/shared/utils/money';
+import RoundHistoryTable from '../../components/round-history/RoundHistoryTable';
 import VerificationModal from '../../components/round-history/VerificationModal';
 
 export default function RoundHistoryPage() {
@@ -14,20 +14,6 @@ export default function RoundHistoryPage() {
 
   const rounds = data?.data ?? [];
   const meta = data?.meta;
-
-  function getCrashColor(cp: number | null): string {
-    if (!cp) return 'text-text-muted';
-    if (cp < 1.5) return 'text-error';
-    if (cp < 3) return 'text-warning';
-    return 'text-primary';
-  }
-
-  function getCrashBg(cp: number | null): string {
-    if (!cp) return 'bg-text-muted/20';
-    if (cp < 1.5) return 'bg-error/20';
-    if (cp < 3) return 'bg-warning/20';
-    return 'bg-primary/20';
-  }
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
@@ -50,58 +36,12 @@ export default function RoundHistoryPage() {
 
       {/* Table */}
       <div className="panel-cyber rounded-lg overflow-hidden">
-        <div className="grid grid-cols-6 gap-2 px-4 py-3 bg-surface/50 border-b border-border text-xs font-terminal text-text-muted uppercase tracking-wider">
-          <span>ID</span>
-          <span>Crash Point</span>
-          <span>Data</span>
-          <span>Bets</span>
-          <span>Volume</span>
-          <span className="text-right">Verify</span>
-        </div>
-
-        {isLoading ? (
-          <div className="py-12 text-center text-text-muted font-terminal text-sm">
-            Loading...
-          </div>
-        ) : rounds.length === 0 ? (
-          <div className="py-12 text-center text-text-muted font-terminal text-sm">
-            No rounds found
-          </div>
-        ) : (
-          rounds.map((round) => (
-            <div
-              key={round.roundId}
-              className="grid grid-cols-6 gap-2 px-4 py-3 border-b border-border/50 hover:bg-surface/30 transition-colors items-center"
-            >
-              <span className="font-terminal text-sm text-text-muted truncate" title={round.roundId}>
-                {round.roundId.slice(0, 8)}...
-              </span>
-              <span className={`font-terminal text-sm font-bold ${getCrashColor(round.crashPoint)}`}>
-                <span className={`inline-block px-2 py-0.5 rounded ${getCrashBg(round.crashPoint)}`}>
-                  {formatMultiplier(round.crashPoint || 0)}
-                </span>
-              </span>
-              <span className="font-terminal text-xs text-text-muted" title={round.crashedAt ? new Date(round.crashedAt).toLocaleString() : '-'}>
-                {round.crashedAt ? new Date(round.crashedAt).toLocaleDateString() : '-'}
-              </span>
-              <span className="font-terminal text-sm text-text-primary">
-                {round.totalBets}
-              </span>
-              <span className="font-terminal text-sm text-text-primary">
-                {round.totalWageredCents ? formatMoney(round.totalWageredCents) : '-'}
-              </span>
-              <span className="text-right">
-                <button
-                  onClick={() => setVerifyRoundId(round.roundId)}
-                  className="inline-flex items-center gap-1 text-xs font-terminal text-primary hover:text-primary/80 transition-colors"
-                >
-                  <Hash className="w-3 h-3" />
-                  Verify
-                </button>
-              </span>
-            </div>
-          ))
-        )}
+        <RoundHistoryTable
+          rounds={rounds}
+          isLoading={isLoading}
+          onVerify={setVerifyRoundId}
+          emptyMessage="No rounds found"
+        />
       </div>
 
       {/* Pagination */}
