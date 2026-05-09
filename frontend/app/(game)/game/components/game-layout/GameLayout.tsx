@@ -2,6 +2,7 @@
 
 import { Bell, Settings, User, Plus, Cpu } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
+import { formatMoney } from "@/shared/utils/money";
 
 export default function GameLayout({
   children,
@@ -26,12 +27,12 @@ export default function GameLayout({
           {/* Right - Wallet & Utilities */}
           <div className="flex items-center gap-6">
             {/* Wallet Display */}
-            <div className="flex items-center gap-3 bg-surface-bright/50 border border-border-bright rounded px-4 py-2">
+            <div className="flex items-center gap-3 border border-primary-bright rounded-full px-4 py-2">
               <span className="text-xs text-text-muted font-terminal uppercase">
                 Balance
               </span>
               <span className="text-lg font-bold font-terminal text-text-primary">
-                ${Number(balance ?? 0).toFixed(2)}
+                {formatMoney(Number(balance))}
               </span>
             </div>
 

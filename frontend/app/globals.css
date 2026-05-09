@@ -17,8 +17,8 @@
         --surface-bright: 180 4% 22%; /* #37393a - Panel gray */
 
         /* Brand - Lime Green */
-        --primary: 120 100% 50%; /* #00FF00 - Cyber terminal green */
-        --primary-muted: 120 100% 20%;
+        --primary: 72 98% 48%; /* #00FF00 - Cyber terminal green */
+        --primary-muted: 74 79% 35%;
 
         /* Error - Crash Red */
         --error: 0 100% 60%; /* #ff3333 - System failure red */
@@ -147,7 +147,11 @@
     .cyber-grid {
         background-image:
             linear-gradient(hsl(var(--border) / 0.3) 1px, transparent 1px),
-            linear-gradient(90deg, hsl(var(--border) / 0.3) 1px, transparent 1px);
+            linear-gradient(
+                90deg,
+                hsl(var(--border) / 0.3) 1px,
+                transparent 1px
+            );
         background-size: 40px 40px;
     }
 
@@ -193,6 +197,7 @@
     background-color: hsl(var(--surface));
     border: 1px solid hsl(var(--border));
     border-radius: 12px;
+    height: 2rem;
     color: hsl(var(--text-primary));
     font-variant-numeric: tabular-nums;
     transition:
