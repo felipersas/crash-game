@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Settings, User, Plus, Cpu } from "lucide-react";
+import { Bell, Settings, User } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
 import { formatMoney } from "@/shared/utils/money";
 
@@ -20,9 +20,7 @@ export default function GameLayout({
       {/* Fixed Top Navigation Bar */}
       <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-surface/90 backdrop-blur-md border-b border-border">
         <div className="h-full flex items-center justify-between px-6">
-          {/* Left - Brand Logo */}
-          {/* Center - Status Indicator */}
-          <div className="flex items-center gap-2"></div>
+          <div />
 
           {/* Right - Wallet & Utilities */}
           <div className="flex items-center gap-6">
@@ -32,19 +30,19 @@ export default function GameLayout({
                 Balance
               </span>
               <span className="text-lg font-bold font-terminal text-text-primary">
-                {formatMoney(Number(balance))}
+                {formatMoney(Number(balance) || 0)}
               </span>
             </div>
 
             {/* Utility Icons */}
             <div className="flex items-center gap-3 text-text-muted">
-              <button className="hover:text-primary transition-colors">
+              <button className="hover:text-primary transition-colors" aria-label="Notifications">
                 <Bell className="w-5 h-5" />
               </button>
-              <button className="hover:text-primary transition-colors">
+              <button className="hover:text-primary transition-colors" aria-label="Settings">
                 <Settings className="w-5 h-5" />
               </button>
-              <button className="hover:text-primary transition-colors">
+              <button className="hover:text-primary transition-colors" aria-label="Profile">
                 <User className="w-5 h-5" />
               </button>
             </div>
