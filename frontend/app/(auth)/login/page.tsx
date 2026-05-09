@@ -4,6 +4,7 @@
  * Login Page - Redirects to Keycloak
  */
 
+import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
@@ -13,12 +14,11 @@ export default function LoginPage() {
   const { login, status } = useAuth();
   const router = useRouter();
 
-  if (status === "authenticated") {
-    router.push("/games");
-    return null;
-  }
+  useEffect(() => {
+    if (status === "authenticated") router.push("/games");
+  }, [status, router]);
 
-  if (status === "loading") {
+  if (status === "authenticated" || status === "loading") {
     return (
       <div className="flex h-screen items-center justify-center bg-zinc-950">
         <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
