@@ -5,11 +5,10 @@
  * Keeps the inbox table size manageable by removing events older than 30 days.
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import { INBOX_REPOSITORY } from '@/infrastructure/di/tokens';
-import { Inject } from '@nestjs/common';
 
 @Injectable()
 export class InboxProcessor {

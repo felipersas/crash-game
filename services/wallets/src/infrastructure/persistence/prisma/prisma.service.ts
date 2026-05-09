@@ -42,7 +42,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
             `TRUNCATE TABLE "public"."${tablename}" CASCADE;`,
           );
         } catch (error) {
-          console.log(`Could not truncate ${tablename}:`, error);
+          console.error(`Could not truncate ${tablename}:`, error);
         }
       }
     }
