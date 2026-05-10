@@ -57,6 +57,7 @@ export function useGame() {
         id: data.betId,
         roundId: data.roundId,
         playerId: session?.playerId || "",
+        playerName: session?.user?.username || "",
         amountCents: data.amountCents,
         amountDecimal: (data.amountCents / 100).toFixed(2),
         status: data.status,

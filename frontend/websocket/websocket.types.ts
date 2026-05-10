@@ -39,6 +39,7 @@ export interface BetPlacedEvent {
   roundId: string;
   betId: string;
   playerId: string;
+  playerName: string;
   amountCents: number;
 }
 
@@ -46,6 +47,7 @@ export interface BetConfirmedEvent {
   roundId: string;
   betId: string;
   playerId: string;
+  playerName: string;
   amountCents: number;
 }
 
@@ -53,6 +55,7 @@ export interface BetCancelledEvent {
   roundId: string;
   betId: string;
   playerId: string;
+  playerName: string;
   amountCents: number;
   reason: string;
 }
@@ -61,6 +64,7 @@ export interface PlayerCashedOutEvent {
   roundId: string;
   betId: string;
   playerId: string;
+  playerName: string;
   multiplier: number;
   payoutCents: number;
 }

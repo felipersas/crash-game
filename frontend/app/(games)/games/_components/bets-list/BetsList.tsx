@@ -58,9 +58,9 @@ export default function BetsList() {
               {/* Player Name - Truncated */}
               <span
                 className="font-terminal text-sm text-text-primary truncate"
-                title={bet.playerId}
+                title={bet.playerName || bet.playerId}
               >
-                {bet.playerId.slice(0, 8)}...
+                {bet.playerName || bet.playerId.slice(0, 8)}
               </span>
 
               {/* Bet Amount */}

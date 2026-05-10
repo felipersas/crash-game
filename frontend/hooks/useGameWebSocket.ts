@@ -201,6 +201,7 @@ export function useGameWebSocket(
           id: data.betId,
           roundId: data.roundId,
           playerId: data.playerId,
+          playerName: data.playerName ?? '',
           amountCents: data.amountCents,
           amountDecimal: (data.amountCents / 100).toFixed(2),
           status: BetStatus.PENDING,
