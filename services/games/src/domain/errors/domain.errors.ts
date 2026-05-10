@@ -1,4 +1,4 @@
-import { BetStatus } from '@prisma/client';
+import { BetStatus } from '@/domain/entities/bet.entity';
 
 /**
  * Domain-specific exceptions for the Games bounded context.
