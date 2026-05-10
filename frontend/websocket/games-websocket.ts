@@ -8,6 +8,11 @@ import type { ServerToClientEvents } from './websocket.types';
 // Connect through Kong to games service
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:8000';
 
+const INITIAL_RECONNECT_DELAY = 1000;
+const MAX_RECONNECT_DELAY = 30000;
+const MAX_RECONNECT_ATTEMPTS = 20;
+const BACKOFF_FACTOR = 1.5;
+
 export interface GamesWebSocketConfig {
   token?: string;
   onConnect?: () => void;
@@ -24,14 +29,18 @@ export interface GamesWebSocketConfig {
   onPlayerCashedOut?: (data: Parameters<ServerToClientEvents['playerCashedOut']>[0]) => void;
 }
 
+function getBackoffDelay(attempt: number): number {
+  const delay = INITIAL_RECONNECT_DELAY * Math.pow(BACKOFF_FACTOR, attempt - 1);
+  const jittered = delay * (0.8 + Math.random() * 0.4);
+  return Math.min(jittered, MAX_RECONNECT_DELAY);
+}
+
 /**
  * Games WebSocket Client class
  */
 export class GamesWebSocket {
   private socket: Socket<ServerToClientEvents> | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
-  private reconnectDelay = 2000;
 
   constructor(private config: GamesWebSocketConfig) {}
 
@@ -47,14 +56,13 @@ export class GamesWebSocket {
       ? { token: this.config.token }
       : undefined;
 
-    // Use Kong's /socket.io route (games-websocket-root in kong.yml)
-    // Don't specify path - let Socket.IO use default /socket.io/
     this.socket = io(WS_URL, {
       path: '/socket.io/',
       auth,
       reconnection: true,
-      reconnectionDelay: this.reconnectDelay,
-      reconnectionAttempts: this.maxReconnectAttempts,
+      reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+      reconnectionDelay: INITIAL_RECONNECT_DELAY,
+      reconnectionDelayMax: MAX_RECONNECT_DELAY,
     });
 
     this.setupEventHandlers();
@@ -83,13 +91,12 @@ export class GamesWebSocket {
       this.config.onConnectError?.(error);
     });
 
-    // Socket.IO reconnect event
     this.socket.io.on('reconnect_attempt', (attempt) => {
-      console.log('WebSocket reconnect attempt:', attempt);
+      const delay = getBackoffDelay(attempt);
+      console.log(`WebSocket reconnect attempt ${attempt}, next backoff ~${Math.round(delay)}ms`);
       this.config.onReconnecting?.(attempt);
     });
 
-    // Game events
     this.socket.on('roundStarted', (data) => {
       this.config.onRoundStarted?.(data);
     });
@@ -131,24 +138,15 @@ export class GamesWebSocket {
     this.socket = null;
   }
 
-  /**
-   * Get connection status
-   */
   get isConnected(): boolean {
     return this.socket?.connected ?? false;
   }
 
-  /**
-   * Get socket ID
-   */
   get id(): string | undefined {
     return this.socket?.id;
   }
 }
 
-/**
- * Factory function to create WebSocket client
- */
 export function createGamesWebSocket(config: GamesWebSocketConfig): GamesWebSocket {
   return new GamesWebSocket(config);
 }
