@@ -1,0 +1,1137 @@
+openapi: 3.1.0
+info:
+  title: Crash Game API
+  description: |
+    Multiplayer real-time crash game platform. Players place bets, watch a multiplier rise,
+    and cash out before the round crashes. Provably fair verification available for all rounds.
+
+    ## Authentication
+    Most endpoints require a JWT Bearer token obtained from Keycloak (OAuth 2.0 / PKCE flow).
+    Kong API Gateway validates tokens via JWKS discovery.
+
+    ## Money Format
+    All monetary values use **integer cents** (never floating point).
+    Responses include both `amountCents` (integer) and `amountDecimal` (formatted string).
+
+    ## Base URL
+    All requests go through Kong Gateway: `http://localhost:8000`
+  version: 1.0.0
+  contact:
+    name: Jungle Gaming
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Local development (via Kong Gateway)
+  - url: http://localhost:4001
+    description: Games service direct
+  - url: http://localhost:4002
+    description: Wallets service direct
+
+tags:
+  - name: Games - Rounds
+    description: Round lifecycle and history
+  - name: Games - Bets
+    description: Place bets, cash out, view bet history
+  - name: Games - Provably Fair
+    description: Verify round fairness
+  - name: Games - Health
+    description: Service health check
+  - name: Wallets
+    description: Wallet management (balance, create)
+  - name: Wallets - Health
+    description: Wallet service health check
+
+security: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token from Keycloak OAuth 2.0 flow.
+        Obtain via `POST http://localhost:8080/realms/crash-game/protocol/openid-connect/token`
+        with `crash-game-client` client ID.
+
+  schemas:
+    # ── Enums ──────────────────────────────────────────────────────────
+    RoundStatus:
+      type: string
+      enum: [BETTING, ACTIVE, CRASHED]
+      description: |
+        - `BETTING` — Round is accepting bets
+        - `ACTIVE` — Multiplier is rising, bets are live
+        - `CRASHED` — Round ended, non-cashed bets lost
+
+    BetStatus:
+      type: string
+      enum: [PENDING, ACTIVE, CASHED_OUT, LOST, CANCELLED]
+      description: |
+        - `PENDING` — Waiting for wallet debit confirmation
+        - `ACTIVE` — Bet confirmed, can cash out
+        - `CASHED_OUT` — Player cashed out successfully
+        - `LOST` — Round crashed before cashout
+        - `CANCELLED` — Wallet debit failed
+
+    # ── Shared DTOs ───────────────────────────────────────────────────
+    PaginationMeta:
+      type: object
+      required: [page, limit, total, totalPages]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          example: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 20
+        total:
+          type: integer
+          example: 42
+        totalPages:
+          type: integer
+          example: 3
+
+    ErrorResponse:
+      type: object
+      required: [statusCode, error, message, path, timestamp]
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+        code:
+          type: string
+          description: Stable domain error code for programmatic handling
+          example: BET_BELOW_MINIMUM
+        error:
+          type: string
+          description: Error class name
+          example: BetBelowMinimumError
+        message:
+          type: string
+          description: Human-readable error message
+          example: Bet amount must be at least 100 cents ($1.00)
+        path:
+          type: string
+          example: /games/bet
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-05-10T12:00:00.000Z"
+
+    # ── Games DTOs ────────────────────────────────────────────────────
+    PlaceBetRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: integer
+          minimum: 100
+          maximum: 100000
+          description: Bet amount in cents ($1.00 - $1,000.00)
+          example: 500
+
+    PlaceBetResponse:
+      type: object
+      required: [roundId, betId, amountCents, status]
+      properties:
+        roundId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        betId:
+          type: string
+          format: uuid
+          example: "660e8400-e29b-41d4-a716-446655440001"
+        amountCents:
+          type: integer
+          example: 500
+        status:
+          $ref: "#/components/schemas/BetStatus"
+
+    CashOutRequest:
+      type: object
+      required: [idempotencyKey]
+      properties:
+        idempotencyKey:
+          type: string
+          format: uuid
+          description: UUID to prevent double cashout
+          example: "770e8400-e29b-41d4-a716-446655440002"
+        roundId:
+          type: string
+          format: uuid
+          description: Optional round ID for validation
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    CashOutResponse:
+      type: object
+      required: [betId, roundId, playerId, cashOutMultiplier, payoutCents, payoutDecimal]
+      properties:
+        betId:
+          type: string
+          format: uuid
+          example: "660e8400-e29b-41d4-a716-446655440001"
+        roundId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        playerId:
+          type: string
+          format: uuid
+          example: "player-uuid-1234"
+        cashOutMultiplier:
+          type: number
+          format: double
+          example: 2.45
+          description: Multiplier at time of cashout
+        payoutCents:
+          type: integer
+          example: 1225
+          description: Total payout in cents (bet × multiplier)
+        payoutDecimal:
+          type: string
+          example: "12.25"
+
+    MyBetOutput:
+      type: object
+      required: [id, roundId, amountCents, amountDecimal, status, profitCents, profitDecimal, placedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        roundId:
+          type: string
+          format: uuid
+        amountCents:
+          type: integer
+          example: 500
+        amountDecimal:
+          type: string
+          example: "5.00"
+        cashOutMultiplier:
+          type: number
+          format: double
+          nullable: true
+          example: 2.45
+        payoutCents:
+          type: integer
+          nullable: true
+          example: 1225
+        payoutDecimal:
+          type: string
+          nullable: true
+          example: "12.25"
+        profitCents:
+          type: integer
+          example: 725
+          description: Net profit (positive) or loss (negative) in cents
+        profitDecimal:
+          type: string
+          example: "7.25"
+        status:
+          $ref: "#/components/schemas/BetStatus"
+        cashedOutAt:
+          type: string
+          format: date-time
+          nullable: true
+        placedAt:
+          type: string
+          format: date-time
+
+    BetsSummary:
+      type: object
+      required: [totalWageredCents, totalWageredDecimal, wins, losses, profitCents, profitDecimal]
+      properties:
+        totalWageredCents:
+          type: integer
+          example: 5000
+        totalWageredDecimal:
+          type: string
+          example: "50.00"
+        wins:
+          type: integer
+          example: 3
+        losses:
+          type: integer
+          example: 2
+        profitCents:
+          type: integer
+          example: 1500
+          description: Net profit (positive) or loss (negative) in cents
+        profitDecimal:
+          type: string
+          example: "15.00"
+
+    GetMyBetsResponse:
+      type: object
+      required: [data, meta, summary]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MyBetOutput"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+        summary:
+          $ref: "#/components/schemas/BetsSummary"
+
+    BetStatusResponse:
+      type: object
+      required: [betId, roundId, playerId, amountCents, amountDecimal, status]
+      properties:
+        betId:
+          type: string
+          format: uuid
+        roundId:
+          type: string
+          format: uuid
+        playerId:
+          type: string
+          format: uuid
+        amountCents:
+          type: integer
+          example: 500
+        amountDecimal:
+          type: string
+          example: "5.00"
+        status:
+          $ref: "#/components/schemas/BetStatus"
+        cashOutMultiplier:
+          type: number
+          format: double
+          nullable: true
+        payoutCents:
+          type: integer
+          nullable: true
+        payoutDecimal:
+          type: string
+          nullable: true
+        cashedOutAt:
+          type: string
+          format: date-time
+          nullable: true
+        cancelReason:
+          type: string
+          nullable: true
+          description: Reason for cancellation (only if status is CANCELLED)
+
+    BetOutput:
+      type: object
+      required: [id, playerId, amountCents, amountDecimal, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        playerId:
+          type: string
+          format: uuid
+        amountCents:
+          type: integer
+        amountDecimal:
+          type: string
+        status:
+          $ref: "#/components/schemas/BetStatus"
+        cashOutMultiplier:
+          type: number
+          format: double
+          nullable: true
+        payoutCents:
+          type: integer
+          nullable: true
+        payoutDecimal:
+          type: string
+          nullable: true
+        cashedOutAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    RoundOutput:
+      type: object
+      required: [roundId, status, currentMultiplier, bets]
+      properties:
+        roundId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/RoundStatus"
+        crashPoint:
+          type: number
+          format: double
+          nullable: true
+          description: Pre-determined crash point (revealed only after crash)
+        currentMultiplier:
+          type: number
+          format: double
+          example: 1.0
+          description: Current live multiplier
+        bettingEndTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: When betting phase ends
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        crashedAt:
+          type: string
+          format: date-time
+          nullable: true
+        bets:
+          type: array
+          items:
+            $ref: "#/components/schemas/BetOutput"
+
+    RoundSummaryOutput:
+      type: object
+      required: [roundId, crashPoint, status, totalBets, totalWageredCents, totalWageredDecimal]
+      properties:
+        roundId:
+          type: string
+          format: uuid
+        crashPoint:
+          type: number
+          format: double
+          nullable: true
+          example: 2.45
+        status:
+          $ref: "#/components/schemas/RoundStatus"
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        crashedAt:
+          type: string
+          format: date-time
+          nullable: true
+        totalBets:
+          type: integer
+          example: 15
+        totalWageredCents:
+          type: integer
+          example: 7500
+        totalWageredDecimal:
+          type: string
+          example: "75.00"
+
+    GetRoundHistoryResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoundSummaryOutput"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    VerifyRoundResponse:
+      type: object
+      required: [roundId, seed, seedHash, salt, crashPoint, verified, verificationFormula]
+      properties:
+        roundId:
+          type: string
+          format: uuid
+        seed:
+          type: string
+          description: Revealed seed (only available after crash)
+        seedHash:
+          type: string
+          description: Committed hash (available before crash for commitment verification)
+        salt:
+          type: string
+        crashPoint:
+          type: number
+          format: double
+          example: 2.45
+        verified:
+          type: boolean
+          example: true
+          description: Whether the crash point matches the seed verification
+        verificationFormula:
+          type: string
+          example: "crashPoint = f(seed, salt) = 2.45"
+
+    # ── Wallets DTOs ──────────────────────────────────────────────────
+    CreateWalletResponse:
+      type: object
+      required: [walletId, playerId, balance]
+      properties:
+        walletId:
+          type: string
+          format: uuid
+          example: "880e8400-e29b-41d4-a716-446655440003"
+        playerId:
+          type: string
+          format: uuid
+          example: "player-uuid-1234"
+        balance:
+          type: string
+          description: Balance in cents as string
+          example: "0"
+
+    GetWalletResponse:
+      type: object
+      required: [walletId, playerId, balance, version]
+      properties:
+        walletId:
+          type: string
+          format: uuid
+        playerId:
+          type: string
+          format: uuid
+        balance:
+          type: string
+          description: Balance in cents as string
+          example: "50000"
+        version:
+          type: integer
+          description: Optimistic lock version for concurrency control
+          example: 3
+
+    HealthCheckResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          example: "ok"
+        service:
+          type: string
+          example: "games"
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number for pagination
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Number of items per page
+    BetIdParam:
+      name: betId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Bet UUID
+    RoundIdParam:
+      name: roundId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Round UUID
+
+  responses:
+    BadRequest:
+      description: Invalid request or domain rule violation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            statusCode: 401
+            error: Unauthorized
+            message: Authorization header not found
+            path: /games/bet
+            timestamp: "2026-05-10T12:00:00.000Z"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Duplicate resource or optimistic lock conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit per window
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests in current window
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Seconds until window resets
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until retry is allowed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            statusCode: 429
+            error: RateLimitError
+            message: Rate limit exceeded. Please slow down.
+            path: /games/bet
+            timestamp: "2026-05-10T12:00:00.000Z"
+
+paths:
+  # ═══════════════════════════════════════════════════════════════════
+  # GAMES SERVICE
+  # ═══════════════════════════════════════════════════════════════════
+
+  /games/health:
+    get:
+      operationId: gamesHealthCheck
+      tags: [Games - Health]
+      summary: Games service health check
+      description: Returns service health status. No authentication required.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+              example:
+                status: "ok"
+                service: "games"
+
+  /games/bet:
+    post:
+      operationId: placeBet
+      tags: [Games - Bets]
+      summary: Place a bet
+      description: |
+        Place a bet on the current round. The bet is initially `PENDING` until the wallet
+        service confirms the debit via async saga. Returns `202 Accepted` because
+        confirmation is asynchronous.
+
+        **Requirements:**
+        - Current round must be in `BETTING` phase
+        - Player can only have one active bet per round
+        - Amount: 100 - 100,000 cents ($1.00 - $1,000.00)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceBetRequest"
+            examples:
+              minimum:
+                summary: Minimum bet ($1.00)
+                value:
+                  amount: 100
+              medium:
+                summary: Medium bet ($5.00)
+                value:
+                  amount: 500
+              maximum:
+                summary: Maximum bet ($1,000.00)
+                value:
+                  amount: 100000
+      responses:
+        "202":
+          description: Bet placed successfully (pending wallet confirmation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaceBetResponse"
+              example:
+                roundId: "550e8400-e29b-41d4-a716-446655440000"
+                betId: "660e8400-e29b-41d4-a716-446655440001"
+                amountCents: 500
+                status: "PENDING"
+        "400":
+          description: Invalid bet (below minimum, above maximum, wrong round state, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                below_minimum:
+                  summary: Bet below minimum
+                  value:
+                    statusCode: 400
+                    code: BET_BELOW_MINIMUM
+                    error: BetBelowMinimumError
+                    message: Bet amount must be at least 100 cents ($1.00)
+                    path: /games/bet
+                    timestamp: "2026-05-10T12:00:00.000Z"
+                above_maximum:
+                  summary: Bet above maximum
+                  value:
+                    statusCode: 400
+                    code: BET_ABOVE_MAXIMUM
+                    error: BetAboveMaximumError
+                    message: Bet amount must be at most 100000 cents ($1,000.00)
+                    path: /games/bet
+                    timestamp: "2026-05-10T12:00:00.000Z"
+                not_accepting:
+                  summary: Round not accepting bets
+                  value:
+                    statusCode: 400
+                    code: ROUND_NOT_ACCEPTING_BETS
+                    error: RoundNotAcceptingBetsError
+                    message: Round is not accepting bets
+                    path: /games/bet
+                    timestamp: "2026-05-10T12:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Duplicate bet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 409
+                code: DUPLICATE_BET
+                error: DuplicateBetError
+                message: Player already has an active bet in this round
+                path: /games/bet
+                timestamp: "2026-05-10T12:00:00.000Z"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /games/bet/cashout:
+    post:
+      operationId: cashOut
+      tags: [Games - Bets]
+      summary: Cash out current bet
+      description: |
+        Cash out the player's active bet at the current multiplier.
+
+        **Requirements:**
+        - Player must have an `ACTIVE` bet in the current round
+        - Round must not have crashed yet
+        - `idempotencyKey` prevents double cashout on retries
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashOutRequest"
+            example:
+              idempotencyKey: "770e8400-e29b-41d4-a716-446655440002"
+              roundId: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        "200":
+          description: Cash out successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashOutResponse"
+              example:
+                betId: "660e8400-e29b-41d4-a716-446655440001"
+                roundId: "550e8400-e29b-41d4-a716-446655440000"
+                playerId: "player-uuid-1234"
+                cashOutMultiplier: 2.45
+                payoutCents: 1225
+                payoutDecimal: "12.25"
+        "400":
+          description: Cannot cash out (no active bet, already crashed, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                no_bet:
+                  summary: No active bet
+                  value:
+                    statusCode: 400
+                    code: NO_ACTIVE_BET
+                    error: NoActiveBetError
+                    message: No active bet found for this player
+                    path: /games/bet/cashout
+                    timestamp: "2026-05-10T12:00:00.000Z"
+                already_cashed:
+                  summary: Already cashed out
+                  value:
+                    statusCode: 400
+                    code: BET_ALREADY_CASHED_OUT
+                    error: BetAlreadyCashedOutError
+                    message: Bet has already been cashed out
+                    path: /games/bet/cashout
+                    timestamp: "2026-05-10T12:00:00.000Z"
+                crashed:
+                  summary: Round already crashed
+                  value:
+                    statusCode: 400
+                    code: ROUND_ALREADY_CRASHED
+                    error: RoundAlreadyCrashedError
+                    message: Round has already crashed
+                    path: /games/bet/cashout
+                    timestamp: "2026-05-10T12:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /games/bets/me:
+    get:
+      operationId: getMyBets
+      tags: [Games - Bets]
+      summary: Get current player's bet history
+      description: |
+        Returns paginated bet history for the authenticated player, including
+        a summary of total wagered, wins, losses, and net profit.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Bet history retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetMyBetsResponse"
+              example:
+                data:
+                  - id: "660e8400-e29b-41d4-a716-446655440001"
+                    roundId: "550e8400-e29b-41d4-a716-446655440000"
+                    amountCents: 500
+                    amountDecimal: "5.00"
+                    cashOutMultiplier: 2.45
+                    payoutCents: 1225
+                    payoutDecimal: "12.25"
+                    profitCents: 725
+                    profitDecimal: "7.25"
+                    status: "CASHED_OUT"
+                    cashedOutAt: "2026-05-10T12:05:30.000Z"
+                    placedAt: "2026-05-10T12:00:00.000Z"
+                meta:
+                  page: 1
+                  limit: 20
+                  total: 42
+                  totalPages: 3
+                summary:
+                  totalWageredCents: 5000
+                  totalWageredDecimal: "50.00"
+                  wins: 3
+                  losses: 2
+                  profitCents: 1500
+                  profitDecimal: "15.00"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /games/bets/{betId}:
+    get:
+      operationId: getBetStatus
+      tags: [Games - Bets]
+      summary: Get bet status
+      description: |
+        Get detailed status of a specific bet. No authentication required —
+        used for polling bet status after placement.
+      parameters:
+        - $ref: "#/components/parameters/BetIdParam"
+      responses:
+        "200":
+          description: Bet status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BetStatusResponse"
+              example:
+                betId: "660e8400-e29b-41d4-a716-446655440001"
+                roundId: "550e8400-e29b-41d4-a716-446655440000"
+                playerId: "player-uuid-1234"
+                amountCents: 500
+                amountDecimal: "5.00"
+                status: "ACTIVE"
+                cashOutMultiplier: null
+                payoutCents: null
+                payoutDecimal: null
+                cashedOutAt: null
+                cancelReason: null
+        "404":
+          description: Bet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 404
+                code: BET_NOT_FOUND
+                error: BetNotFoundError
+                message: Bet not found
+                path: /games/bets/660e8400-e29b-41d4-a716-446655440001
+                timestamp: "2026-05-10T12:00:00.000Z"
+
+  /games/rounds/current:
+    get:
+      operationId: getCurrentRound
+      tags: [Games - Rounds]
+      summary: Get current round state
+      description: |
+        Returns the current round including status, multiplier, and all bets.
+        No authentication required — used for real-time game state display.
+
+        **Tip:** For live updates, connect via WebSocket at `ws://localhost:8000/games`
+        instead of polling this endpoint.
+      responses:
+        "200":
+          description: Current round state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoundOutput"
+              example:
+                roundId: "550e8400-e29b-41d4-a716-446655440000"
+                status: "ACTIVE"
+                crashPoint: null
+                currentMultiplier: 1.87
+                bettingEndTime: "2026-05-10T12:00:10.000Z"
+                startedAt: "2026-05-10T12:00:10.000Z"
+                crashedAt: null
+                bets:
+                  - id: "660e8400-e29b-41d4-a716-446655440001"
+                    playerId: "player-uuid-1234"
+                    amountCents: 500
+                    amountDecimal: "5.00"
+                    status: "ACTIVE"
+                    cashOutMultiplier: null
+                    payoutCents: null
+                    payoutDecimal: null
+                    cashedOutAt: null
+
+  /games/rounds/history:
+    get:
+      operationId: getRoundHistory
+      tags: [Games - Rounds]
+      summary: Get round history
+      description: |
+        Returns paginated history of completed rounds with aggregated stats.
+        No authentication required.
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Round history retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetRoundHistoryResponse"
+              example:
+                data:
+                  - roundId: "550e8400-e29b-41d4-a716-446655440000"
+                    crashPoint: 2.45
+                    status: "CRASHED"
+                    startedAt: "2026-05-10T12:00:10.000Z"
+                    crashedAt: "2026-05-10T12:00:25.000Z"
+                    totalBets: 15
+                    totalWageredCents: 7500
+                    totalWageredDecimal: "75.00"
+                meta:
+                  page: 1
+                  limit: 20
+                  total: 100
+                  totalPages: 5
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /games/rounds/{roundId}/verify:
+    get:
+      operationId: verifyRound
+      tags: [Games - Provably Fair]
+      summary: Verify round fairness (provably fair)
+      description: |
+        Verify that a round's crash point was generated fairly using the
+        provably fair algorithm. The seed is revealed only after the round crashes.
+
+        **Verification process:**
+        1. Take the revealed `seed` and `salt`
+        2. Apply the verification formula
+        3. Confirm the result matches `crashPoint`
+        4. Compare `seedHash` with `SHA256(seed)` for commitment verification
+      parameters:
+        - $ref: "#/components/parameters/RoundIdParam"
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyRoundResponse"
+              example:
+                roundId: "550e8400-e29b-41d4-a716-446655440000"
+                seed: "a1b2c3d4e5f6..."
+                seedHash: "sha256hash..."
+                salt: "random-salt"
+                crashPoint: 2.45
+                verified: true
+                verificationFormula: "crashPoint = f(seed, salt) = 2.45"
+        "400":
+          description: Seed not available (round hasn't crashed yet)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 400
+                code: SEED_NOT_AVAILABLE
+                error: SeedNotAvailableError
+                message: Seed is not available until the round crashes
+                path: /games/rounds/550e8400-e29b-41d4-a716-446655440000/verify
+                timestamp: "2026-05-10T12:00:00.000Z"
+        "404":
+          description: Round not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Verification computation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                code: VERIFICATION_FAILED
+                error: VerificationFailedError
+                message: Round verification failed
+                path: /games/rounds/550e8400-e29b-41d4-a716-446655440000/verify
+                timestamp: "2026-05-10T12:00:00.000Z"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # WALLETS SERVICE
+  # ═══════════════════════════════════════════════════════════════════
+
+  /wallets/health:
+    get:
+      operationId: walletsHealthCheck
+      tags: [Wallets - Health]
+      summary: Wallets service health check
+      description: Returns service health status. No authentication required.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+              example:
+                status: "ok"
+                service: "wallets"
+
+  /wallets:
+    post:
+      operationId: createWallet
+      tags: [Wallets]
+      summary: Create a wallet
+      description: |
+        Creates a new wallet for the authenticated player. Each player can only
+        have one wallet. The player ID is extracted from the JWT token.
+
+        **Note:** The balance starts at 0 cents. Use the Keycloak admin console
+        or a separate funding endpoint to add funds for testing.
+      security:
+        - BearerAuth: []
+      responses:
+        "201":
+          description: Wallet created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateWalletResponse"
+              example:
+                walletId: "880e8400-e29b-41d4-a716-446655440003"
+                playerId: "player-uuid-1234"
+                balance: "0"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Wallet already exists for this player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 409
+                code: WALLET_ALREADY_EXISTS
+                error: WalletAlreadyExistsError
+                message: Wallet already exists
+                path: /wallets
+                timestamp: "2026-05-10T12:00:00.000Z"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /wallets/me:
+    get:
+      operationId: getWallet
+      tags: [Wallets]
+      summary: Get current player's wallet
+      description: |
+        Returns the authenticated player's wallet including balance and version.
+        The `version` field is used for optimistic locking in concurrent operations.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Wallet retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetWalletResponse"
+              example:
+                walletId: "880e8400-e29b-41d4-a716-446655440003"
+                playerId: "player-uuid-1234"
+                balance: "50000"
+                version: 3
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Wallet not found (player hasn't created one yet)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 404
+                code: WALLET_NOT_FOUND
+                error: WalletNotFoundError
+                message: Wallet not found
+                path: /wallets/me
+                timestamp: "2026-05-10T12:00:00.000Z"
+        "429":
+          $ref: "#/components/responses/RateLimited"

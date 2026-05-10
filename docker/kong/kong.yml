@@ -4,6 +4,17 @@ services:
   - name: games-service
     url: http://games:4001
     plugins:
+      - name: rate-limiting
+        config:
+          second: 10
+          minute: 60
+          hour: 1000
+          policy: local
+          limit_by: consumer
+          fault_tolerant: true
+          hide_client_headers: false
+          error_code: 429
+          error_message: "Rate limit exceeded. Please slow down."
       - name: cors
         config:
           origins: ["http://localhost:3000", "http://localhost:5173"]
@@ -61,6 +72,17 @@ services:
               realm: crash-game
               scope: openid
               ssl_verify: "no"
+      - name: games-api-docs
+        paths: [/games/api-docs]
+        strip_path: false
+        plugins:
+          - name: cors
+            config:
+              origins: ["*"]
+              methods: ["GET", "OPTIONS"]
+              headers: ["Accept", "Content-Type", "Origin"]
+              credentials: false
+              max_age: 3600
       - name: games-websocket
         paths: [/games]
         strip_path: true
@@ -91,6 +113,17 @@ services:
   - name: wallets-service
     url: http://wallets:4002
     plugins:
+      - name: rate-limiting
+        config:
+          second: 5
+          minute: 30
+          hour: 500
+          policy: local
+          limit_by: consumer
+          fault_tolerant: true
+          hide_client_headers: false
+          error_code: 429
+          error_message: "Rate limit exceeded. Please slow down."
       - name: cors
         config:
           origins: ["http://localhost:3000", "http://localhost:5173"]
@@ -128,3 +161,29 @@ services:
               realm: crash-game
               scope: openid
               ssl_verify: "no"
+      - name: wallets-api-docs
+        paths: [/wallets/api-docs]
+        strip_path: false
+        plugins:
+          - name: cors
+            config:
+              origins: ["*"]
+              methods: ["GET", "OPTIONS"]
+              headers: ["Accept", "Content-Type", "Origin"]
+              credentials: false
+              max_age: 3600
+
+  - name: api-docs
+    url: http://api-docs:8088
+    routes:
+      - name: docs-ui
+        paths: [/docs]
+        strip_path: true
+        plugins:
+          - name: cors
+            config:
+              origins: ["*"]
+              methods: ["GET", "OPTIONS"]
+              headers: ["Accept", "Content-Type", "Origin"]
+              credentials: false
+              max_age: 3600
