@@ -62,6 +62,7 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
         input.roundId,
         input.betId,
         input.playerId,
+        bet.playerName,
         bet.getAmount().toCents(),
       );
     } catch (error) {

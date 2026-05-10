@@ -65,6 +65,7 @@ export class CancelBetUseCase implements IUseCase<CancelBetInput, CancelBetOutpu
         input.roundId,
         input.betId,
         input.playerId,
+        bet.playerName,
         bet.getAmount().toCents(),
         input.reason,
       );

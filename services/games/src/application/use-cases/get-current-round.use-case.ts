@@ -12,6 +12,7 @@ export interface GetCurrentRoundInput {
 export interface BetOutput {
   id: string;
   playerId: string;
+  playerName: string;
   amountCents: bigint;
   amountDecimal: string;
   status: string;
@@ -65,6 +66,7 @@ export class GetCurrentRoundUseCase implements IUseCase<
     return {
       id: bet.id,
       playerId: bet.playerId,
+      playerName: bet.playerName,
       amountCents: bet.getAmount().toCents(),
       amountDecimal: bet.getAmount().toDecimal(),
       status: bet.getStatus(),

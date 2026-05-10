@@ -159,11 +159,16 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
       (e): e is PlayerCashedOutEvent => e.eventType === 'PlayerCashedOut',
     );
     if (cashedOut) {
+      const cashedOutBet = round.getBetByPlayer(cashedOut.playerId);
+      if (!cashedOutBet) {
+        this.logger.warn(`Bet not found for cashed out player ${cashedOut.playerId} in round ${cashedOut.roundId}`);
+      }
       try {
         this.broadcaster.broadcastPlayerCashedOut(
           cashedOut.roundId,
           cashedOut.betId,
           cashedOut.playerId,
+          cashedOutBet?.playerName ?? '',
           cashedOut.cashOutMultiplier,
           cashedOut.winAmount,
         );

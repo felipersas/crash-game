@@ -17,6 +17,7 @@ import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster
 
 export interface PlaceBetInput {
   playerId: string;
+  playerName: string;
   amountCents: bigint;
 }
 
@@ -59,12 +60,25 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
         existingBet.cancel('Replaced by new bet attempt');
         await this.betRepository.update(existingBet);
         round.removeBet(input.playerId);
+
+        try {
+          this.broadcaster.broadcastBetCancelled(
+            round.id,
+            existingBet.id,
+            input.playerId,
+            existingBet.playerName,
+            existingBet.getAmount().toCents(),
+            'Replaced by new bet attempt',
+          );
+        } catch (error) {
+          this.logger.error('Failed to broadcast bet cancelled event (replaced)', error);
+        }
       } else {
         throw new DuplicateBetError();
       }
     }
 
-    round.placeBet(input.playerId, amount);
+    round.placeBet(input.playerId, input.playerName, amount);
 
     const bet = round.getBetByPlayer(input.playerId);
     if (!bet) {
@@ -81,7 +95,7 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
     }
 
     try {
-      this.broadcaster.broadcastBetPlaced(round.id, bet.id, input.playerId, input.amountCents);
+      this.broadcaster.broadcastBetPlaced(round.id, bet.id, input.playerId, input.playerName, input.amountCents);
     } catch (error) {
       this.logger.error('Failed to broadcast bet placed event', error);
     }
