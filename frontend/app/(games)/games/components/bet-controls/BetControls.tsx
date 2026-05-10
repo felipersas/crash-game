@@ -1,35 +1,28 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { useGame } from "@/hooks/useGame";
 import { useGameStore } from "@/store/game-store";
-import { useGameSounds } from "@/hooks/useGameSounds";
-import { Input } from "@/components/ui/input";
-import { calculatePayout, formatMoney } from "@/shared/utils/money";
 import { RoundStatus } from "@/types/game.types";
-import { GAME_CONSTANTS } from "@/shared/constants/game.constants";
-import { BetButton } from "./BetButton";
+import { BetInput } from "./BetInput";
+import { AutoCashoutInput } from "./AutoCashoutInput";
+import { BetStatusDisplay, CashOutButton } from "./BetStatusDisplay";
+import { useBetToast } from "./useBetToast";
 
 export default function BetControls() {
   const { placeBet, isPlacingBet, cashOut, isCashingOut } = useGame();
   const myActiveBet = useGameStore((s) => s.myActiveBet);
   const roundStatus = useGameStore((s) => s.roundStatus);
   const liveMultiplier = useGameStore((s) => s.liveMultiplier);
-  const { playWin, playCrash } = useGameSounds();
   const { data: session, status: authStatus } = useSession();
 
-  const isAuthenticated = authStatus === "authenticated";
+  useBetToast();
 
+  const isAuthenticated = authStatus === "authenticated";
   const [amount, setAmount] = useState("10.00");
   const [autoCashOut, setAutoCashOut] = useState("2.00");
-
-  const prevRoundStatus = useRef(roundStatus);
-  const prevMyActiveBet = useRef(myActiveBet);
-  const hasShownWinToast = useRef(false);
-  const hasShownLossToast = useRef(false);
 
   const isBettingPhase = roundStatus === RoundStatus.BETTING;
   const isActivePhase = roundStatus === RoundStatus.ACTIVE;
@@ -39,85 +32,14 @@ export default function BetControls() {
   const canBet = isBettingPhase && !myActiveBet && isAuthenticated;
   const canCashOut = isActivePhase && myActiveBet && !hasCashedOut;
 
-  useEffect(() => {
-    if (
-      prevMyActiveBet.current?.status !== "CASHED_OUT" &&
-      myActiveBet?.status === "CASHED_OUT" &&
-      !hasShownWinToast.current
-    ) {
-      const winAmount = myActiveBet.payoutCents
-        ? formatMoney(myActiveBet.payoutCents)
-        : formatMoney(
-            calculatePayout(
-              myActiveBet.amountCents,
-              myActiveBet.cashOutMultiplier || liveMultiplier,
-            ),
-          );
-
-      toast.success("Cashed Out!", {
-        description: `You won ${winAmount} at ${myActiveBet.cashOutMultiplier?.toFixed(2)}x`,
-        duration: 4000,
-      });
-      playWin();
-      hasShownWinToast.current = true;
-      hasShownLossToast.current = false;
-    }
-
-    if (
-      prevRoundStatus.current !== RoundStatus.CRASHED &&
-      roundStatus === RoundStatus.CRASHED &&
-      myActiveBet &&
-      myActiveBet.status !== "CASHED_OUT" &&
-      !hasShownLossToast.current
-    ) {
-      toast.error("Crashed!", {
-        description: `You lost ${formatMoney(myActiveBet.amountCents)} at ${liveMultiplier.toFixed(2)}x`,
-        duration: 4000,
-      });
-      playCrash();
-      hasShownLossToast.current = true;
-      hasShownWinToast.current = false;
-    }
-
-    if (
-      roundStatus === RoundStatus.BETTING &&
-      prevRoundStatus.current !== RoundStatus.BETTING
-    ) {
-      hasShownWinToast.current = false;
-      hasShownLossToast.current = false;
-    }
-
-    prevRoundStatus.current = roundStatus;
-    prevMyActiveBet.current = myActiveBet;
-  }, [roundStatus, myActiveBet, liveMultiplier, playWin, playCrash]);
-
   const handlePlaceBet = () => {
     const cents = Math.round(parseFloat(amount) * 100);
     if (isNaN(cents) || cents <= 0) return;
     placeBet(cents);
   };
 
-  const potentialWin = myActiveBet
-    ? calculatePayout(myActiveBet.amountCents, liveMultiplier)
-    : null;
-
-  const handleHalfBet = () => {
-    const current = parseFloat(amount) || 0;
-    setAmount(Math.max(GAME_CONSTANTS.MIN_BET, current / 2).toFixed(2));
-  };
-
-  const handleDoubleBet = () => {
-    const current = parseFloat(amount) || 0;
-    setAmount(Math.min(GAME_CONSTANTS.MAX_BET, current * 2).toFixed(2));
-  };
-
-  const handleMaxBet = () => {
-    setAmount(GAME_CONSTANTS.MAX_BET.toFixed(2));
-  };
-
   return (
     <div className="panel-cyber rounded-lg p-6 space-y-4 h-full flex flex-col">
-      {/* Username display */}
       {isAuthenticated && (
         <div className="flex items-center gap-2 pb-3 border-b border-border">
           <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
@@ -133,7 +55,6 @@ export default function BetControls() {
         </div>
       )}
 
-      {/* Unauthenticated banner */}
       {!isAuthenticated && (
         <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 text-center">
           <p className="text-sm font-terminal text-warning mb-2">
@@ -148,59 +69,10 @@ export default function BetControls() {
         </div>
       )}
 
-      {/* Amount Input */}
-      <div className="space-y-2">
-        <label className="text-xs font-terminal text-text-muted uppercase tracking-wider">
-          Bet Amount
-        </label>
-        <div className="relative">
-          <Input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            type="number"
-            step="0.01"
-            min="1"
-            max="1000"
-            className="input-cyber pr-12 text-lg font-bold"
-            disabled={!canBet}
-          />
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted font-terminal text-sm">
-            USD
-          </span>
-        </div>
+      <BetInput amount={amount} onAmountChange={setAmount} disabled={!canBet} />
 
-        {canBet && (
-          <div className="flex gap-2">
-            <BetButton onAction={handleHalfBet}>1/2</BetButton>
-            <BetButton onAction={handleDoubleBet}>2x</BetButton>
-            <BetButton onAction={handleMaxBet}>MAX</BetButton>
-          </div>
-        )}
-      </div>
+      <AutoCashoutInput value={autoCashOut} onChange={setAutoCashOut} disabled={!canBet} />
 
-      {/* Auto Cash Out - always visible */}
-      <div className="space-y-2">
-        <label className="text-xs font-terminal text-text-muted uppercase tracking-wider">
-          Auto Cash Out
-        </label>
-        <div className="relative">
-          <Input
-            value={autoCashOut}
-            onChange={(e) => setAutoCashOut(e.target.value)}
-            type="number"
-            step="0.01"
-            min="1.01"
-            max="1000"
-            className="input-cyber pr-8"
-            disabled={!canBet}
-          />
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted font-terminal text-sm">
-            x
-          </span>
-        </div>
-      </div>
-
-      {/* Main CTA Button */}
       {canBet && (
         <button
           onClick={handlePlaceBet}
@@ -218,83 +90,21 @@ export default function BetControls() {
         </button>
       )}
 
-      {myActiveBet && myActiveBet.status === "PENDING" && (
-        <div className="text-center py-4">
-          <span className="flex items-center justify-center gap-2">
-            <span className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-text-muted font-terminal text-sm uppercase tracking-wider">
-              Confirming bet...
-            </span>
-          </span>
-          <p className="text-text-muted font-terminal text-xs mt-2">
-            {formatMoney(myActiveBet.amountCents)} pending
-          </p>
-        </div>
+      {canCashOut && myActiveBet && (
+        <CashOutButton
+          myActiveBet={myActiveBet}
+          liveMultiplier={liveMultiplier}
+          onCashOut={() => cashOut()}
+          isCashingOut={isCashingOut}
+        />
       )}
 
-      {canCashOut && (
-        <div className="space-y-3">
-          <div className="flex justify-between text-sm font-terminal">
-            <span className="text-text-muted">Bet:</span>
-            <span className="text-text-primary">
-              {formatMoney(myActiveBet.amountCents)}
-            </span>
-          </div>
-          <div className="flex justify-between text-sm font-terminal">
-            <span className="text-text-muted">Potential:</span>
-            <span className="text-primary">
-              {formatMoney(potentialWin || 0)}
-            </span>
-          </div>
-          <button
-            onClick={() => cashOut()}
-            disabled={isCashingOut}
-            className="w-full btn-cyber-primary py-4 text-lg font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed animate-pulse-glow"
-          >
-            {isCashingOut ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                Cashing Out...
-              </span>
-            ) : (
-              `CASH OUT @ ${liveMultiplier.toFixed(2)}x`
-            )}
-          </button>
-        </div>
-      )}
-
-      {hasCashedOut && (isActivePhase || isCrashed) && (
-        <div className="text-center py-4">
-          <p className="text-primary font-terminal text-sm uppercase tracking-wider">
-            You Won!
-          </p>
-          <p className="text-text-primary font-terminal text-lg mt-1">
-            {formatMoney(myActiveBet!.payoutCents || 0)}
-          </p>
-          <p className="text-text-muted font-terminal text-xs mt-1">
-            at {myActiveBet!.cashOutMultiplier?.toFixed(2)}x
-          </p>
-        </div>
-      )}
-
-      {isCrashed && myActiveBet && myActiveBet.status !== "CASHED_OUT" && (
-        <div className="text-center py-4">
-          <p className="text-error font-terminal text-sm uppercase tracking-wider">
-            Crashed at {liveMultiplier.toFixed(2)}x
-          </p>
-          <p className="text-text-muted font-terminal text-xs mt-1">
-            You lost {formatMoney(myActiveBet.amountCents)}
-          </p>
-        </div>
-      )}
-
-      {isCrashed && !myActiveBet && (
-        <div className="text-center py-4">
-          <p className="text-text-muted font-terminal text-sm">
-            Next round starting soon...
-          </p>
-        </div>
-      )}
+      <BetStatusDisplay
+        myActiveBet={myActiveBet}
+        isCrashed={isCrashed}
+        isActivePhase={isActivePhase}
+        liveMultiplier={liveMultiplier}
+      />
     </div>
   );
 }
