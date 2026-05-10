@@ -58,10 +58,14 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
 
     const existingBet = await this.betRepository.findByPlayerAndRound(input.playerId, round.id);
     if (existingBet) {
-      if (existingBet.getStatus() === BetStatus.PENDING) {
-        existingBet.cancel('Replaced by new bet attempt');
-        await this.betRepository.update(existingBet);
-        this.metrics.incrBet('cancelled', Number(existingBet.getAmount().toCents()));
+      const status = existingBet.getStatus();
+      // Allow replacement for PENDING (wallet not confirmed) and CANCELLED (wallet rejected/timeout)
+      if (status === BetStatus.PENDING || status === BetStatus.CANCELLED) {
+        if (status === BetStatus.PENDING) {
+          existingBet.cancel('Replaced by new bet attempt');
+          await this.betRepository.update(existingBet);
+          this.metrics.incrBet('cancelled', Number(existingBet.getAmount().toCents()));
+        }
         round.removeBet(input.playerId);
 
         try {
