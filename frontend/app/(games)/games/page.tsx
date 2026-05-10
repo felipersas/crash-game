@@ -9,6 +9,7 @@ import { RoundStatus } from "@/types/game.types";
 import { useGameWebSocket } from "@/hooks/useGameWebSocket";
 import { useRoundHistory } from "@/hooks/useRoundHistory";
 import { useSession } from "next-auth/react";
+import { GameErrorBoundary } from "@/components/error-boundary";
 
 export default function GameContent() {
   const roundStatus = useGameStore((s) => s.roundStatus);
@@ -35,12 +36,16 @@ export default function GameContent() {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
         {/* Center - Crash Graph (first on mobile) */}
         <div className="md:col-span-6 md:order-2">
-          <CrashGraph multiplier={liveMultiplier} phase={roundPhase} recentRounds={historyData?.data} />
+          <GameErrorBoundary label="Graph">
+            <CrashGraph multiplier={liveMultiplier} phase={roundPhase} recentRounds={historyData?.data} />
+          </GameErrorBoundary>
         </div>
 
         {/* Left Panel - Bet Controls (second on mobile) */}
         <div className="md:col-span-3 md:order-1">
-          <BetControls />
+          <GameErrorBoundary label="Bet Controls">
+            <BetControls />
+          </GameErrorBoundary>
         </div>
 
         {/* Right Panel - Active Bets (third on mobile) */}

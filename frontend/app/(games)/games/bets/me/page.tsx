@@ -13,6 +13,7 @@ import {
 import { useMyBets } from "@/hooks/useMyBets";
 import { formatMoney, formatMultiplier } from "@/shared/utils/money";
 import { BetStatus } from "@/types/game.types";
+import { TableSkeleton } from "@/components/ui/skeleton";
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -117,9 +118,7 @@ export default function MyBetsPage() {
         </div>
 
         {isLoading ? (
-          <div className="py-12 text-center text-text-muted font-terminal text-sm">
-            Loading...
-          </div>
+          <TableSkeleton rows={8} />
         ) : bets.length === 0 ? (
           <div className="py-12 text-center space-y-3">
             <p className="font-terminal text-text-muted text-sm">

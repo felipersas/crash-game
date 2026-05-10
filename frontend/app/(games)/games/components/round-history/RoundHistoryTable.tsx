@@ -2,6 +2,7 @@
 
 import { Hash } from 'lucide-react';
 import { formatMultiplier, formatMoney } from '@/shared/utils/money';
+import { TableSkeleton } from '@/components/ui/skeleton';
 
 export interface RoundHistoryItem {
   roundId: string;
@@ -39,11 +40,7 @@ export default function RoundHistoryTable({
   emptyMessage = 'No rounds yet',
 }: RoundHistoryTableProps) {
   if (isLoading) {
-    return (
-      <div className="py-12 text-center text-text-muted font-terminal text-sm">
-        Loading...
-      </div>
-    );
+    return <TableSkeleton rows={5} />;
   }
 
   if (rounds.length === 0) {

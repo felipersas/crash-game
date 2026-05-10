@@ -5,6 +5,7 @@ import { Copy, Check, Shield, X } from 'lucide-react';
 import { useVerifyRound } from '@/hooks/useVerifyRound';
 import { computeSHA256 } from '@/shared/utils/crypto';
 import { formatMultiplier } from '@/shared/utils/money';
+import { InlineSkeleton } from '@/components/ui/skeleton';
 
 interface VerificationModalProps {
   roundId: string;
@@ -53,7 +54,9 @@ export default function VerificationModal({ roundId, onClose }: VerificationModa
         </div>
 
         {isLoading ? (
-          <p className="text-sm font-terminal text-text-muted text-center py-4">Loading...</p>
+          <div className="py-6">
+            <InlineSkeleton />
+          </div>
         ) : error || !data ? (
           <p className="text-sm font-terminal text-error text-center py-4">Failed to load data</p>
         ) : (
