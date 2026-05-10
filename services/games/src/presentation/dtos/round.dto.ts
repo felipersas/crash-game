@@ -7,6 +7,7 @@ export { PaginationQueryDto, PaginationMetaDto };
 export class BetOutputDto {
   @ApiProperty() id!: string;
   @ApiProperty() playerId!: string;
+  @ApiProperty() playerName!: string;
   @ApiProperty({ example: 500 }) amountCents!: number;
   @ApiProperty({ example: '5.00' }) amountDecimal!: string;
   @ApiProperty({ enum: ['PENDING', 'ACTIVE', 'CASHED_OUT', 'LOST', 'CANCELLED'] }) status!: string;
@@ -18,6 +19,7 @@ export class BetOutputDto {
   static fromCents(
     id: string,
     playerId: string,
+    playerName: string,
     amountCents: number,
     status: string,
     cashOutMultiplier: number | null,
@@ -27,6 +29,7 @@ export class BetOutputDto {
     return {
       id,
       playerId,
+      playerName,
       amountCents,
       amountDecimal: centsToDecimal(amountCents),
       status,

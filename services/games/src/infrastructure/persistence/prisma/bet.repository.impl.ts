@@ -2,19 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { Bet, BetStatus } from '@/domain/entities/bet.entity';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
-
-/** Prisma row type matching schema.prisma Bet model */
-type BetRow = {
-  id: string;
-  roundId: string;
-  playerId: string;
-  amountCents: bigint;
-  status: string;
-  cashOutMultiplier: number | null;
-  cashOutAmount: bigint | null;
-  cashedOutAt: Date | null;
-  createdAt: Date;
-};
+import type { Bet as BetRow } from '@prisma/client';
 
 /**
  * Prisma-based implementation of Bet Repository.
@@ -172,6 +160,7 @@ export class PrismaBetRepository implements IBetRepository {
       record.id,
       record.roundId,
       record.playerId,
+      record.playerName,
       BigInt(record.amountCents),
       record.status as BetStatus,
       record.cashOutMultiplier,

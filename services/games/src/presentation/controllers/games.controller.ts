@@ -93,6 +93,7 @@ export class GamesController {
   ): Promise<PlaceBetResponseDto> {
     const result = await this.placeBetUseCase.execute({
       playerId: user.playerId,
+      playerName: user.username,
       amountCents: BigInt(dto.amount),
     });
 
@@ -236,6 +237,7 @@ export class GamesController {
         return BetOutputDto.fromCents(
           bet.id,
           bet.playerId,
+          bet.playerName,
           amountCents,
           bet.status,
           bet.cashOutMultiplier,
