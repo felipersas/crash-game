@@ -22,9 +22,8 @@ import { CancelBetUseCase } from './application/use-cases/cancel-bet.use-case';
 import { GetBetStatusUseCase } from './application/use-cases/get-bet-status.use-case';
 import { GetMyBetsUseCase } from './application/use-cases/get-my-bets.use-case';
 import { BetTimeoutHandler } from './infrastructure/scheduling/bet-timeout.handler';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY } from './infrastructure/di/tokens';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY, GAMES_GATEWAY, GAME_BROADCASTER } from './infrastructure/di/tokens';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
-import { GAMES_GATEWAY } from './infrastructure/di/tokens';
 import { APP_FILTER } from '@nestjs/core';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-chain.repository.impl';
@@ -52,6 +51,10 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
     {
       provide: GAMES_GATEWAY,
       useClass: GamesGateway,
+    },
+    {
+      provide: GAME_BROADCASTER,
+      useExisting: GamesGateway,
     },
     GamesGateway,
     {

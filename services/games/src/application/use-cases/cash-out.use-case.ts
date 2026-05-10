@@ -7,8 +7,8 @@ import type { IEventPublisher } from '@crash/messaging';
 import { RoundLifecycleManager } from '@/infrastructure/scheduling/round-lifecycle-manager';
 import { RedisService, type CashoutIdempotencyResult } from '@/infrastructure/redis/redis.service';
 import { RoundNotFoundError, NoActiveBetError, InvalidIdempotencyKeyError } from '@/domain/errors/domain.errors';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
-import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, GAME_BROADCASTER } from '@/infrastructure/di/tokens';
+import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
 import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
 
 /**
@@ -42,7 +42,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
     private readonly roundLifecycleManager: RoundLifecycleManager,
     private readonly redisService: RedisService,
-    private readonly gamesGateway: GamesGateway,
+    @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
@@ -146,7 +146,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     );
     if (cashedOut) {
       try {
-        this.gamesGateway.broadcastPlayerCashedOut(
+        this.broadcaster.broadcastPlayerCashedOut(
           cashedOut.roundId,
           cashedOut.betId,
           cashedOut.playerId,

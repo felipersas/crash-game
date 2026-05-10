@@ -2,10 +2,10 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import type { IEventPublisher } from '@crash/messaging';
-import { BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { BET_REPOSITORY, EVENT_PUBLISHER, GAME_BROADCASTER } from '@/infrastructure/di/tokens';
 import { BetNotFoundError } from '@/domain/errors/domain.errors';
 import { createBetConfirmedEvent } from '@/domain/events/round.events';
-import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
 
 export interface ConfirmBetInput {
   roundId: string;
@@ -35,7 +35,7 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
   constructor(
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
-    private readonly gamesGateway: GamesGateway,
+    @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
   ) {}
 
   async execute(input: ConfirmBetInput): Promise<ConfirmBetOutput> {
@@ -67,7 +67,7 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
 
     // Broadcast via WebSocket (fire-and-forget, non-blocking)
     try {
-      this.gamesGateway.broadcastBetConfirmed(
+      this.broadcaster.broadcastBetConfirmed(
         input.roundId,
         input.betId,
         input.playerId,

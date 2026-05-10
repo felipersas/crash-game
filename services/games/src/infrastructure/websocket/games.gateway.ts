@@ -9,6 +9,7 @@ import type {
 } from '@nestjs/websockets';
 import { Logger, Injectable } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
 
 /**
  * WebSocket Events - Server to Client only (push)
@@ -31,7 +32,7 @@ export interface ServerToClientEvents {
   },
 })
 export class GamesGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, IGameBroadcaster
 {
   @WebSocketServer()
   server!: Server;
