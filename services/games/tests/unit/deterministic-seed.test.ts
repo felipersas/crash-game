@@ -30,14 +30,16 @@ describe('Deterministic Seed', () => {
   });
 
   test('known seeds produce expected crash points', async () => {
+    // Chain size must match RoundLifecycleManager (1000)
+    const CHAIN_SIZE = 1000;
     const knownSeeds = [
-      { seed: 'test-crash-1.5-17', expectedMin: 10.40, expectedMax: 10.50 },
-      { seed: 'test-crash-2-27', expectedMin: 8.42, expectedMax: 8.52 },
-      { seed: 'test-crash-3-28', expectedMin: 1.93, expectedMax: 2.03 },
+      { seed: 'test-crash-1.5-6', expectedMin: 1.42, expectedMax: 1.52 },
+      { seed: 'test-crash-2-94', expectedMin: 1.93, expectedMax: 2.03 },
+      { seed: 'test-crash-3-20', expectedMin: 2.97, expectedMax: 3.07 },
     ];
 
     for (const { seed, expectedMin, expectedMax } of knownSeeds) {
-      const chain = await SeedChain.generateDeterministic(seed);
+      const chain = await SeedChain.generateDeterministic(seed, CHAIN_SIZE);
       const crashPoint = await CrashPoint.fromSeed(chain.getSeed());
 
       expect(crashPoint.getValue()).toBeGreaterThanOrEqual(expectedMin);

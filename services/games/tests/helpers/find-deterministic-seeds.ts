@@ -8,6 +8,7 @@
  */
 
 import { CrashPoint } from '../../src/domain/value-objects/crash-point.value-object';
+import { SeedChain } from '../../src/domain/value-objects/seed-chain.value-object';
 
 interface SeedResult {
   seed: string;
@@ -15,15 +16,11 @@ interface SeedResult {
 }
 
 /**
- * Generate a seed from a string using the same method as SeedChain.generateDeterministic()
+ * Chain size must match RoundLifecycleManager.onModuleInit() which calls
+ * SeedChain.generate(1000). Using a different size produces a different
+ * seeds[0] and therefore a completely different crash point.
  */
-async function seedFromString(seedString: string): Promise<string> {
-  const stringBytes = new TextEncoder().encode(seedString);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', stringBytes);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-}
+const CHAIN_SIZE = 1000;
 
 /**
  * Find a seed that produces a crash point close to the target.
@@ -37,8 +34,8 @@ async function findSeedForCrashPoint(
 
   for (let i = 0; i < maxAttempts; i++) {
     const seedString = `test-crash-${targetCrashPoint}-${i}`;
-    const seed = await seedFromString(seedString);
-    const crashPoint = await CrashPoint.fromSeed(seed);
+    const chain = await SeedChain.generateDeterministic(seedString, CHAIN_SIZE);
+    const crashPoint = await CrashPoint.fromSeed(chain.getSeed());
 
     const diff = Math.abs(crashPoint.getValue() - targetCrashPoint);
     if (diff <= tolerance) {
@@ -97,4 +94,4 @@ if (import.meta.main) {
   findAllSeeds().catch(console.error);
 }
 
-export { seedFromString, findSeedForCrashPoint };
+export { findSeedForCrashPoint };
