@@ -33,6 +33,7 @@ model Bet {
   id                String       @id @default(uuid())
   roundId           String       @map("round_id")
   playerId          String       @map("player_id")
+  playerName        String       @map("player_name") @default("")
   amountCents       BigInt       @map("amount_cents")
   status            BetStatus
   cashOutMultiplier Float?       @map("cash_out_multiplier")
