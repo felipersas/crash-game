@@ -1,25 +1,42 @@
-import "reflect-metadata";
-import { NestFactory } from "@nestjs/core";
-import { ValidationPipe } from "@nestjs/common";
-import { AppModule } from "./app.module";
+import 'reflect-metadata';
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
+import { Transport } from '@nestjs/microservices';
+import type { MicroserviceOptions } from '@nestjs/microservices';
+import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
-  // Enable validation pipe for DTOs
+  // Connect as microservice to consume wallet events
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.RMQ,
+    options: {
+      urls: [process.env.RABBITMQ_URL || 'amqp://admin:admin@localhost:5672'],
+      exchange: 'wallet.events',
+      exchangeType: 'fanout',
+      queue: 'games.wallet.events',
+      queueOptions: { durable: true },
+      prefetchCount: 10,
+      noAck: false,
+    },
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Strip properties that don't have decorators
-      forbidNonWhitelisted: true, // Throw error if non-whitelisted properties are present
-      transform: true, // Automatically transform payloads to DTO instances
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
       transformOptions: {
-        enableImplicitConversion: true, // Allow implicit type conversion
+        enableImplicitConversion: true,
       },
-    })
+    }),
   );
 
+  await app.startAllMicroservices();
+
   const port = process.env.PORT ?? '4001';
-  await app.listen(port, "0.0.0.0");
+  await app.listen(port, '0.0.0.0');
 }
 
 bootstrap();
