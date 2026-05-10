@@ -1,15 +1,9 @@
-/**
- * Outbox Processor - Infrastructure Layer
- *
- * Background worker that processes pending outbox events
- * and publishes them to RabbitMQ.
- *
- * Implements the Transactional Outbox pattern for at-least-once delivery.
- */
-
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
+import type { IEventPublisher } from '@crash/messaging';
+import { Inject } from '@nestjs/common';
+import { EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 
 @Injectable()
 export class OutboxProcessor {
@@ -17,11 +11,11 @@ export class OutboxProcessor {
   private readonly MAX_RETRIES = 3;
   private readonly BATCH_SIZE = 50;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+  ) {}
 
-  /**
-   * Process pending outbox events every 5 seconds.
-   */
   @Cron(CronExpression.EVERY_5_SECONDS)
   async processPendingEvents() {
     try {
@@ -50,8 +44,9 @@ export class OutboxProcessor {
 
   private async publishEvent(event: any) {
     try {
-      // TODO: Publish to RabbitMQ
-      // For now, just mark as sent
+      const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
+      await this.eventPublisher.publish(payload);
+
       await this.prisma.outboxEvent.update({
         where: { id: event.id },
         data: {
