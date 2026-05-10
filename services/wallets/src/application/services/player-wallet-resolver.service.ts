@@ -39,7 +39,11 @@ export class PlayerWalletResolver {
    * @returns The wallet entity
    * @throws WalletNotFoundError if wallet not found
    */
-  async resolveWallet(playerId: string): Promise<ReturnType<typeof this.walletRepository.findByPlayerId> extends Promise<infer T> ? T : never> {
+  async resolveWallet(
+    playerId: string,
+  ): Promise<
+    ReturnType<typeof this.walletRepository.findByPlayerId> extends Promise<infer T> ? T : never
+  > {
     const wallet = await this.walletRepository.findByPlayerId(playerId);
     if (!wallet) {
       throw new WalletNotFoundError();

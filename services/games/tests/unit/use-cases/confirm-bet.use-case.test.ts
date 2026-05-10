@@ -15,8 +15,12 @@ function mockFn<T extends (...args: any[]) => any>(impl?: T) {
   fn._impl = impl || (() => {});
   fn.callCount = 0;
   fn.lastArgs = null;
-  fn.mockReturnValue = (v: any) => { fn._impl = () => v; };
-  fn.mockResolvedValue = (v: any) => { fn._impl = () => Promise.resolve(v); };
+  fn.mockReturnValue = (v: any) => {
+    fn._impl = () => v;
+  };
+  fn.mockResolvedValue = (v: any) => {
+    fn._impl = () => Promise.resolve(v);
+  };
   return fn as T & {
     callCount: number;
     lastArgs: any[] | null;
@@ -103,9 +107,9 @@ describe('ConfirmBetUseCase', () => {
   test('should throw BetNotFoundError when bet not found', async () => {
     betRepository.findByPlayerAndRound.mockResolvedValue(null);
 
-    expect(
-      useCase.execute({ roundId, betId: 'nonexistent', playerId }),
-    ).rejects.toThrow(BetNotFoundError);
+    expect(useCase.execute({ roundId, betId: 'nonexistent', playerId })).rejects.toThrow(
+      BetNotFoundError,
+    );
   });
 
   test('should save confirmed bet', async () => {
@@ -138,7 +142,9 @@ describe('ConfirmBetUseCase', () => {
   test('should handle WebSocket broadcast failure gracefully', async () => {
     const bet = Bet.create(roundId, playerId, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
-    gamesGateway.broadcastBetConfirmed = mockFn(() => { throw new Error('WS error'); });
+    gamesGateway.broadcastBetConfirmed = mockFn(() => {
+      throw new Error('WS error');
+    });
 
     const result = await useCase.execute({ roundId, betId: bet.id, playerId });
 

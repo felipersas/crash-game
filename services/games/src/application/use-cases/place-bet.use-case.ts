@@ -1,12 +1,17 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
+import { Round, type RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { IEventPublisher } from '@crash/messaging';
 import type { IUseCase } from '@/application/interfaces/use-case';
 import { Money } from '@crash/domain';
 import { BetNotFoundError } from '@/domain/errors/domain.errors';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, GAME_BROADCASTER } from '@/infrastructure/di/tokens';
+import {
+  ROUND_REPOSITORY,
+  BET_REPOSITORY,
+  EVENT_PUBLISHER,
+  GAME_BROADCASTER,
+} from '@/infrastructure/di/tokens';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
 
 export interface PlaceBetInput {
@@ -70,12 +75,7 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
 
     // Broadcast via WebSocket (fire-and-forget, non-blocking)
     try {
-      this.broadcaster.broadcastBetPlaced(
-        round.id,
-        bet.id,
-        input.playerId,
-        input.amountCents,
-      );
+      this.broadcaster.broadcastBetPlaced(round.id, bet.id, input.playerId, input.amountCents);
     } catch (error) {
       this.logger.error('Failed to broadcast bet placed event', error);
     }

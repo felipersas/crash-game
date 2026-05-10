@@ -15,8 +15,12 @@ function mockFn<T extends (...args: any[]) => any>(impl?: T) {
   fn._impl = impl || (() => {});
   fn.callCount = 0;
   fn.lastArgs = null;
-  fn.mockReturnValue = (v: any) => { fn._impl = () => v; };
-  fn.mockResolvedValue = (v: any) => { fn._impl = () => Promise.resolve(v); };
+  fn.mockReturnValue = (v: any) => {
+    fn._impl = () => v;
+  };
+  fn.mockResolvedValue = (v: any) => {
+    fn._impl = () => Promise.resolve(v);
+  };
   return fn as T & {
     callCount: number;
     lastArgs: any[] | null;
@@ -142,9 +146,16 @@ describe('CancelBetUseCase', () => {
   test('should handle WebSocket broadcast failure gracefully', async () => {
     const bet = Bet.create(roundId, playerId, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
-    gamesGateway.broadcastBetCancelled = mockFn(() => { throw new Error('WS error'); });
+    gamesGateway.broadcastBetCancelled = mockFn(() => {
+      throw new Error('WS error');
+    });
 
-    const result = await useCase.execute({ roundId, betId: bet.id, playerId, reason: cancelReason });
+    const result = await useCase.execute({
+      roundId,
+      betId: bet.id,
+      playerId,
+      reason: cancelReason,
+    });
 
     // Should still succeed despite WS failure
     expect(result.betId).toBe(bet.id);

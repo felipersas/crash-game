@@ -67,14 +67,18 @@ describe('Wallets ↔ Games Integration (E2E)', () => {
     });
 
     if (!betResponse.ok) {
-      console.log('Bet placement failed (status:', betResponse.status, ') - may not be in betting phase');
+      console.log(
+        'Bet placement failed (status:',
+        betResponse.status,
+        ') - may not be in betting phase',
+      );
       return;
     }
 
     const betData = await betResponse.json();
     expect(betData).toHaveProperty('betId');
 
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     const message = await channel!.get('test-wallets-integration', { noAck: true });
 

@@ -25,18 +25,12 @@ export class GamesEventsController {
   ) {}
 
   @EventPattern('BetPlaced')
-  async handleBetPlaced(
-    @Payload() event: any,
-    @Ctx() context: RmqContext,
-  ): Promise<void> {
+  async handleBetPlaced(@Payload() event: any, @Ctx() context: RmqContext): Promise<void> {
     await this.processWithRetry(event, context, this.betPlacedHandler);
   }
 
   @EventPattern('PlayerCashedOut')
-  async handlePlayerCashedOut(
-    @Payload() event: any,
-    @Ctx() context: RmqContext,
-  ): Promise<void> {
+  async handlePlayerCashedOut(@Payload() event: any, @Ctx() context: RmqContext): Promise<void> {
     await this.processWithRetry(event, context, this.playerCashedOutHandler);
   }
 
@@ -76,7 +70,9 @@ export class GamesEventsController {
     const retryCount = (msg.properties?.headers?.['x-retry-count'] as number) ?? 0;
 
     try {
-      this.logger.debug(`Received event: ${event.eventType} (retry: ${retryCount}/${this.MAX_RETRIES})`);
+      this.logger.debug(
+        `Received event: ${event.eventType} (retry: ${retryCount}/${this.MAX_RETRIES})`,
+      );
       await handler.handle(event);
       channel.ack(msg);
       this.logger.debug(`Event ${event.eventType} processed successfully`);
@@ -110,7 +106,8 @@ export class GamesEventsController {
         error.message.includes('timeout') ||
         error.message.includes('ETIMEDOUT') ||
         error.message.includes('ECONNREFUSED')
-      ) return true;
+      )
+        return true;
     }
 
     return false;

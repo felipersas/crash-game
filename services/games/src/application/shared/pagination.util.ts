@@ -21,11 +21,7 @@ export function computePagination(input: PaginationInput = {}): {
   return { page, limit, offset };
 }
 
-export function buildPaginationMeta(
-  page: number,
-  limit: number,
-  total: number,
-): PaginationMeta {
+export function buildPaginationMeta(page: number, limit: number, total: number): PaginationMeta {
   return {
     page,
     limit,

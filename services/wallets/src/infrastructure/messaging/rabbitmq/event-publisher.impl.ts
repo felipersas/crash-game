@@ -14,9 +14,7 @@ import type { IEventPublisher } from '@crash/messaging';
 export class RabbitMQEventPublisher implements IEventPublisher {
   private readonly logger = new Logger(RabbitMQEventPublisher.name);
 
-  constructor(
-    @Inject('WALLET_EVENTS_CLIENT') private readonly client: ClientProxy,
-  ) {}
+  constructor(@Inject('WALLET_EVENTS_CLIENT') private readonly client: ClientProxy) {}
 
   async publish(event: WalletDomainEvent): Promise<void> {
     const serialized = JSON.parse(
@@ -25,10 +23,9 @@ export class RabbitMQEventPublisher implements IEventPublisher {
       ),
     );
 
-    await firstValueFrom(
-      this.client.emit(event.eventType, serialized),
-      { defaultValue: undefined },
-    );
+    await firstValueFrom(this.client.emit(event.eventType, serialized), {
+      defaultValue: undefined,
+    });
 
     this.logger.debug(`Published event: ${event.eventType} (${event.aggregateId})`);
   }

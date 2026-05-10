@@ -189,9 +189,7 @@ describe('Bet Entity', () => {
       bet.confirm();
       bet.cashOut(Multiplier.fromValue(2.5));
 
-      expect(() => bet.markAsLost()).toThrow(
-        'Cannot mark as lost a bet in CASHED_OUT state',
-      );
+      expect(() => bet.markAsLost()).toThrow('Cannot mark as lost a bet in CASHED_OUT state');
     });
 
     test('should reject marking already lost bet', () => {
@@ -200,9 +198,7 @@ describe('Bet Entity', () => {
       bet.confirm();
       bet.markAsLost();
 
-      expect(() => bet.markAsLost()).toThrow(
-        'Cannot mark as lost a bet in LOST state',
-      );
+      expect(() => bet.markAsLost()).toThrow('Cannot mark as lost a bet in LOST state');
     });
   });
 

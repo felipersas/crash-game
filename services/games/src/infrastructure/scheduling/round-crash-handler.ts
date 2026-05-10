@@ -1,11 +1,16 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Round } from '@/domain/entities/round.entity';
+import { type Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY } from '@/infrastructure/di/tokens';
-import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
-import { RedisService } from '@/infrastructure/redis/redis.service';
+import {
+  ROUND_REPOSITORY,
+  BET_REPOSITORY,
+  EVENT_PUBLISHER,
+  GAMES_GATEWAY,
+} from '@/infrastructure/di/tokens';
+import { type GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import { type RedisService } from '@/infrastructure/redis/redis.service';
 
 /**
  * Round Crash Handler - Infrastructure Layer
@@ -63,7 +68,9 @@ export class RoundCrashHandler {
       await this.roundRepository.save(latestRound);
     } catch (error: unknown) {
       if (error instanceof Error && 'code' in error && error.code === 'P2025') {
-        this.logger.warn(`Round ${roundId} version conflict during crash, continuing with in-memory events`);
+        this.logger.warn(
+          `Round ${roundId} version conflict during crash, continuing with in-memory events`,
+        );
       } else {
         this.logger.error(`Failed to save crashed round: ${error}`);
       }
@@ -82,7 +89,7 @@ export class RoundCrashHandler {
     }
 
     // Broadcast crash
-    const crashEvent = events.find(e => e.eventType === 'RoundCrashed');
+    const crashEvent = events.find((e) => e.eventType === 'RoundCrashed');
     if (crashEvent && 'seed' in crashEvent) {
       this.gamesGateway.broadcastCrash(
         latestRound.id,
@@ -101,7 +108,7 @@ export class RoundCrashHandler {
    */
   private async settleBets(round: Round): Promise<void> {
     const bets = round.getBets();
-    const unsettled = bets.filter(b => b.isLost() || b.isCancelled());
+    const unsettled = bets.filter((b) => b.isLost() || b.isCancelled());
 
     for (const bet of unsettled) {
       try {

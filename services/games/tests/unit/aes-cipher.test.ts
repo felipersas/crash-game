@@ -51,8 +51,8 @@ describe('AesCipher', () => {
       const payload = {
         seeds: Array.from({ length: 100 }, () =>
           Array.from(crypto.getRandomValues(new Uint8Array(32)))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('')
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join(''),
         ),
         current: 42,
         commitment: 'abc123',
@@ -153,7 +153,9 @@ describe('AesCipher', () => {
     });
 
     test('should detect plain parsed JSON as non-encrypted', () => {
-      expect(AesCipher.isEncryptedPayload({ seeds: [], current: 0, commitment: 'abc' })).toBe(false);
+      expect(AesCipher.isEncryptedPayload({ seeds: [], current: 0, commitment: 'abc' })).toBe(
+        false,
+      );
     });
 
     test('should detect null and primitives as non-encrypted', () => {

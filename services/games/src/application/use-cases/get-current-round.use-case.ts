@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Bet } from '@/domain/entities/bet.entity';
+import { type Bet } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
@@ -33,10 +33,11 @@ export interface GetCurrentRoundOutput {
 }
 
 @Injectable()
-export class GetCurrentRoundUseCase implements IUseCase<GetCurrentRoundInput, GetCurrentRoundOutput> {
-  constructor(
-    @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
-  ) {}
+export class GetCurrentRoundUseCase implements IUseCase<
+  GetCurrentRoundInput,
+  GetCurrentRoundOutput
+> {
+  constructor(@Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository) {}
 
   async execute(input: GetCurrentRoundInput = {}): Promise<GetCurrentRoundOutput> {
     const round = await this.roundRepository.findCurrentRound();

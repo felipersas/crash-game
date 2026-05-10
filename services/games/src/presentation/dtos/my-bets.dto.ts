@@ -17,17 +17,29 @@ export class MyBetOutputDto {
   @ApiProperty() placedAt!: Date;
 
   static fromBet(
-    id: string, roundId: string, amountCents: number,
-    cashOutMultiplier: number | null, payoutCents: number | null,
-    profitCents: number, status: string,
-    cashedOutAt: Date | null, placedAt: Date,
+    id: string,
+    roundId: string,
+    amountCents: number,
+    cashOutMultiplier: number | null,
+    payoutCents: number | null,
+    profitCents: number,
+    status: string,
+    cashedOutAt: Date | null,
+    placedAt: Date,
   ): MyBetOutputDto {
     return {
-      id, roundId, amountCents, amountDecimal: centsToDecimal(amountCents),
-      cashOutMultiplier, payoutCents,
+      id,
+      roundId,
+      amountCents,
+      amountDecimal: centsToDecimal(amountCents),
+      cashOutMultiplier,
+      payoutCents,
       payoutDecimal: payoutCents !== null ? centsToDecimal(payoutCents) : null,
-      profitCents, profitDecimal: centsToDecimal(profitCents),
-      status, cashedOutAt, placedAt,
+      profitCents,
+      profitDecimal: centsToDecimal(profitCents),
+      status,
+      cashedOutAt,
+      placedAt,
     };
   }
 }
@@ -40,10 +52,19 @@ export class BetsSummaryDto {
   @ApiProperty({ example: 1500 }) profitCents!: number;
   @ApiProperty({ example: '15.00' }) profitDecimal!: string;
 
-  static fromCents(totalWageredCents: number, wins: number, losses: number, profitCents: number): BetsSummaryDto {
+  static fromCents(
+    totalWageredCents: number,
+    wins: number,
+    losses: number,
+    profitCents: number,
+  ): BetsSummaryDto {
     return {
-      totalWageredCents, totalWageredDecimal: centsToDecimal(totalWageredCents),
-      wins, losses, profitCents, profitDecimal: centsToDecimal(profitCents),
+      totalWageredCents,
+      totalWageredDecimal: centsToDecimal(totalWageredCents),
+      wins,
+      losses,
+      profitCents,
+      profitDecimal: centsToDecimal(profitCents),
     };
   }
 }

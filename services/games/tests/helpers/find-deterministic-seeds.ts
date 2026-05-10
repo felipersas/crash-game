@@ -39,7 +39,9 @@ async function findSeedForCrashPoint(
 
     const diff = Math.abs(crashPoint.getValue() - targetCrashPoint);
     if (diff <= tolerance) {
-      console.log(`✅ Found after ${i + 1} attempts: "${seedString}" → ${crashPoint.getValue().toFixed(2)}x`);
+      console.log(
+        `✅ Found after ${i + 1} attempts: "${seedString}" → ${crashPoint.getValue().toFixed(2)}x`,
+      );
       return { seed: seedString, crashPoint: crashPoint.getValue() };
     }
   }
@@ -65,11 +67,7 @@ async function findAllSeeds(): Promise<void> {
   const results: Record<string, SeedResult> = {};
 
   for (const target of targets) {
-    const result = await findSeedForCrashPoint(
-      target.crash,
-      target.tolerance,
-      target.attempts,
-    );
+    const result = await findSeedForCrashPoint(target.crash, target.tolerance, target.attempts);
     if (result) {
       results[`crash-${target.crash}`] = result;
     }
@@ -89,7 +87,6 @@ async function findAllSeeds(): Promise<void> {
 }
 
 // Run if executed directly
-// @ts-ignore - Bun supports import.meta.main
 if (import.meta.main) {
   findAllSeeds().catch(console.error);
 }

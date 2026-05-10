@@ -70,11 +70,7 @@ export class Round {
   private events: GameDomainEvent[];
   private config: RoundConfig;
 
-  private constructor(
-    id: string,
-    seedChain: SeedChain,
-    config: RoundConfig,
-  ) {
+  private constructor(id: string, seedChain: SeedChain, config: RoundConfig) {
     this.id = id;
     this.seedChain = seedChain;
     this.config = config;
@@ -97,12 +93,7 @@ export class Round {
 
     // Emit RoundStartedEvent with seed hash (commit before reveal)
     this.addEvent(
-      createRoundStartedEvent(
-        this.id,
-        this.seedChain.getCurrentSeedHash(),
-        endTime,
-        this.version,
-      ),
+      createRoundStartedEvent(this.id, this.seedChain.getCurrentSeedHash(), endTime, this.version),
     );
   }
 
@@ -123,7 +114,10 @@ export class Round {
    * Factory method to create a new round with an existing seed chain.
    * Used by RoundLifecycleManager to use pre-generated seeds.
    */
-  static async createWithSeedChain(seedChain: SeedChain, config: RoundConfig = DEFAULT_ROUND_CONFIG): Promise<Round> {
+  static async createWithSeedChain(
+    seedChain: SeedChain,
+    config: RoundConfig = DEFAULT_ROUND_CONFIG,
+  ): Promise<Round> {
     const roundId = crypto.randomUUID();
     const round = new Round(roundId, seedChain, config);
 
@@ -195,15 +189,7 @@ export class Round {
     this.bets.set(playerId, bet);
 
     this.version++;
-    this.addEvent(
-      createBetPlacedEvent(
-        this.id,
-        bet.id,
-        playerId,
-        amount.toCents(),
-        this.version,
-      ),
-    );
+    this.addEvent(createBetPlacedEvent(this.id, bet.id, playerId, amount.toCents(), this.version));
   }
 
   /**

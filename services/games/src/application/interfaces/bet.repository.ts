@@ -1,4 +1,4 @@
-import { Bet, BetStatus } from '@/domain/entities/bet.entity';
+import { type Bet, type BetStatus } from '@/domain/entities/bet.entity';
 
 /**
  * Bet Repository Interface - Application Layer

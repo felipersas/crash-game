@@ -3,7 +3,7 @@ import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
 import { BetNotFoundError } from '@/domain/errors/domain.errors';
-import { BetStatus } from '@/domain/entities/bet.entity';
+import { type BetStatus } from '@/domain/entities/bet.entity';
 
 export interface GetBetStatusInput {
   betId: string;
@@ -29,9 +29,7 @@ export interface BetStatusOutput {
  */
 @Injectable()
 export class GetBetStatusUseCase implements IUseCase<GetBetStatusInput, BetStatusOutput> {
-  constructor(
-    @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
-  ) {}
+  constructor(@Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository) {}
 
   async execute(input: GetBetStatusInput): Promise<BetStatusOutput> {
     const bet = await this.betRepository.findById(input.betId);

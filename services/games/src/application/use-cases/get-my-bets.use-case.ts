@@ -3,7 +3,11 @@ import { BetStatus } from '@/domain/entities/bet.entity';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
-import { computePagination, buildPaginationMeta, type PaginationMeta } from '../shared/pagination.util';
+import {
+  computePagination,
+  buildPaginationMeta,
+  type PaginationMeta,
+} from '../shared/pagination.util';
 
 export interface GetMyBetsInput {
   playerId: string;
@@ -38,9 +42,7 @@ export interface GetMyBetsOutput {
 
 @Injectable()
 export class GetMyBetsUseCase implements IUseCase<GetMyBetsInput, GetMyBetsOutput> {
-  constructor(
-    @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
-  ) {}
+  constructor(@Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository) {}
 
   async execute(input: GetMyBetsInput): Promise<GetMyBetsOutput> {
     const { page, limit, offset } = computePagination(input);
@@ -50,7 +52,7 @@ export class GetMyBetsUseCase implements IUseCase<GetMyBetsInput, GetMyBetsOutpu
       this.betRepository.countByPlayer(input.playerId),
     ]);
 
-    const data = bets.map(bet => {
+    const data = bets.map((bet) => {
       const amountCents = Number(bet.getAmount().toCents());
       const payoutCents = bet.getCashOutAmount()?.toCents()
         ? Number(bet.getCashOutAmount()!.toCents())
@@ -79,7 +81,11 @@ export class GetMyBetsUseCase implements IUseCase<GetMyBetsInput, GetMyBetsOutpu
     };
   }
 
-  private calculateProfit(status: BetStatus, amountCents: number, payoutCents: number | null): number {
+  private calculateProfit(
+    status: BetStatus,
+    amountCents: number,
+    payoutCents: number | null,
+  ): number {
     if (status === BetStatus.CASHED_OUT && payoutCents !== null) {
       return payoutCents - amountCents;
     }
@@ -88,5 +94,4 @@ export class GetMyBetsUseCase implements IUseCase<GetMyBetsInput, GetMyBetsOutpu
     }
     return 0;
   }
-
 }

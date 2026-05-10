@@ -196,7 +196,7 @@ describe('Round Entity', () => {
       await round.startRound();
       const events = round.pullEvents();
 
-      const bettingEndedEvent = events.find(e => e.eventType === 'BettingPhaseEnded');
+      const bettingEndedEvent = events.find((e) => e.eventType === 'BettingPhaseEnded');
       expect(bettingEndedEvent).toBeDefined();
       if (bettingEndedEvent && bettingEndedEvent.eventType === 'BettingPhaseEnded') {
         expect(bettingEndedEvent.roundId).toBe(round.id);
@@ -257,7 +257,7 @@ describe('Round Entity', () => {
       round.cashOut('player-1');
 
       const events = round.pullEvents();
-      const cashOutEvent = events.find(e => e.eventType === 'PlayerCashedOut');
+      const cashOutEvent = events.find((e) => e.eventType === 'PlayerCashedOut');
       expect(cashOutEvent).toBeDefined();
       if (cashOutEvent && cashOutEvent.eventType === 'PlayerCashedOut') {
         expect(cashOutEvent.playerId).toBe('player-1');
@@ -385,7 +385,7 @@ describe('Round Entity', () => {
       round.updateMultiplier(0.01);
 
       const events = round.pullEvents();
-      const crashEvent = events.find(e => e.eventType === 'RoundCrashed');
+      const crashEvent = events.find((e) => e.eventType === 'RoundCrashed');
 
       expect(crashEvent).toBeDefined();
       if (crashEvent && crashEvent.eventType === 'RoundCrashed') {
@@ -398,7 +398,7 @@ describe('Round Entity', () => {
       round.updateMultiplier(0.01);
 
       const events = round.pullEvents();
-      const crashEvent = events.find(e => e.eventType === 'RoundCrashed');
+      const crashEvent = events.find((e) => e.eventType === 'RoundCrashed');
 
       if (crashEvent && crashEvent.eventType === 'RoundCrashed') {
         expect(crashEvent.seed).toBeDefined();

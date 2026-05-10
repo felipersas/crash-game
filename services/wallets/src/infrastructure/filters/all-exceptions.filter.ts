@@ -1,9 +1,4 @@
-import {
-  Catch,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { Catch, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { ExceptionFilter, ArgumentsHost } from '@nestjs/common';
 import type { Response } from 'express';
 import { DomainError } from '@/domain/errors/domain.errors';
@@ -20,12 +15,12 @@ import {
  * Maps domain errors to appropriate HTTP status codes.
  */
 const ERROR_STATUS_MAP: Record<string, HttpStatus> = {
-  [InsufficientFundsError.name]: HttpStatus.BAD_REQUEST,         // 400
-  [InvalidMoneyAmountError.name]: HttpStatus.BAD_REQUEST,        // 400
-  [NegativeMoneyError.name]: HttpStatus.BAD_REQUEST,            // 400
-  [WalletNotFoundError.name]: HttpStatus.NOT_FOUND,              // 404
-  [WalletAlreadyExistsError.name]: HttpStatus.CONFLICT,          // 409
-  [OptimisticLockError.name]: HttpStatus.CONFLICT,              // 409
+  [InsufficientFundsError.name]: HttpStatus.BAD_REQUEST, // 400
+  [InvalidMoneyAmountError.name]: HttpStatus.BAD_REQUEST, // 400
+  [NegativeMoneyError.name]: HttpStatus.BAD_REQUEST, // 400
+  [WalletNotFoundError.name]: HttpStatus.NOT_FOUND, // 404
+  [WalletAlreadyExistsError.name]: HttpStatus.CONFLICT, // 409
+  [OptimisticLockError.name]: HttpStatus.CONFLICT, // 409
 };
 
 /**
@@ -58,9 +53,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message = exception.message;
       code = exception.code;
 
-      this.logger.warn(
-        `[${errorName}] ${message} - ${request.method} ${request.url}`
-      );
+      this.logger.warn(`[${errorName}] ${message} - ${request.method} ${request.url}`);
     }
     // Handle HttpException instances (including built-in NestJS exceptions)
     else if (exception instanceof HttpException) {
@@ -77,10 +70,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message = exception.message;
 
       // Log unexpected errors for debugging
-      this.logger.error(
-        `Unhandled exception: ${exception.message}`,
-        exception.stack
-      );
+      this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
     }
 
     return response.status(statusCode).json({

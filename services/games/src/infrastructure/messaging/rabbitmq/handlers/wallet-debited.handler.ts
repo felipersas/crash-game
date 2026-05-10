@@ -6,7 +6,7 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfirmBetUseCase } from '@/application/use-cases/confirm-bet.use-case';
+import { type ConfirmBetUseCase } from '@/application/use-cases/confirm-bet.use-case';
 import type { WalletDebitedEvent } from '../../types/wallet.events';
 
 /**
@@ -45,14 +45,10 @@ export class WalletDebitedEventHandler {
         playerId: event.playerId,
       });
 
-      this.logger.log(
-        `Bet ${event.betId} confirmed for player ${event.playerId}`,
-      );
+      this.logger.log(`Bet ${event.betId} confirmed for player ${event.playerId}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(
-        `Failed to confirm bet ${event.betId}: ${errorMessage}`,
-      );
+      this.logger.error(`Failed to confirm bet ${event.betId}: ${errorMessage}`);
       throw error; // Re-throw for consumer to handle (nack)
     }
   }

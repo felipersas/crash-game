@@ -1,5 +1,5 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
+import { type ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
 import type { GameDomainEvent } from '@/domain/events/round.events';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
@@ -8,9 +8,7 @@ import type { IGameEventPublisher } from '@/application/interfaces/event-publish
 export class RabbitMQEventPublisher implements IGameEventPublisher {
   private readonly logger = new Logger(RabbitMQEventPublisher.name);
 
-  constructor(
-    @Inject('GAMES_EVENTS_CLIENT') private readonly client: ClientProxy,
-  ) {}
+  constructor(@Inject('GAMES_EVENTS_CLIENT') private readonly client: ClientProxy) {}
 
   async publish(event: GameDomainEvent): Promise<void> {
     const serialized = JSON.parse(
@@ -19,10 +17,9 @@ export class RabbitMQEventPublisher implements IGameEventPublisher {
       ),
     );
 
-    await firstValueFrom(
-      this.client.emit(event.eventType, serialized),
-      { defaultValue: undefined },
-    );
+    await firstValueFrom(this.client.emit(event.eventType, serialized), {
+      defaultValue: undefined,
+    });
 
     this.logger.debug(`Published event: ${event.eventType}`);
   }

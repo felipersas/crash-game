@@ -16,13 +16,24 @@ export class BetOutputDto {
   @ApiProperty({ nullable: true }) cashedOutAt!: Date | null;
 
   static fromCents(
-    id: string, playerId: string, amountCents: number, status: string,
-    cashOutMultiplier: number | null, payoutCents: number | null, cashedOutAt: Date | null,
+    id: string,
+    playerId: string,
+    amountCents: number,
+    status: string,
+    cashOutMultiplier: number | null,
+    payoutCents: number | null,
+    cashedOutAt: Date | null,
   ): BetOutputDto {
     return {
-      id, playerId, amountCents, amountDecimal: centsToDecimal(amountCents),
-      status, cashOutMultiplier, payoutCents,
-      payoutDecimal: payoutCents !== null ? centsToDecimal(payoutCents) : null, cashedOutAt,
+      id,
+      playerId,
+      amountCents,
+      amountDecimal: centsToDecimal(amountCents),
+      status,
+      cashOutMultiplier,
+      payoutCents,
+      payoutDecimal: payoutCents !== null ? centsToDecimal(payoutCents) : null,
+      cashedOutAt,
     };
   }
 }

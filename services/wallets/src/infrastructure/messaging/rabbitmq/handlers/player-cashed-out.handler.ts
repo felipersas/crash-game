@@ -9,8 +9,8 @@
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
-import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
+import type { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
+import type { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
 import { INBOX_REPOSITORY, PLAYER_WALLET_RESOLVER } from '@/infrastructure/di/tokens';
 import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import type { PlayerCashedOutEvent } from '../../types/games.events';
@@ -63,16 +63,22 @@ export class PlayerCashedOutEventHandler {
       const existing = await this.inboxRepository.findByIdempotencyKey(idempotencyKey);
 
       if (existing?.status === 'PROCESSED') {
-        this.logger.log(`Duplicate PlayerCashedOutEvent detected (already processed): ${idempotencyKey}. Skipping.`);
+        this.logger.log(
+          `Duplicate PlayerCashedOutEvent detected (already processed): ${idempotencyKey}. Skipping.`,
+        );
         return;
       }
 
       if (existing?.status === 'FAILED') {
-        this.logger.warn(`Duplicate PlayerCashedOutEvent detected (previously failed): ${idempotencyKey}. Retrying.`);
+        this.logger.warn(
+          `Duplicate PlayerCashedOutEvent detected (previously failed): ${idempotencyKey}. Retrying.`,
+        );
         eventId = existing.id;
         // Continue to retry the failed operation
       } else {
-        this.logger.log(`Duplicate PlayerCashedOutEvent detected (pending): ${idempotencyKey}. Skipping.`);
+        this.logger.log(
+          `Duplicate PlayerCashedOutEvent detected (pending): ${idempotencyKey}. Skipping.`,
+        );
         return;
       }
     } else {

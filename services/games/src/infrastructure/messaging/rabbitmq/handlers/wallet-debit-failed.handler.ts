@@ -6,7 +6,7 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { CancelBetUseCase } from '@/application/use-cases/cancel-bet.use-case';
+import { type CancelBetUseCase } from '@/application/use-cases/cancel-bet.use-case';
 import type { WalletDebitFailedEvent } from '../../types/wallet.events';
 
 /**
@@ -46,14 +46,10 @@ export class WalletDebitFailedEventHandler {
         reason: event.reason,
       });
 
-      this.logger.log(
-        `Bet ${event.betId} cancelled for player ${event.playerId}: ${event.reason}`,
-      );
+      this.logger.log(`Bet ${event.betId} cancelled for player ${event.playerId}: ${event.reason}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(
-        `Failed to cancel bet ${event.betId}: ${errorMessage}`,
-      );
+      this.logger.error(`Failed to cancel bet ${event.betId}: ${errorMessage}`);
       throw error; // Re-throw for consumer to handle (nack)
     }
   }

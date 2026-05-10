@@ -24,7 +24,10 @@ export interface CreateWalletOutput {
 @Injectable()
 export class CreateWalletUseCase {
   constructor(
-    @Inject(WALLET_REPOSITORY) private readonly walletRepository: IWalletRepository & { create(wallet: Wallet): Promise<void> },
+    @Inject(WALLET_REPOSITORY)
+    private readonly walletRepository: IWalletRepository & {
+      create(wallet: Wallet): Promise<void>;
+    },
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
   ) {}
 

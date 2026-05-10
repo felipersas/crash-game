@@ -1,7 +1,7 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "./prisma.service";
-import { Bet, BetStatus } from "@/domain/entities/bet.entity";
-import type { IBetRepository } from "@/application/interfaces/bet.repository";
+import { Injectable } from '@nestjs/common';
+import { type PrismaService } from './prisma.service';
+import { Bet, BetStatus } from '@/domain/entities/bet.entity';
+import type { IBetRepository } from '@/application/interfaces/bet.repository';
 
 /** Prisma row type matching schema.prisma Bet model */
 type BetRow = {
@@ -62,7 +62,7 @@ export class PrismaBetRepository implements IBetRepository {
   async findByRound(roundId: string): Promise<Bet[]> {
     const records = await this.prisma.bet.findMany({
       where: { roundId },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: 'asc' },
     });
 
     return records.map((record) => this.toDomain(record));
@@ -80,7 +80,7 @@ export class PrismaBetRepository implements IBetRepository {
   async findByPlayer(playerId: string, limit?: number): Promise<Bet[]> {
     const records = await this.prisma.bet.findMany({
       where: { playerId },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       take: limit,
     });
 
@@ -93,7 +93,7 @@ export class PrismaBetRepository implements IBetRepository {
         roundId,
         status: status as any,
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: 'asc' },
     });
 
     return records.map((record) => this.toDomain(record));
@@ -122,14 +122,16 @@ export class PrismaBetRepository implements IBetRepository {
   }> {
     // Single query, single table scan — all aggregation in DB
     // $queryRaw tagged template is parameterized: safe from SQL injection
-    const [row] = await this.prisma.$queryRaw<Array<{
-      total_wagered_cents: bigint;
-      wins: bigint;
-      losses: bigint;
-      total_payout_cents: bigint;
-      cashed_out_wagered: bigint;
-      lost_wagered_cents: bigint;
-    }>>`
+    const [row] = await this.prisma.$queryRaw<
+      Array<{
+        total_wagered_cents: bigint;
+        wins: bigint;
+        losses: bigint;
+        total_payout_cents: bigint;
+        cashed_out_wagered: bigint;
+        lost_wagered_cents: bigint;
+      }>
+    >`
       SELECT
         COALESCE(SUM(amount_cents), 0)              AS total_wagered_cents,
         COUNT(CASE WHEN status = 'CASHED_OUT' THEN 1 END) AS wins,

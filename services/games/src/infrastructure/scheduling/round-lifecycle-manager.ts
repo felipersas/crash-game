@@ -5,13 +5,18 @@ import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
-import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
-import { RedisService } from '@/infrastructure/redis/redis.service';
+import { type GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import { type RedisService } from '@/infrastructure/redis/redis.service';
 import type { RoundState } from '@/infrastructure/redis/redis.service';
-import { ROUND_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/infrastructure/di/tokens';
+import {
+  ROUND_REPOSITORY,
+  EVENT_PUBLISHER,
+  GAMES_GATEWAY,
+  SEED_CHAIN_REPOSITORY,
+} from '@/infrastructure/di/tokens';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
-import { RoundCrashHandler } from './round-crash-handler';
+import { type RoundCrashHandler } from './round-crash-handler';
 
 /**
  * Round Lifecycle Manager - Infrastructure Layer
@@ -58,13 +63,13 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       const summary = this.currentSeedChain.getSummary();
       this.logger.log(
         `New seed chain created: ${summary.total} seeds, ` +
-        `commitment: ${summary.commitment.substring(0, 16)}...`
+          `commitment: ${summary.commitment.substring(0, 16)}...`,
       );
     } else {
       const summary = this.currentSeedChain.getSummary();
       this.logger.log(
         `Seed chain loaded: ${summary.remaining}/${summary.total} seeds remaining, ` +
-        `position: ${summary.currentPosition}`
+          `position: ${summary.currentPosition}`,
       );
 
       // Check if chain needs regeneration
@@ -103,15 +108,12 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       const summary = this.currentSeedChain.getSummary();
       this.logger.log(
         `New seed chain generated: ${summary.total} seeds, ` +
-        `commitment: ${summary.commitment.substring(0, 16)}...`
+          `commitment: ${summary.commitment.substring(0, 16)}...`,
       );
     }
 
     // Create round with current seed from chain
-    const newRound = await Round.createWithSeedChain(
-      this.currentSeedChain,
-      DEFAULT_ROUND_CONFIG,
-    );
+    const newRound = await Round.createWithSeedChain(this.currentSeedChain, DEFAULT_ROUND_CONFIG);
     await this.roundRepository.create(newRound);
 
     // Advance to next seed for next round
@@ -119,7 +121,9 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       this.currentSeedChain = this.currentSeedChain.advance();
       await this.seedChainRepository.save(this.currentSeedChain);
     } catch (error) {
-      this.logger.error(`Failed to advance seed chain: ${error instanceof Error ? error.message : error}`);
+      this.logger.error(
+        `Failed to advance seed chain: ${error instanceof Error ? error.message : error}`,
+      );
     }
 
     this.currentRound = newRound;
@@ -131,7 +135,7 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     }
 
     // Broadcast via WebSocket
-    const roundStarted = events.find(e => e.eventType === 'RoundStarted');
+    const roundStarted = events.find((e) => e.eventType === 'RoundStarted');
     if (roundStarted && this.currentRound) {
       this.gamesGateway.broadcastRoundStarted(
         this.currentRound.id,
@@ -207,7 +211,7 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       if (error instanceof OptimisticLockError) {
         // Handle optimistic lock conflict - reload the round from the database
         this.logger.warn(
-          `Optimistic lock conflict for round ${this.currentRound.id}, reloading from database`
+          `Optimistic lock conflict for round ${this.currentRound.id}, reloading from database`,
         );
 
         const reloaded = await this.roundRepository.findById(this.currentRound.id);
@@ -351,8 +355,8 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     // Log current state
     this.logger.debug(
       `Round ${this.currentRound.id}: ${status}, ` +
-      `Multiplier: ${this.currentRound.getCurrentMultiplier().toFixed(2)}x, ` +
-      `Bets: ${this.currentRound.getBets().length}`
+        `Multiplier: ${this.currentRound.getCurrentMultiplier().toFixed(2)}x, ` +
+        `Bets: ${this.currentRound.getBets().length}`,
     );
   }
 

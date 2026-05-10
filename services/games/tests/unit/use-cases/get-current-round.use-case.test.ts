@@ -5,11 +5,17 @@ import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
 import { Money } from '@crash/domain';
 import { RoundNotFoundError } from '../../../src/domain/errors/domain.errors';
 
-function mockFn<T extends (...args: any[]) => any>(impl?: T): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
+function mockFn<T extends (...args: any[]) => any>(
+  impl?: T,
+): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
   const fn: any = (...args: any[]) => fn._impl(...args);
   fn._impl = impl || (() => {});
-  fn.mockReturnValue = (v: any) => { fn._impl = () => v; };
-  fn.mockResolvedValue = (v: any) => { fn._impl = () => Promise.resolve(v); };
+  fn.mockReturnValue = (v: any) => {
+    fn._impl = () => v;
+  };
+  fn.mockResolvedValue = (v: any) => {
+    fn._impl = () => Promise.resolve(v);
+  };
   return fn;
 }
 

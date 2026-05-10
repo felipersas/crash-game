@@ -70,7 +70,11 @@ describe('Games ↔ Wallets Integration (E2E)', () => {
     });
 
     if (!betResponse.ok) {
-      console.log('Bet placement failed (status:', betResponse.status, ') - may not be in betting phase');
+      console.log(
+        'Bet placement failed (status:',
+        betResponse.status,
+        ') - may not be in betting phase',
+      );
       return;
     }
 
@@ -79,7 +83,7 @@ describe('Games ↔ Wallets Integration (E2E)', () => {
     expect(betData).toHaveProperty('roundId');
 
     // Wait for event to be published via outbox pattern
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     const message = await channel!.get('test-integration-events', { noAck: true });
 

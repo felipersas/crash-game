@@ -6,7 +6,7 @@
  */
 
 export class Multiplier {
-  private static readonly MIN_VALUE = 1.00;
+  private static readonly MIN_VALUE = 1.0;
   private readonly value: number;
 
   private constructor(value: number) {

@@ -2,11 +2,17 @@ import { IsString, IsOptional, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CashOutRequestDto {
-  @ApiProperty({ description: 'UUID to prevent double cashout', example: '770e8400-e29b-41d4-a716-446655440002' })
+  @ApiProperty({
+    description: 'UUID to prevent double cashout',
+    example: '770e8400-e29b-41d4-a716-446655440002',
+  })
   @IsUUID()
   idempotencyKey!: string;
 
-  @ApiPropertyOptional({ description: 'Optional round ID for validation', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @ApiPropertyOptional({
+    description: 'Optional round ID for validation',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
   @IsString()
   @IsOptional()
   roundId?: string;

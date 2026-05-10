@@ -1,5 +1,8 @@
 import { describe, test, expect } from 'bun:test';
-import { computePagination, buildPaginationMeta } from '../../../src/application/shared/pagination.util';
+import {
+  computePagination,
+  buildPaginationMeta,
+} from '../../../src/application/shared/pagination.util';
 
 describe('computePagination', () => {
   test('Should compute default pagination (page=1, limit=20)', () => {

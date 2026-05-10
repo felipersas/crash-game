@@ -40,10 +40,7 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
 
   async execute(input: ConfirmBetInput): Promise<ConfirmBetOutput> {
     // Find bet directly by player and round
-    const bet = await this.betRepository.findByPlayerAndRound(
-      input.playerId,
-      input.roundId,
-    );
+    const bet = await this.betRepository.findByPlayerAndRound(input.playerId, input.roundId);
 
     if (!bet) {
       throw new BetNotFoundError();

@@ -1,14 +1,7 @@
-import {
-  WebSocketGateway,
-  WebSocketServer,
-} from '@nestjs/websockets';
-import type {
-  OnGatewayInit,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
-} from '@nestjs/websockets';
+import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
+import type { OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { Logger, Injectable } from '@nestjs/common';
-import { Server, Socket } from 'socket.io';
+import { type Server, type Socket } from 'socket.io';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
 
 /**
@@ -19,10 +12,32 @@ export interface ServerToClientEvents {
   bettingEnded: (data: { roundId: string }) => void;
   multiplierUpdate: (data: { roundId: string; multiplier: number }) => void;
   crash: (data: { roundId: string; crashPoint: number; seed: string }) => void;
-  betPlaced: (data: { roundId: string; betId: string; playerId: string; amountCents: number }) => void;
-  betConfirmed: (data: { roundId: string; betId: string; playerId: string; amountCents: number }) => void;
-  betCancelled: (data: { roundId: string; betId: string; playerId: string; amountCents: number; reason: string }) => void;
-  playerCashedOut: (data: { roundId: string; betId: string; playerId: string; multiplier: number; payoutCents: number }) => void;
+  betPlaced: (data: {
+    roundId: string;
+    betId: string;
+    playerId: string;
+    amountCents: number;
+  }) => void;
+  betConfirmed: (data: {
+    roundId: string;
+    betId: string;
+    playerId: string;
+    amountCents: number;
+  }) => void;
+  betCancelled: (data: {
+    roundId: string;
+    betId: string;
+    playerId: string;
+    amountCents: number;
+    reason: string;
+  }) => void;
+  playerCashedOut: (data: {
+    roundId: string;
+    betId: string;
+    playerId: string;
+    multiplier: number;
+    payoutCents: number;
+  }) => void;
 }
 
 @Injectable()
@@ -39,7 +54,7 @@ export class GamesGateway
 
   private readonly logger = new Logger(GamesGateway.name);
 
-  afterInit(server: Server) {
+  afterInit(_server: Server) {
     this.logger.log('WebSocket Gateway initialized');
   }
 
@@ -117,7 +132,13 @@ export class GamesGateway
   /**
    * Broadcast bet cancelled event - bet was rejected by wallet service.
    */
-  broadcastBetCancelled(roundId: string, betId: string, playerId: string, amountCents: bigint, reason: string) {
+  broadcastBetCancelled(
+    roundId: string,
+    betId: string,
+    playerId: string,
+    amountCents: bigint,
+    reason: string,
+  ) {
     this.server.emit('betCancelled', {
       roundId,
       betId,

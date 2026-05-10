@@ -1,18 +1,43 @@
-import { Controller, Get, Post, Body, Param, Query, HttpCode, HttpStatus, Header } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiExcludeEndpoint } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  HttpCode,
+  HttpStatus,
+  Header,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '../dtos/api-error.dto';
-import { UserContext, type UserContext as UserContextType } from '../decorators/user-context.decorator';
-import { PlaceBetUseCase } from '@/application/use-cases/place-bet.use-case';
-import { CashOutUseCase } from '@/application/use-cases/cash-out.use-case';
-import { GetCurrentRoundUseCase } from '@/application/use-cases/get-current-round.use-case';
-import { GetRoundHistoryUseCase } from '@/application/use-cases/get-round-history.use-case';
-import { VerifyRoundUseCase } from '@/application/use-cases/verify-round.use-case';
-import { GetBetStatusUseCase } from '@/application/use-cases/get-bet-status.use-case';
-import { GetMyBetsUseCase } from '@/application/use-cases/get-my-bets.use-case';
-import { PlaceBetRequestDto } from '../dtos/place-bet.dto';
-import { CashOutRequestDto } from '../dtos/cash-out.dto';
-import { RoundOutputDto, GetRoundHistoryResponseDto, VerifyRoundResponseDto, BetOutputDto, RoundSummaryOutputDto } from '../dtos/round.dto';
-import { PaginationQueryDto } from '../dtos/pagination.dto';
+import {
+  UserContext,
+  type UserContext as UserContextType,
+} from '../decorators/user-context.decorator';
+import { type PlaceBetUseCase } from '@/application/use-cases/place-bet.use-case';
+import { type CashOutUseCase } from '@/application/use-cases/cash-out.use-case';
+import { type GetCurrentRoundUseCase } from '@/application/use-cases/get-current-round.use-case';
+import { type GetRoundHistoryUseCase } from '@/application/use-cases/get-round-history.use-case';
+import { type VerifyRoundUseCase } from '@/application/use-cases/verify-round.use-case';
+import { type GetBetStatusUseCase } from '@/application/use-cases/get-bet-status.use-case';
+import { type GetMyBetsUseCase } from '@/application/use-cases/get-my-bets.use-case';
+import { type PlaceBetRequestDto } from '../dtos/place-bet.dto';
+import { type CashOutRequestDto } from '../dtos/cash-out.dto';
+import {
+  RoundOutputDto,
+  GetRoundHistoryResponseDto,
+  VerifyRoundResponseDto,
+  BetOutputDto,
+  type RoundSummaryOutputDto,
+} from '../dtos/round.dto';
+import { type PaginationQueryDto } from '../dtos/pagination.dto';
 import { GetMyBetsResponseDto, MyBetOutputDto, BetsSummaryDto } from '../dtos/my-bets.dto';
 import { HealthCheckResponseDto } from '../dtos/health-check-response.dto';
 import { BetStatusResponseDto } from '../dtos/bet-status.dto';
@@ -32,7 +57,10 @@ export class GamesController {
   ) {}
 
   @Get('health')
-  @ApiOperation({ summary: 'Games service health check', description: 'Returns service health status. No authentication required.' })
+  @ApiOperation({
+    summary: 'Games service health check',
+    description: 'Returns service health status. No authentication required.',
+  })
   @ApiResponse({ status: 200, description: 'Service is healthy', type: HealthCheckResponseDto })
   check(): HealthCheckResponseDto {
     return { status: 'ok', service: 'games' };
@@ -44,9 +72,17 @@ export class GamesController {
   @Post('bet')
   @HttpCode(HttpStatus.ACCEPTED)
   @Header('Content-Type', 'application/json')
-  @ApiOperation({ summary: 'Place a bet', description: 'Place a bet on the current round. Returns 202 Accepted because confirmation is asynchronous (wallet debit via RabbitMQ).' })
+  @ApiOperation({
+    summary: 'Place a bet',
+    description:
+      'Place a bet on the current round. Returns 202 Accepted because confirmation is asynchronous (wallet debit via RabbitMQ).',
+  })
   @ApiBearerAuth()
-  @ApiResponse({ status: 202, description: 'Bet placed (pending confirmation)', type: () => import('../dtos/place-bet.dto').PlaceBetResponseDto })
+  @ApiResponse({
+    status: 202,
+    description: 'Bet placed (pending confirmation)',
+    type: () => import('../dtos/place-bet.dto').PlaceBetResponseDto,
+  })
   @ApiResponse({ status: 400, description: 'Invalid bet', type: ApiErrorResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 409, description: 'Duplicate bet', type: ApiErrorResponseDto })
@@ -69,7 +105,10 @@ export class GamesController {
   }
 
   @Get('bets/me')
-  @ApiOperation({ summary: "Get player's bet history", description: 'Returns paginated bet history with win/loss summary.' })
+  @ApiOperation({
+    summary: "Get player's bet history",
+    description: 'Returns paginated bet history with win/loss summary.',
+  })
   @ApiBearerAuth()
   @ApiResponse({ status: 200, description: 'Bet history', type: GetMyBetsResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -84,17 +123,19 @@ export class GamesController {
     });
 
     return {
-      data: result.data.map(bet => MyBetOutputDto.fromBet(
-        bet.id,
-        bet.roundId,
-        bet.amountCents,
-        bet.cashOutMultiplier,
-        bet.payoutCents,
-        bet.profitCents,
-        bet.status,
-        bet.cashedOutAt,
-        bet.placedAt,
-      )),
+      data: result.data.map((bet) =>
+        MyBetOutputDto.fromBet(
+          bet.id,
+          bet.roundId,
+          bet.amountCents,
+          bet.cashOutMultiplier,
+          bet.payoutCents,
+          bet.profitCents,
+          bet.status,
+          bet.cashedOutAt,
+          bet.placedAt,
+        ),
+      ),
       meta: result.meta,
       summary: BetsSummaryDto.fromCents(
         result.summary.totalWageredCents,
@@ -109,7 +150,10 @@ export class GamesController {
    * Get bet status - polling endpoint for clients to check bet confirmation status.
    */
   @Get('bets/:betId')
-  @ApiOperation({ summary: 'Get bet status', description: 'Polling endpoint. No authentication required.' })
+  @ApiOperation({
+    summary: 'Get bet status',
+    description: 'Polling endpoint. No authentication required.',
+  })
   @ApiParam({ name: 'betId', description: 'Bet UUID', type: String })
   @ApiResponse({ status: 200, description: 'Bet status', type: BetStatusResponseDto })
   @ApiResponse({ status: 404, description: 'Bet not found', type: ApiErrorResponseDto })
@@ -135,9 +179,16 @@ export class GamesController {
   }
 
   @Post('bet/cashout')
-  @ApiOperation({ summary: 'Cash out current bet', description: 'Cash out at the current multiplier. Idempotent via idempotencyKey.' })
+  @ApiOperation({
+    summary: 'Cash out current bet',
+    description: 'Cash out at the current multiplier. Idempotent via idempotencyKey.',
+  })
   @ApiBearerAuth()
-  @ApiResponse({ status: 200, description: 'Cash out successful', type: () => import('../dtos/cash-out.dto').CashOutResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Cash out successful',
+    type: () => import('../dtos/cash-out.dto').CashOutResponseDto,
+  })
   @ApiResponse({ status: 400, description: 'Cannot cash out', type: ApiErrorResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async cashOut(
@@ -163,7 +214,10 @@ export class GamesController {
   }
 
   @Get('rounds/current')
-  @ApiOperation({ summary: 'Get current round state', description: 'Returns current round with multiplier and bets. No authentication required.' })
+  @ApiOperation({
+    summary: 'Get current round state',
+    description: 'Returns current round with multiplier and bets. No authentication required.',
+  })
   @ApiResponse({ status: 200, description: 'Current round', type: RoundOutputDto })
   async getCurrentRound(): Promise<RoundOutputDto> {
     const result = await this.getCurrentRoundUseCase.execute({ includeBets: true });
@@ -176,7 +230,7 @@ export class GamesController {
       bettingEndTime: result.bettingEndTime,
       startedAt: result.startedAt,
       crashedAt: result.crashedAt,
-      bets: result.bets.map(bet => {
+      bets: result.bets.map((bet) => {
         const amountCents = Number(bet.amountCents);
         const payoutCents = bet.cashOutAmountCents ? Number(bet.cashOutAmountCents) : null;
         return BetOutputDto.fromCents(
@@ -193,7 +247,10 @@ export class GamesController {
   }
 
   @Get('rounds/history')
-  @ApiOperation({ summary: 'Get round history', description: 'Paginated history of completed rounds.' })
+  @ApiOperation({
+    summary: 'Get round history',
+    description: 'Paginated history of completed rounds.',
+  })
   @ApiResponse({ status: 200, description: 'Round history', type: GetRoundHistoryResponseDto })
   async getRoundHistory(@Query() query: PaginationQueryDto): Promise<GetRoundHistoryResponseDto> {
     const result = await this.getRoundHistoryUseCase.execute({
@@ -202,22 +259,27 @@ export class GamesController {
     });
 
     return {
-      data: result.data.map((r): RoundSummaryOutputDto => ({
-        roundId: r.roundId,
-        crashPoint: r.crashPoint,
-        status: r.status,
-        startedAt: r.startedAt,
-        crashedAt: r.crashedAt,
-        totalBets: r.totalBets,
-        totalWageredCents: r.totalWageredCents,
-        totalWageredDecimal: centsToDecimal(r.totalWageredCents),
-      })),
+      data: result.data.map(
+        (r): RoundSummaryOutputDto => ({
+          roundId: r.roundId,
+          crashPoint: r.crashPoint,
+          status: r.status,
+          startedAt: r.startedAt,
+          crashedAt: r.crashedAt,
+          totalBets: r.totalBets,
+          totalWageredCents: r.totalWageredCents,
+          totalWageredDecimal: centsToDecimal(r.totalWageredCents),
+        }),
+      ),
       meta: result.meta,
     };
   }
 
   @Get('rounds/:roundId/verify')
-  @ApiOperation({ summary: 'Verify round fairness (provably fair)', description: 'Verify crash point was generated fairly. Seed revealed only after crash.' })
+  @ApiOperation({
+    summary: 'Verify round fairness (provably fair)',
+    description: 'Verify crash point was generated fairly. Seed revealed only after crash.',
+  })
   @ApiParam({ name: 'roundId', description: 'Round UUID', type: String })
   @ApiResponse({ status: 200, description: 'Verification result', type: VerifyRoundResponseDto })
   @ApiResponse({ status: 400, description: 'Seed not available', type: ApiErrorResponseDto })

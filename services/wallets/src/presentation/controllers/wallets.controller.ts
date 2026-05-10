@@ -1,5 +1,8 @@
 import { Controller, Get, Post } from '@nestjs/common';
-import { UserContext, type UserContext as UserContextType } from '../decorators/user-context.decorator';
+import {
+  UserContext,
+  type UserContext as UserContextType,
+} from '../decorators/user-context.decorator';
 import { HealthCheckResponseDto } from '../dtos/health-check-response.dto';
 import { CreateWalletResponseDto } from '../dtos/create-wallet.dto';
 import { GetWalletResponseDto } from '../dtos/get-wallet.dto';
@@ -16,23 +19,26 @@ export class WalletsController {
     private readonly getWalletUseCase: GetWalletUseCase,
   ) {}
 
-  @ApiOperation({ summary: 'Wallets service health check', description: 'No authentication required.' })
+  @ApiOperation({
+    summary: 'Wallets service health check',
+    description: 'No authentication required.',
+  })
   @ApiResponse({ status: 200, description: 'Service is healthy', type: HealthCheckResponseDto })
   @Get('health')
   check(): HealthCheckResponseDto {
     return { status: 'ok', service: 'wallets' };
   }
 
-  @ApiOperation({ summary: 'Create a wallet', description: 'Creates wallet for authenticated player. Balance starts at 0.' })
+  @ApiOperation({
+    summary: 'Create a wallet',
+    description: 'Creates wallet for authenticated player. Balance starts at 0.',
+  })
   @ApiBearerAuth()
   @ApiResponse({ status: 201, description: 'Wallet created', type: CreateWalletResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 409, description: 'Wallet already exists', type: ApiErrorResponseDto })
   @Post()
-  async createWallet(
-    @UserContext() user: UserContextType,
-  ): Promise<CreateWalletResponseDto> {
-
+  async createWallet(@UserContext() user: UserContextType): Promise<CreateWalletResponseDto> {
     const result = await this.createWalletUseCase.execute({ playerId: user.playerId });
     return {
       walletId: result.walletId,
@@ -41,14 +47,16 @@ export class WalletsController {
     };
   }
 
-  @ApiOperation({ summary: "Get player's wallet", description: 'Returns wallet with balance and optimistic lock version.' })
+  @ApiOperation({
+    summary: "Get player's wallet",
+    description: 'Returns wallet with balance and optimistic lock version.',
+  })
   @ApiBearerAuth()
   @ApiResponse({ status: 200, description: 'Wallet details', type: GetWalletResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Wallet not found', type: ApiErrorResponseDto })
   @Get('me')
   async getWallet(@UserContext() user: UserContextType): Promise<GetWalletResponseDto> {
-
     const result = await this.getWalletUseCase.execute({ playerId: user.playerId });
     return {
       walletId: result.walletId,

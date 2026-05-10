@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from './prisma.service';
+import { type PrismaService } from './prisma.service';
 import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
-import { Bet, BetStatus } from '@/domain/entities/bet.entity';
+import { Bet, type BetStatus } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
-import type { Round as RoundRow } from '@prisma/client'
-import type { Bet as BetRow } from '@prisma/client'
+import type { Round as RoundRow } from '@prisma/client';
+import type { Bet as BetRow } from '@prisma/client';
 
 @Injectable()
 export class PrismaRoundRepository implements IRoundRepository {

@@ -1,7 +1,7 @@
 import { Controller, Logger } from '@nestjs/common';
-import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
-import { WalletDebitedEventHandler } from './handlers/wallet-debited.handler';
-import { WalletDebitFailedEventHandler } from './handlers/wallet-debit-failed.handler';
+import { EventPattern, Payload, Ctx, type RmqContext } from '@nestjs/microservices';
+import { type WalletDebitedEventHandler } from './handlers/wallet-debited.handler';
+import { type WalletDebitFailedEventHandler } from './handlers/wallet-debit-failed.handler';
 @Controller()
 export class WalletEventsController {
   private readonly logger = new Logger(WalletEventsController.name);
@@ -12,10 +12,7 @@ export class WalletEventsController {
   ) {}
 
   @EventPattern('WalletDebited')
-  async handleWalletDebited(
-    @Payload() event: any,
-    @Ctx() context: RmqContext,
-  ): Promise<void> {
+  async handleWalletDebited(@Payload() event: any, @Ctx() context: RmqContext): Promise<void> {
     const channel = context.getChannelRef();
     const msg = context.getMessage();
 
@@ -32,10 +29,7 @@ export class WalletEventsController {
   }
 
   @EventPattern('WalletDebitFailed')
-  async handleWalletDebitFailed(
-    @Payload() event: any,
-    @Ctx() context: RmqContext,
-  ): Promise<void> {
+  async handleWalletDebitFailed(@Payload() event: any, @Ctx() context: RmqContext): Promise<void> {
     const channel = context.getChannelRef();
     const msg = context.getMessage();
 

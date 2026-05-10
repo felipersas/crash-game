@@ -8,7 +8,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from './prisma.service';
-import type { IInboxRepository, InboxEvent, InboxEventCreateInput } from '@/application/interfaces/inbox.repository';
+import type {
+  IInboxRepository,
+  InboxEvent,
+  InboxEventCreateInput,
+} from '@/application/interfaces/inbox.repository';
 
 @Injectable()
 export class PrismaInboxRepository implements IInboxRepository {
@@ -106,19 +110,17 @@ export class PrismaInboxRepository implements IInboxRepository {
     return result.count;
   }
 
-  private toDomain(
-    record: {
-      id: string;
-      idempotencyKey: string;
-      eventType: string;
-      payload: Prisma.JsonValue;
-      status: 'PENDING' | 'PROCESSED' | 'FAILED';
-      processedAt: Date | null;
-      errorMessage: string | null;
-      retryCount: number | null;
-      createdAt: Date;
-    },
-  ): InboxEvent {
+  private toDomain(record: {
+    id: string;
+    idempotencyKey: string;
+    eventType: string;
+    payload: Prisma.JsonValue;
+    status: 'PENDING' | 'PROCESSED' | 'FAILED';
+    processedAt: Date | null;
+    errorMessage: string | null;
+    retryCount: number | null;
+    createdAt: Date;
+  }): InboxEvent {
     return {
       id: record.id,
       idempotencyKey: record.idempotencyKey,

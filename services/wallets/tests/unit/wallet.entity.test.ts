@@ -359,7 +359,6 @@ describe('Wallet Entity', () => {
       const events2 = wallet.pullEvents();
       expect(events2[0].version).toBe(3);
     });
-
   });
 
   describe('Version Management', () => {
