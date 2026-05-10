@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Copy, Check, Shield, X } from 'lucide-react';
-import { createGamesApi } from '@/infrastructure/api/games-api';
+import { useVerifyRound } from '@/hooks/useVerifyRound';
+import { computeSHA256 } from '@/shared/utils/crypto';
 import { formatMultiplier } from '@/shared/utils/money';
 
 interface VerificationModalProps {
@@ -10,51 +11,10 @@ interface VerificationModalProps {
   onClose: () => void;
 }
 
-interface VerifyData {
-  roundId: string;
-  seed: string;
-  seedHash: string;
-  salt: string;
-  crashPoint: number;
-  verified: boolean;
-  verificationFormula: string;
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
-
-async function computeSHA256(hexString: string): Promise<string> {
-  const data = hexToBytes(hexString);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data.buffer as ArrayBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 export default function VerificationModal({ roundId, onClose }: VerificationModalProps) {
-  const [data, setData] = useState<VerifyData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, error } = useVerifyRound(roundId);
   const [computedHash, setComputedHash] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    async function fetchVerify() {
-      try {
-        const api = createGamesApi();
-        const result = await api.verifyRound(roundId);
-        setData(result as VerifyData);
-      } catch {
-        // silently fail
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    fetchVerify();
-  }, [roundId]);
 
   const handleVerify = async () => {
     if (!data) return;
@@ -94,7 +54,7 @@ export default function VerificationModal({ roundId, onClose }: VerificationModa
 
         {isLoading ? (
           <p className="text-sm font-terminal text-text-muted text-center py-4">Loading...</p>
-        ) : !data ? (
+        ) : error || !data ? (
           <p className="text-sm font-terminal text-error text-center py-4">Failed to load data</p>
         ) : (
           <>

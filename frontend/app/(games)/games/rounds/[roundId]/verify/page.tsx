@@ -1,61 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Copy, Check, Shield } from 'lucide-react';
-import { createGamesApi } from '@/infrastructure/api/games-api';
+import { useVerifyRound } from '@/hooks/useVerifyRound';
+import { computeSHA256 } from '@/shared/utils/crypto';
 import { formatMultiplier } from '@/shared/utils/money';
-
-interface VerifyData {
-  roundId: string;
-  seed: string;
-  seedHash: string;
-  salt: string;
-  crashPoint: number;
-  verified: boolean;
-  verificationFormula: string;
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
-
-async function computeSHA256(hexString: string): Promise<string> {
-  const data = hexToBytes(hexString);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data.buffer as ArrayBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 export default function VerifyRoundPage() {
   const params = useParams();
   const roundId = params.roundId as string;
 
-  const [data, setData] = useState<VerifyData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, error } = useVerifyRound(roundId);
   const [computedHash, setComputedHash] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function fetchVerify() {
-      try {
-        const api = createGamesApi();
-        const result = await api.verifyRound(roundId);
-        setData(result as VerifyData);
-      } catch (err) {
-        setError('Failed to load verification data');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    fetchVerify();
-  }, [roundId]);
 
   const handleVerify = async () => {
     if (!data) return;
@@ -81,7 +40,7 @@ export default function VerifyRoundPage() {
   if (error || !data) {
     return (
       <div className="container mx-auto px-4 py-12 text-center space-y-4">
-        <p className="font-terminal text-error">{error || 'Data not found'}</p>
+        <p className="font-terminal text-error">{error ? 'Failed to load verification data' : 'Data not found'}</p>
         <Link href="/games/rounds/history" className="text-primary hover:text-primary/80 font-terminal text-sm">
           Back to History
         </Link>
@@ -120,7 +79,6 @@ export default function VerifyRoundPage() {
           )}
         </div>
 
-        {/* Copy hash */}
         <button
           onClick={handleCopy}
           className="flex items-center gap-2 text-sm font-terminal text-primary hover:text-primary/80 transition-colors"
@@ -129,7 +87,6 @@ export default function VerifyRoundPage() {
           {copied ? 'Copied!' : 'Copy hash'}
         </button>
 
-        {/* Verify button */}
         <button
           onClick={handleVerify}
           className="w-full btn-cyber-primary py-3 rounded-lg text-sm uppercase tracking-widest"
@@ -137,7 +94,6 @@ export default function VerifyRoundPage() {
           Verify Now (SHA-256)
         </button>
 
-        {/* Result */}
         {computedHash && (
           <div className="space-y-3 pt-4 border-t border-border">
             <div>
