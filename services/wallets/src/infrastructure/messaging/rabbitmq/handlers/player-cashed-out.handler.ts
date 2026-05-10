@@ -9,8 +9,8 @@
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
-import type { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
+import { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
+import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
 import { INBOX_REPOSITORY, PLAYER_WALLET_RESOLVER } from '@/infrastructure/di/tokens';
 import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import type { PlayerCashedOutEvent } from '../../types/games.events';

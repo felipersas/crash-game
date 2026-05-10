@@ -13,8 +13,8 @@
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
-import type { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
+import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
+import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
 import {
   EVENT_PUBLISHER,
   PLAYER_WALLET_RESOLVER,
