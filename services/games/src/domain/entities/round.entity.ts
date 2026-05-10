@@ -168,7 +168,7 @@ export class Round {
    * Place a bet for a player.
    * Only allowed during BETTING phase.
    */
-  placeBet(playerId: string, amount: Money): void {
+  placeBet(playerId: string, playerName: string, amount: Money): void {
     if (this.status !== RoundStatus.BETTING) {
       throw new RoundNotAcceptingBetsError();
     }
@@ -185,7 +185,7 @@ export class Round {
       throw new BetAboveMaximumError(amount.toCents());
     }
 
-    const bet = Bet.create(this.id, playerId, amount);
+    const bet = Bet.create(this.id, playerId, playerName, amount);
     this.bets.set(playerId, bet);
 
     this.version++;

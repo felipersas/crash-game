@@ -18,6 +18,7 @@ export class Bet {
   readonly id: string;
   readonly roundId: string;
   readonly playerId: string;
+  readonly playerName: string;
   private amount: Money;
   private status: BetStatus;
   private cashOutMultiplier: Multiplier | null;
@@ -30,12 +31,14 @@ export class Bet {
     id: string,
     roundId: string,
     playerId: string,
+    playerName: string,
     amount: Money,
     status: BetStatus,
   ) {
     this.id = id;
     this.roundId = roundId;
     this.playerId = playerId;
+    this.playerName = playerName;
     this.amount = amount;
     this.status = status;
     this.cashOutMultiplier = null;
@@ -49,9 +52,9 @@ export class Bet {
    * Factory method to create a new bet in PENDING state.
    * The bet will be confirmed once the wallet is debited.
    */
-  static create(roundId: string, playerId: string, amount: Money): Bet {
+  static create(roundId: string, playerId: string, playerName: string, amount: Money): Bet {
     const betId = crypto.randomUUID();
-    return new Bet(betId, roundId, playerId, amount, BetStatus.PENDING);
+    return new Bet(betId, roundId, playerId, playerName, amount, BetStatus.PENDING);
   }
 
   /**
@@ -61,6 +64,7 @@ export class Bet {
     id: string,
     roundId: string,
     playerId: string,
+    playerName: string,
     amountCents: bigint,
     status: BetStatus,
     cashOutMultiplier: number | null,
@@ -69,7 +73,7 @@ export class Bet {
     createdAt?: Date,
   ): Bet {
     const amount = Money.fromCents(amountCents);
-    const bet = new Bet(id, roundId, playerId, amount, status);
+    const bet = new Bet(id, roundId, playerId, playerName, amount, status);
 
     if (cashOutMultiplier !== null) {
       bet.cashOutMultiplier = Multiplier.fromValue(cashOutMultiplier);
@@ -230,6 +234,7 @@ export class Bet {
       id: this.id,
       roundId: this.roundId,
       playerId: this.playerId,
+      playerName: this.playerName,
       amountCents: this.amount.toCents(),
       status: this.status,
       cashOutMultiplier: this.cashOutMultiplier?.getValue() ?? null,
