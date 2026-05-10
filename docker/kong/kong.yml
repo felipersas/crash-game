@@ -6,7 +6,7 @@ services:
     plugins:
       - name: rate-limiting
         config:
-          second: 20
+          second: 30
           minute: 200
           hour: 5000
           policy: local
@@ -90,9 +90,21 @@ services:
         plugins:
           - name: cors
             config:
-              origins: ["http://localhost:3000", "http://localhost:5173", "http://localhost:8000"]
+              origins:
+                [
+                  "http://localhost:3000",
+                  "http://localhost:5173",
+                  "http://localhost:8000",
+                ]
               methods: ["GET", "POST", "OPTIONS"]
-              headers: ["Accept", "Authorization", "Content-Type", "Origin", "X-Requested-With"]
+              headers:
+                [
+                  "Accept",
+                  "Authorization",
+                  "Content-Type",
+                  "Origin",
+                  "X-Requested-With",
+                ]
               exposed_headers: ["*"]
               credentials: true
               max_age: 3600
@@ -115,7 +127,7 @@ services:
     plugins:
       - name: rate-limiting
         config:
-          second: 10
+          second: 15
           minute: 100
           hour: 2000
           policy: local
