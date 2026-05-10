@@ -27,7 +27,7 @@ export class PlayerWalletResolver {
   async resolveWalletId(playerId: string): Promise<string> {
     const wallet = await this.walletRepository.findByPlayerId(playerId);
     if (!wallet) {
-      throw new WalletNotFoundError(`playerId=${playerId}`);
+      throw new WalletNotFoundError();
     }
     return wallet.id;
   }
@@ -42,7 +42,7 @@ export class PlayerWalletResolver {
   async resolveWallet(playerId: string): Promise<ReturnType<typeof this.walletRepository.findByPlayerId> extends Promise<infer T> ? T : never> {
     const wallet = await this.walletRepository.findByPlayerId(playerId);
     if (!wallet) {
-      throw new WalletNotFoundError(`playerId=${playerId}`);
+      throw new WalletNotFoundError();
     }
     return wallet;
   }

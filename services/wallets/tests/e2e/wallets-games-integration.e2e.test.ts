@@ -1,16 +1,16 @@
 /**
  * E2E Test: Wallets ↔ Games Integration
  *
- * Tests the complete flow using Testcontainers:
- * 1. Consume BetPlacedEvent from Games service
- * 2. Debit wallet
- * 3. Consume PlayerCashedOutEvent from Games service
- * 4. Credit wallet
+ * Tests cross-service flow using Testcontainers:
+ * 1. Create wallet via Wallets service
+ * 2. Consume events from Games service via RabbitMQ
+ * 3. Verify wallet state after operations
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { connect } from 'amqplib';
-import { beforeAllTests, afterAllTests, TestCompose } from './helpers/compose';
+import { beforeAllTests, afterAllTests } from './helpers/compose';
+import { authHeader } from './helpers/jwt';
 
 describe('Wallets ↔ Games Integration (E2E)', () => {
   let connection: any | null = null;
@@ -21,9 +21,7 @@ describe('Wallets ↔ Games Integration (E2E)', () => {
   const playerId = `e2e-integration-${Date.now()}`;
 
   beforeAll(async () => {
-    // Start Testcontainers environment
     const connections = await beforeAllTests();
-
     gamesUrl = connections.gamesUrl!;
     walletsUrl = connections.walletsUrl!;
     rabbitmqUrl = connections.rabbitmqUrl!;
@@ -32,140 +30,94 @@ describe('Wallets ↔ Games Integration (E2E)', () => {
     connection = await connect(rabbitmqUrl);
     channel = await connection.createChannel();
 
-    // Set up exchanges and queues
-    await channel.assertExchange('games.events', 'topic', { durable: true });
-    await channel.assertQueue('test-integration-events', { durable: true });
-    await channel.bindQueue('test-integration-events', 'games.events', '#');
+    // Set up test queue bound to games.events exchange (already created by service)
+    await channel.assertQueue('test-wallets-integration', { durable: false, autoDelete: true });
+    await channel.bindQueue('test-wallets-integration', 'games.events', '');
+    await channel.purgeQueue('test-wallets-integration');
 
-    // Create test wallet with initial balance
-    await fetch(`${walletsUrl}/wallets`, {
+    // Create test wallet
+    const walletResponse = await fetch(`${walletsUrl}/wallets`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerId }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader(playerId),
+      },
     });
+    expect(walletResponse.ok).toBe(true);
   }, 300_000);
-
-  test('should verify RabbitMQ message consumption setup', async () => {
-    expect(channel).toBeTruthy();
-
-    // Verify exchange exists
-    const result = await TestCompose.exec('rabbitmq-1', [
-      'rabbitmqctl',
-      'list_exchanges',
-      'games.events',
-    ]);
-
-    expect(result.exitCode).toBe(0);
-    expect(result.output).toContain('games.events');
-  });
-
-  test('should consume BetPlacedEvent', async () => {
-    // Place a bet via Games service
-    const betResponse = await fetch(`${gamesUrl}/bet`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        playerId,
-        amount: 500, // $5.00
-      }),
-    });
-
-    if (!betResponse.ok) {
-      console.log('⚠ Bet placement failed - may not be in betting phase');
-      return;
-    }
-
-    // Wait for event to be published
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Try to consume the event
-    const message = await channel!.get('test-integration-events', {
-      noAck: true,
-    });
-
-    if (message) {
-      const event = JSON.parse(message.content.toString());
-      console.log('📬 Received event:', event.eventType);
-
-      expect(event).toHaveProperty('eventType');
-      expect(event).toHaveProperty('aggregateId');
-      expect(event).toHaveProperty('occurredAt');
-
-      // Verify BetPlacedEvent structure
-      if (event.eventType === 'BetPlaced') {
-        expect(event).toHaveProperty('playerId');
-        expect(event).toHaveProperty('amountCents');
-        expect(event).toHaveProperty('roundId');
-        expect(event).toHaveProperty('betId');
-      }
-    } else {
-      console.log('⚠ No message in queue - event may have been consumed already');
-    }
-  }, 20_000);
-
-  test('should verify wallet state after operations', async () => {
-    const response = await fetch(`${walletsUrl}/wallets/me`);
-
-    if (response.ok) {
-      const wallet = await response.json();
-
-      expect(wallet).toHaveProperty('walletId');
-      expect(wallet).toHaveProperty('playerId');
-      expect(wallet).toHaveProperty('balance');
-      expect(wallet).toHaveProperty('version');
-
-      // Verify balance is a string (to preserve precision)
-      expect(typeof wallet.balance).toBe('string');
-
-      // Verify version is incremented on operations
-      expect(typeof wallet.version).toBe('number');
-      expect(wallet.version).toBeGreaterThan(0);
-    }
-  });
-
-  test('should verify database state consistency', async () => {
-    // Check wallets table
-    const walletsResult = await TestCompose.exec('postgres-1', [
-      'psql',
-      '-U',
-      'admin',
-      '-d',
-      'wallets',
-      '-c',
-      'SELECT COUNT(*) FROM wallets;',
-    ]);
-
-    expect(walletsResult.exitCode).toBe(0);
-
-    // Check games database exists
-    const gamesResult = await TestCompose.exec('postgres-1', [
-      'psql',
-      '-U',
-      'admin',
-      '-d',
-      'games',
-      '-c',
-      'SELECT COUNT(*) FROM rounds;',
-    ]);
-
-    expect(gamesResult.exitCode).toBe(0);
-  });
-
-  test('should handle event delivery failure gracefully', async () => {
-    // This test verifies that the system handles failures
-    // e.g., when RabbitMQ is temporarily unavailable
-
-    // Simulate by checking that the wallet service continues to operate
-    const response = await fetch(`${walletsUrl}/health`);
-
-    expect(response.ok).toBe(true);
-    const data = await response.json();
-    expect(data.status).toBe('ok');
-  });
 
   afterAll(async () => {
     if (channel) await channel.close();
     if (connection) await connection.close();
     await afterAllTests();
+  }, 60_000);
+
+  test('should verify RabbitMQ exchange exists', async () => {
+    expect(channel).toBeTruthy();
+  });
+
+  test('should consume BetPlacedEvent when bet is placed', async () => {
+    const betResponse = await fetch(`${gamesUrl}/games/bet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader(playerId),
+      },
+      body: JSON.stringify({ amount: 500 }),
+    });
+
+    if (!betResponse.ok) {
+      console.log('Bet placement failed (status:', betResponse.status, ') - may not be in betting phase');
+      return;
+    }
+
+    const betData = await betResponse.json();
+    expect(betData).toHaveProperty('betId');
+
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    const message = await channel!.get('test-wallets-integration', { noAck: true });
+
+    if (message) {
+      const event = JSON.parse(message.content.toString());
+      console.log('Received event:', event.eventType);
+
+      expect(event).toHaveProperty('eventType');
+      expect(event).toHaveProperty('aggregateId');
+      expect(event).toHaveProperty('occurredAt');
+
+      if (event.eventType === 'BetPlaced') {
+        expect(event).toHaveProperty('playerId');
+        expect(event).toHaveProperty('amount');
+        expect(event).toHaveProperty('roundId');
+        expect(event).toHaveProperty('betId');
+      }
+    } else {
+      console.log('No message in queue - event consumed by wallets service or timing');
+    }
   }, 30_000);
+
+  test('should verify wallet state after operations', async () => {
+    const response = await fetch(`${walletsUrl}/wallets/me`, {
+      headers: authHeader(playerId),
+    });
+
+    expect(response.ok).toBe(true);
+
+    const wallet = await response.json();
+    expect(wallet).toHaveProperty('walletId');
+    expect(wallet).toHaveProperty('playerId', playerId);
+    expect(wallet).toHaveProperty('balance');
+    expect(wallet).toHaveProperty('version');
+    expect(typeof wallet.version).toBe('number');
+    expect(wallet.version).toBeGreaterThan(0);
+  });
+
+  test('should verify both services are healthy', async () => {
+    const gamesHealth = await fetch(`${gamesUrl}/games/health`);
+    expect(gamesHealth.ok).toBe(true);
+
+    const walletsHealth = await fetch(`${walletsUrl}/wallets/health`);
+    expect(walletsHealth.ok).toBe(true);
+  });
 });

@@ -1,8 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
-import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
+import type { IEventPublisher } from '@crash/messaging';
+import { BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 import { BetNotFoundError } from '@/domain/errors/domain.errors';
+import { createBetConfirmedEvent } from '@/domain/events/round.events';
+import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
 
 export interface ConfirmBetInput {
   roundId: string;
@@ -21,13 +24,18 @@ export interface ConfirmBetOutput {
  *
  * Confirms a bet after successful wallet debit.
  * Transitions the bet from PENDING to ACTIVE state.
+ * Emits BetConfirmedEvent for WebSocket notification to clients.
  *
  * Now uses BetRepository directly for better concurrency.
  */
 @Injectable()
 export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOutput> {
+  private readonly logger = new Logger(ConfirmBetUseCase.name);
+
   constructor(
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
+    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    private readonly gamesGateway: GamesGateway,
   ) {}
 
   async execute(input: ConfirmBetInput): Promise<ConfirmBetOutput> {
@@ -38,7 +46,7 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
     );
 
     if (!bet) {
-      throw new BetNotFoundError(input.betId);
+      throw new BetNotFoundError();
     }
 
     // Confirm the bet (PENDING → ACTIVE)
@@ -46,6 +54,28 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
 
     // Save bet state change
     await this.betRepository.update(bet);
+
+    // Emit event for WebSocket notification
+    const event = createBetConfirmedEvent(
+      input.roundId,
+      input.betId,
+      input.playerId,
+      bet.getAmount().toCents(),
+      1, // version for the event
+    );
+    await this.eventPublisher.publishBatch([event]);
+
+    // Broadcast via WebSocket (fire-and-forget, non-blocking)
+    try {
+      this.gamesGateway.broadcastBetConfirmed(
+        input.roundId,
+        input.betId,
+        input.playerId,
+        bet.getAmount().toCents(),
+      );
+    } catch (error) {
+      this.logger.error('Failed to broadcast bet confirmed event', error);
+    }
 
     return {
       betId: input.betId,

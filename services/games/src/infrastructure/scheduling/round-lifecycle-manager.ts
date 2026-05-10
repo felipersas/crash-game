@@ -7,7 +7,8 @@ import type { IGameEventPublisher } from '@/application/interfaces/event-publish
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
 import { RedisService, type RoundState } from '@/infrastructure/redis/redis.service';
-import { ROUND_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/infrastructure/di/tokens';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/infrastructure/di/tokens';
+import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
 
 /**
@@ -31,6 +32,7 @@ export class RoundLifecycleManager {
 
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
+    @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(SEED_CHAIN_REPOSITORY) private readonly seedChainRepository: ISeedChainRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
@@ -366,6 +368,9 @@ export class RoundLifecycleManager {
       }
     }
 
+    // Persist bet status changes (LOST/CANCELLED) to DB
+    await this.settleBets(latestRound);
+
     // Clear from Redis (round is over)
     await this.redisService.deleteRound(roundId);
 
@@ -414,6 +419,30 @@ export class RoundLifecycleManager {
       `Multiplier: ${this.currentRound.getCurrentMultiplier().toFixed(2)}x, ` +
       `Bets: ${this.currentRound.getBets().length}`
     );
+  }
+
+  /**
+   * Persist bet status changes after crash.
+   * Round.crash() mutates bets in-memory (ACTIVE→LOST, PENDING→CANCELLED)
+   * but bets are persisted independently via BetRepository.
+   */
+  private async settleBets(round: Round): Promise<void> {
+    const bets = round.getBets();
+    const unsettled = bets.filter(b => b.isLost() || b.isCancelled());
+
+    for (const bet of unsettled) {
+      try {
+        await this.betRepository.update(bet);
+      } catch (error) {
+        this.logger.error(
+          `Failed to settle bet ${bet.id} (status: ${bet.isLost() ? 'LOST' : 'CANCELLED'}): ${error}`,
+        );
+      }
+    }
+
+    if (unsettled.length > 0) {
+      this.logger.log(`Settled ${unsettled.length} bets for round ${round.id}`);
+    }
   }
 
   /**

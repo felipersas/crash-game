@@ -143,13 +143,6 @@ export class Wallet {
   }
 
   /**
-   * Get count of pending events without clearing.
-   */
-  getPendingEventsCount(): number {
-    return this.events.length;
-  }
-
-  /**
    * Add a domain event to the internal buffer.
    */
   private addEvent(event: WalletDomainEvent): void {

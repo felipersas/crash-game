@@ -25,7 +25,6 @@ import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.fil
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     ScheduleModule.forRoot(),
-    // AuthModule, // Removed - auth now handled by Kong OIDC plugin
   ],
   controllers: [WalletsController],
   providers: [

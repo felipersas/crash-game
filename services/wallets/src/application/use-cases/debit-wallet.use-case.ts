@@ -7,7 +7,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { Money } from '@crash/domain';
-import { WalletNotFoundError, InsufficientFundsError } from '@/domain/errors/domain.errors';
+import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
 import type { IEventPublisher } from '@crash/messaging';
 import { WALLET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
@@ -35,7 +35,7 @@ export class DebitWalletUseCase {
   async execute(input: DebitWalletInput): Promise<DebitWalletOutput> {
     const wallet = await this.walletRepository.findById(input.walletId);
     if (!wallet) {
-      throw new WalletNotFoundError(input.walletId);
+      throw new WalletNotFoundError();
     }
 
     const amount = Money.fromCents(input.amount);

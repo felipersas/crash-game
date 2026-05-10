@@ -28,32 +28,32 @@ export interface TestSeed {
 export const DETERMINISTIC_SEEDS: TestSeed[] = [
   {
     name: 'fast-crash',
-    seed: 'test-crash-1.5-17',
-    crashPoint: 1.53,
-    description: 'Very fast crash (~1.5x) - ideal for quick smoke tests',
+    seed: 'test-crash-1.5-6',
+    crashPoint: 1.47,
+    description: 'Fast crash (~1.5x) - ideal for quick smoke tests',
   },
   {
     name: 'low-crash',
-    seed: 'test-crash-2-27',
+    seed: 'test-crash-2-94',
     crashPoint: 1.98,
     description: 'Low crash (~2x) - fast but still playable',
   },
   {
     name: 'medium-crash',
-    seed: 'test-crash-3-28',
-    crashPoint: 3.05,
+    seed: 'test-crash-3-20',
+    crashPoint: 3.02,
     description: 'Medium crash (~3x) - balanced test',
   },
   {
     name: 'high-crash',
-    seed: 'test-crash-5-26',
-    crashPoint: 4.88,
+    seed: 'test-crash-5-179',
+    crashPoint: 5.10,
     description: 'High crash (~5x) - tests longer rounds',
   },
   {
     name: 'very-high-crash',
-    seed: 'test-crash-10-125',
-    crashPoint: 9.78,
+    seed: 'test-crash-10-31',
+    crashPoint: 9.64,
     description: 'Very high crash (~10x) - stress test for long rounds',
   },
 ];

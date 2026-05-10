@@ -19,9 +19,11 @@ import { GetRoundHistoryUseCase } from './application/use-cases/get-round-histor
 import { VerifyRoundUseCase } from './application/use-cases/verify-round.use-case';
 import { ConfirmBetUseCase } from './application/use-cases/confirm-bet.use-case';
 import { CancelBetUseCase } from './application/use-cases/cancel-bet.use-case';
+import { GetBetStatusUseCase } from './application/use-cases/get-bet-status.use-case';
+import { GetMyBetsUseCase } from './application/use-cases/get-my-bets.use-case';
+import { BetTimeoutHandler } from './infrastructure/scheduling/bet-timeout.handler';
 import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY } from './infrastructure/di/tokens';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
-import { RoundEventListeners } from './infrastructure/websocket/round-event.listeners';
 import { GAMES_GATEWAY } from './infrastructure/di/tokens';
 import { APP_FILTER } from '@nestjs/core';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
@@ -52,7 +54,6 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
       useClass: GamesGateway,
     },
     GamesGateway,
-    RoundEventListeners,
     {
       provide: ROUND_REPOSITORY,
       useClass: PrismaRoundRepository,
@@ -80,6 +81,8 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
     OutboxProcessor,
     RedisService,
     RoundLifecycleManager,
+    // Scheduled Jobs
+    BetTimeoutHandler,
     // Use Cases
     PlaceBetUseCase,
     CashOutUseCase,
@@ -88,6 +91,8 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
     VerifyRoundUseCase,
     ConfirmBetUseCase,
     CancelBetUseCase,
+    GetBetStatusUseCase,
+    GetMyBetsUseCase,
   ],
   exports: [
     ROUND_REPOSITORY,

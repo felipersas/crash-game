@@ -87,13 +87,20 @@ export class Round {
     this.currentMultiplier = Multiplier.start();
     this.version = 1;
     this.events = [];
+  }
+
+  /**
+   * Set betting end time. Called by factory methods.
+   */
+  private setBettingEndTime(endTime: Date): void {
+    this.bettingEndTime = endTime;
 
     // Emit RoundStartedEvent with seed hash (commit before reveal)
     this.addEvent(
       createRoundStartedEvent(
-        id,
-        seedChain.getCurrentSeedHash(),
-        new Date(Date.now() + config.bettingDurationMs),
+        this.id,
+        this.seedChain.getCurrentSeedHash(),
+        endTime,
         this.version,
       ),
     );
@@ -107,8 +114,7 @@ export class Round {
     const seedChain = await SeedChain.generate();
     const round = new Round(roundId, seedChain, config);
 
-    // Set betting end time
-    (round as any).bettingEndTime = new Date(Date.now() + config.bettingDurationMs);
+    round.setBettingEndTime(new Date(Date.now() + config.bettingDurationMs));
 
     return round;
   }
@@ -121,8 +127,7 @@ export class Round {
     const roundId = crypto.randomUUID();
     const round = new Round(roundId, seedChain, config);
 
-    // Set betting end time
-    (round as any).bettingEndTime = new Date(Date.now() + config.bettingDurationMs);
+    round.setBettingEndTime(new Date(Date.now() + config.bettingDurationMs));
 
     return round;
   }
@@ -171,11 +176,11 @@ export class Round {
    */
   placeBet(playerId: string, amount: Money): void {
     if (this.status !== RoundStatus.BETTING) {
-      throw new RoundNotAcceptingBetsError(this.id);
+      throw new RoundNotAcceptingBetsError();
     }
 
     if (this.bets.has(playerId)) {
-      throw new DuplicateBetError(playerId, this.id);
+      throw new DuplicateBetError();
     }
 
     if (amount.isLessThan(this.config.minBetAmount)) {
@@ -207,12 +212,12 @@ export class Round {
    */
   cashOut(playerId: string): Money {
     if (this.status !== RoundStatus.ACTIVE) {
-      throw new RoundAlreadyCrashedError(this.id, this.crashPoint?.getValue() || 0);
+      throw new RoundAlreadyCrashedError(this.crashPoint?.getValue() || 0);
     }
 
     const bet = this.bets.get(playerId);
     if (!bet || !bet.isActive()) {
-      throw new NoActiveBetError(playerId, this.id);
+      throw new NoActiveBetError();
     }
 
     const payout = bet.cashOut(this.currentMultiplier);
@@ -239,7 +244,7 @@ export class Round {
    */
   async startRound(): Promise<void> {
     if (this.status !== RoundStatus.BETTING) {
-      throw new InvalidRoundStateError(this.id, this.status, 'start');
+      throw new InvalidRoundStateError(this.status, 'start');
     }
 
     this.version++;
@@ -282,10 +287,12 @@ export class Round {
     this.status = RoundStatus.CRASHED;
     this.crashedAt = new Date();
 
-    // Mark all active bets as lost (PENDING bets are also lost - implicit cancellation)
+    // Mark active bets as lost, cancel PENDING bets (wallet may not have debited yet)
     for (const bet of this.bets.values()) {
-      if (bet.isActive() || bet.isPending()) {
+      if (bet.isActive()) {
         bet.markAsLost();
+      } else if (bet.isPending()) {
+        bet.cancel('Round crashed before wallet confirmation');
       }
     }
 
@@ -328,7 +335,7 @@ export class Round {
    * Get the crash point (revealed after crash).
    */
   getCrashPoint(): number | null {
-    return this.crashPoint?.getValue() || null;
+    return this.crashPoint?.getValue() ?? null;
   }
 
   /**
@@ -343,7 +350,7 @@ export class Round {
    */
   getSeed(): string {
     if (this.status !== RoundStatus.CRASHED) {
-      throw new SeedNotAvailableError(this.id);
+      throw new SeedNotAvailableError();
     }
     return this.seedChain.getSeed();
   }
@@ -428,16 +435,15 @@ export class Round {
   toPersistence() {
     return {
       id: this.id,
-      seed: this.status === RoundStatus.CRASHED ? this.seedChain.getSeed() : null,
+      seed: this.seedChain.getSeed(),
       seedHash: this.seedChain.getCurrentSeedHash(),
-      nextSeed: null, // Seed chain managed separately
+      nextSeed: null,
       status: this.status,
-      crashPoint: this.crashPoint?.getValue() || null,
+      crashPoint: this.crashPoint?.getValue() ?? null,
       bettingEndTime: this.bettingEndTime,
       startedAt: this.startedAt,
       crashedAt: this.crashedAt,
       version: this.version,
-      config: this.config,
     };
   }
 }

@@ -155,20 +155,20 @@ export class SeedChain {
    * Get the hash of the current seed (commitment).
    * This is published BEFORE the round starts.
    *
-   * Note: The hash is pre-calculated during chain generation for performance.
-   * For the current seed, we use the next seed in chain as the hash commitment.
+   * Chain relationship: H(seeds[i]) = seeds[i-1]
+   * The hash of the current seed is the previous seed in the array,
+   * because the chain is built as seeds[i] = H(seeds[i+1]).
    */
   getCurrentSeedHash(): string {
     const currentIndex = this.current;
 
-    // The hash commitment for current seed is the next seed in chain
-    // seed[N] commitment = seed[N+1]
-    if (currentIndex < this.seeds.length - 1) {
-      return this.seeds[currentIndex + 1];
+    // For the first seed, the hash is the commitment (= H(seeds[0]))
+    if (currentIndex === 0) {
+      return this.commitment;
     }
 
-    // For the last seed, use the commitment hash
-    return this.commitment;
+    // H(seeds[i]) = seeds[i-1] by chain construction
+    return this.seeds[currentIndex - 1];
   }
 
   /**

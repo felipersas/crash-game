@@ -25,8 +25,8 @@ export class CrashPoint {
       throw new InvalidSeedError(seed);
     }
 
-    const seedBytes = new TextEncoder().encode(seed);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', seedBytes);
+    const seedBytes = CrashPoint.hexToBytes(seed);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', seedBytes as BufferSource);
     const hashArray = new Uint8Array(hashBuffer);
 
     const first52Bits = this.extractBits(hashArray, CrashPoint.SEED_PRECISION);
@@ -58,6 +58,14 @@ export class CrashPoint {
 
   toString(): string {
     return `${this.value.toFixed(2)}x`;
+  }
+
+  private static hexToBytes(hex: string): Uint8Array {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }
 
   private static extractBits(bytes: Uint8Array, bitCount: number): number {

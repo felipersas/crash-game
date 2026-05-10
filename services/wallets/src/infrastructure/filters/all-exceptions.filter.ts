@@ -12,6 +12,8 @@ import {
   InvalidMoneyAmountError,
   NegativeMoneyError,
   WalletNotFoundError,
+  WalletAlreadyExistsError,
+  OptimisticLockError,
 } from '@/domain/errors/domain.errors';
 
 /**
@@ -22,6 +24,8 @@ const ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [InvalidMoneyAmountError.name]: HttpStatus.BAD_REQUEST,        // 400
   [NegativeMoneyError.name]: HttpStatus.BAD_REQUEST,            // 400
   [WalletNotFoundError.name]: HttpStatus.NOT_FOUND,              // 404
+  [WalletAlreadyExistsError.name]: HttpStatus.CONFLICT,          // 409
+  [OptimisticLockError.name]: HttpStatus.CONFLICT,              // 409
 };
 
 /**
@@ -46,12 +50,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let message = 'An unexpected error occurred';
 
     // Handle DomainError instances
+    let code: string | undefined;
+
     if (exception instanceof DomainError) {
       statusCode = ERROR_STATUS_MAP[exception.constructor.name] ?? HttpStatus.INTERNAL_SERVER_ERROR;
       errorName = exception.constructor.name;
       message = exception.message;
+      code = exception.code;
 
-      // Log domain errors as warnings (expected errors)
       this.logger.warn(
         `[${errorName}] ${message} - ${request.method} ${request.url}`
       );
@@ -79,6 +85,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     return response.status(statusCode).json({
       statusCode,
+      code,
       error: errorName,
       message,
       path: (request as any).url,

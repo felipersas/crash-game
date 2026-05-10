@@ -63,17 +63,17 @@ export class TestCompose {
     // Build environment variables for compose
     const composeEnv = {
       NODE_ENV: 'test',
-      DETERMINISTIC_SEED: 'test-crash-2-27',
+      DETERMINISTIC_SEED: 'test-crash-2-94',
       ...config.env,
     };
 
     // Start Docker Compose environment
     this.environment = await new DockerComposeEnvironment(composeFilePath, composeFile)
-      .withBuild()
       .withWaitStrategy('postgres-1', Wait.forHealthCheck())
-      .withWaitStrategy('rabbitmq-1', Wait.forLogMessage('Server startup complete'))
-      .withWaitStrategy('games-1', Wait.forHttp('/health', 4001).withStartupTimeout(120000))
-      .withWaitStrategy('wallets-1', Wait.forHttp('/health', 4002).withStartupTimeout(120000))
+      .withWaitStrategy('redis-1', Wait.forHealthCheck())
+      .withWaitStrategy('rabbitmq-1', Wait.forHealthCheck())
+      .withWaitStrategy('games-1', Wait.forHealthCheck())
+      .withWaitStrategy('wallets-1', Wait.forHealthCheck())
       .withEnvironment(composeEnv)
       .up();
 
@@ -129,7 +129,7 @@ export class TestCompose {
     console.log('[TestCompose] Stopping environment...');
 
     if (this.environment) {
-      await this.environment.down({ removeVolumes: true, timeout: 60000 });
+      await this.environment.down({ removeVolumes: true, timeout: 30000 });
       this.environment = undefined;
       this.containers.clear();
       this.connections = undefined;

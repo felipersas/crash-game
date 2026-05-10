@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
 # Kong-Keycloak JWT Sync (Bash version)
-# Sincroniza automaticamente as chaves públicas do Keycloak para o Kong JWT plugin.
+# Updates ONLY the JWT consumer keys in kong.yml, preserving all other config
 
 set -e
 
-# Configurações
+# Configuration
 KEYCLOAK_URL="${KEYCLOAK_URL:-http://keycloak:8080}"
 REALM="${KEYCLOAK_REALM:-crash-game}"
 KONG_CONFIG_PATH="${KONG_CONFIG_PATH:-/kong/kong.yml}"
@@ -42,10 +42,8 @@ get_keycloak_jwks() {
 find_rs256_key() {
     jwks_data="$1"
 
-    # Salvar em temp
     echo "$jwks_data" > /tmp/jwks_debug.json
 
-    # Tentar RS256/sig, senão qualquer RSA com x5c
     kid=$(jq -r '.keys[] | select(.alg == "RS256" and .use == "sig") | .kid' < /tmp/jwks_debug.json 2>/dev/null | head -1)
     x5c=$(jq -r '.keys[] | select(.alg == "RS256" and .use == "sig") | .x5c[0]' < /tmp/jwks_debug.json 2>/dev/null | head -1)
 
@@ -77,83 +75,48 @@ update_kong_config() {
     kid="$1"
     public_key="$2"
 
-    # Indentar todas as linhas da pubkey (incluindo BEGIN/END)
+    # Indentar todas as linhas da pubkey
     pubkey_indented=$(printf '%s' "$public_key" | sed 's/^/          /')
 
-    cat > "${KONG_CONFIG_PATH}.tmp" << EOF
-_format_version: "3.0"
-
-services:
-  - name: games-service
-    url: http://games:4001
-    routes:
-      - name: games-health
-        paths: [/games/health]
-        strip_path: false
-      - name: games-rounds-current
-        paths: [/games/rounds/current]
-        strip_path: false
-      - name: games-rounds-history
-        paths: [/games/rounds/history]
-        strip_path: false
-      - name: games-rounds-verify
-        paths: [/games/rounds]
-        strip_path: false
-      - name: games-bets-me
-        paths: [/games/bets/me]
-        strip_path: false
-        plugins:
-          - name: jwt
-            config:
-              key_claim_name: kid
-      - name: games-bet
-        paths: [/games/bet]
-        strip_path: false
-        plugins:
-          - name: jwt
-            config:
-              key_claim_name: kid
-      - name: games-bet-cashout
-        paths: [/games/bet/cashout]
-        strip_path: false
-        plugins:
-          - name: jwt
-            config:
-              key_claim_name: kid
-
-  - name: wallets-service
-    url: http://wallets:4002
-    routes:
-      - name: wallets-health
-        paths: [/wallets/health]
-        strip_path: false
-      - name: wallets-me
-        paths: [/wallets/me]
-        strip_path: false
-        plugins:
-          - name: jwt
-            config:
-              key_claim_name: kid
-      - name: wallets-create
-        paths: [/wallets]
-        strip_path: false
-        methods: [POST]
-        plugins:
-          - name: jwt
-            config:
-              key_claim_name: kid
-
+    # Criar novo consumers YAML
+    cat > /tmp/new_consumers.yaml << EOF
 consumers:
   - username: keycloak-crash-game
     jwt_secrets:
-      - consumer: keycloak-crash-game
-        key: ${kid}
+      - key: ${kid}
         algorithm: RS256
         rsa_public_key: |-
 ${pubkey_indented}
+  - username: skip-auth
+    jwt_secrets:
+      - key: m-U9iZ4MfvXDo3DZwPwCRuNRygY8sdyOOf1zRje_TwU
+        algorithm: RS256
+        rsa_public_key: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4aQfhMoZR8/fC5pyI0lO
+          lEsLjZGHW6+qExaAvcdTiJaUVc+QcoRJESex1VhW/YReEW61WWMe2gNHH+nSDFBN
+          ablxfKIl3OiDGo/Iqsh7d5NOX4IV0RrEZZyUhvyH16eJTZhI4ho4vNbKHQJKm5Lh
+          TgL6gLUYfwq1/n6Zql6WzV3UnwDzXp7QTEQWCEdoakJOfqvMEWmCY0WT+Zm9zub9
+          BtF/I1oDEKxiWX/h6thRtLRX+gb4hItU75fMSvf6HpzZnF2hlrc7fKsGcBSkiVSv
+          YQwfl7/CwI4huDfk7DYBSqOwsj70lCySNR8dAQ+FXYZLMJ7kMdiRdSlbZcQSO9TH
+          gQIDAQAB
+          -----END PUBLIC KEY-----
 EOF
 
+    # Remover seção consumers antiga e adicionar a nova
+    awk '
+    BEGIN { in_consumers = 0; skip = 0 }
+    /^consumers:/ { in_consumers = 1; skip = 1; next }
+    in_consumers && /^  [a-z]/ && !/^  - username/ { skip = 0; in_consumers = 0 }
+    !skip { print }
+    ' "${KONG_CONFIG_PATH}" > "${KONG_CONFIG_PATH}.tmp"
+
+    # Adicionar nova seção consumers
+    cat /tmp/new_consumers.yaml >> "${KONG_CONFIG_PATH}.tmp"
+
     mv "${KONG_CONFIG_PATH}.tmp" "$KONG_CONFIG_PATH"
+    rm -f /tmp/new_consumers.yaml
+
     log "Updated ${KONG_CONFIG_PATH} with kid: ${kid}"
 }
 

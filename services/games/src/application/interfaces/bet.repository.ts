@@ -44,4 +44,25 @@ export interface IBetRepository {
    * Useful for finding PENDING bets that need confirmation/cancellation.
    */
   findByRoundAndStatus(roundId: string, status: BetStatus): Promise<Bet[]>;
+
+  /**
+   * Find all bets for a player with pagination.
+   */
+  findByPlayerPaginated(playerId: string, limit: number, offset: number): Promise<Bet[]>;
+
+  /**
+   * Count total bets for a player.
+   */
+  countByPlayer(playerId: string): Promise<number>;
+
+  /**
+   * Compute aggregated summary for a player's bets.
+   * Avoids loading all bets into memory.
+   */
+  getSummaryByPlayer(playerId: string): Promise<{
+    totalWageredCents: number;
+    wins: number;
+    losses: number;
+    profitCents: number;
+  }>;
 }

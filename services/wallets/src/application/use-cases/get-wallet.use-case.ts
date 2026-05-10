@@ -28,7 +28,7 @@ export class GetWalletUseCase {
   async execute(input: GetWalletInput): Promise<GetWalletOutput> {
     const wallet = await this.walletRepository.findByPlayerId(input.playerId);
     if (!wallet) {
-      throw new WalletNotFoundError(input.playerId);
+      throw new WalletNotFoundError();
     }
 
     return this.toOutput(wallet);
@@ -38,7 +38,7 @@ export class GetWalletUseCase {
     return {
       walletId: wallet.id,
       playerId: wallet.playerId,
-      balance: wallet.getBalance().toDecimal(),
+      balance: wallet.getBalance().toCents().toString(),
       version: wallet.getVersion(),
     };
   }

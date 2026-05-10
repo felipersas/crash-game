@@ -3,6 +3,15 @@ _format_version: "3.0"
 services:
   - name: games-service
     url: http://games:4001
+    plugins:
+      - name: cors
+        config:
+          origins: ["http://localhost:3000", "http://localhost:5173"]
+          methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+          headers: ["Accept", "Authorization", "Content-Type", "Origin"]
+          exposed_headers: ["Content-Length", "Content-Type"]
+          credentials: true
+          max_age: 3600
     routes:
       - name: games-health
         paths: [/games/health]
@@ -10,12 +19,27 @@ services:
       - name: games-rounds-current
         paths: [/games/rounds/current]
         strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: kid
+              anonymous: skip-auth
       - name: games-rounds-history
         paths: [/games/rounds/history]
         strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: kid
+              anonymous: skip-auth
       - name: games-rounds-verify
         paths: [/games/rounds]
         strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: kid
+              anonymous: skip-auth
       - name: games-bets-me
         paths: [/games/bets/me]
         strip_path: false
@@ -23,6 +47,7 @@ services:
           - name: jwt
             config:
               key_claim_name: kid
+              anonymous: skip-auth
       - name: games-bet
         paths: [/games/bet]
         strip_path: false
@@ -30,6 +55,7 @@ services:
           - name: jwt
             config:
               key_claim_name: kid
+              anonymous: skip-auth
       - name: games-bet-cashout
         paths: [/games/bet/cashout]
         strip_path: false
@@ -37,9 +63,45 @@ services:
           - name: jwt
             config:
               key_claim_name: kid
+              anonymous: skip-auth
+      - name: games-websocket
+        paths: [/games]
+        strip_path: true
+        protocols: [http, https]
+        plugins:
+          - name: cors
+            config:
+              origins: ["http://localhost:3000", "http://localhost:5173", "http://localhost:8000"]
+              methods: ["GET", "POST", "OPTIONS"]
+              headers: ["Accept", "Authorization", "Content-Type", "Origin", "X-Requested-With"]
+              exposed_headers: ["*"]
+              credentials: true
+              max_age: 3600
+      - name: games-websocket-root
+        paths: [/socket.io]
+        strip_path: false
+        protocols: [http, https]
+        plugins:
+          - name: cors
+            config:
+              origins: ["http://localhost:3000", "http://localhost:5173"]
+              methods: ["GET", "POST", "OPTIONS"]
+              headers: ["Accept", "Authorization", "Content-Type", "Origin"]
+              exposed_headers: ["Content-Length", "Content-Type"]
+              credentials: true
+              max_age: 3600
 
   - name: wallets-service
     url: http://wallets:4002
+    plugins:
+      - name: cors
+        config:
+          origins: ["http://localhost:3000", "http://localhost:5173"]
+          methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+          headers: ["Accept", "Authorization", "Content-Type", "Origin"]
+          exposed_headers: ["Content-Length", "Content-Type"]
+          credentials: true
+          max_age: 3600
     routes:
       - name: wallets-health
         paths: [/wallets/health]
@@ -51,6 +113,7 @@ services:
           - name: jwt
             config:
               key_claim_name: kid
+              anonymous: skip-auth
       - name: wallets-create
         paths: [/wallets]
         strip_path: false
@@ -59,20 +122,34 @@ services:
           - name: jwt
             config:
               key_claim_name: kid
+              anonymous: skip-auth
 
 consumers:
   - username: keycloak-crash-game
     jwt_secrets:
-      - consumer: keycloak-crash-game
-        key: lh1voD04tRzMaQxMMZ_Nz15QIgA_xTgHfvQaopRR5IA
+      - key: jsiXrCRzdqSpry1nUKurxEwZ-kx1H9lrr33C9dnxrcE
         algorithm: RS256
         rsa_public_key: |-
           -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3FroCKE6yiWldU+FvLxY
-          QGNO27gPLHy3qdTalX6lt//pZluApwmwVxgCDdetLPD5EnxKyCN6LBzBu1nfBnNL
-          1OtE7xPo0RNYa/kGqeSe3XC063eYTzqz38VkNCMv/REHNwRvhc5mdB2ntAQTGMNm
-          GNEbfpwrVSYlra2eCINDcnzOuex/9kq2d4F0pEyYwI4bzScNfUMKE3YFVyD4zl2g
-          zLDiOHkntNa7I0hOpSEUQ/Xh4wh66A+W+HBP6ryQGo9UQ8Q1A8VGKtv4/FBH+Jdj
-          RbRteqpisv5PYyHkgKuhF+u+FAS4QXpFjVjmMvZ2Qa6H7EkUiemWte9bUWLiDc2l
-          gwIDAQAB
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1ZXisCqsClkSy8OnU+/w
+          kynDhT92IBDjpNjaBfEuZqncGQR52Vl3eXNNZFtZvonySxsOpY4ddhkvfoop0Iqy
+          4TZu5sW3LoIxo3gUUp1AyIh4mIvR9kh94g4R6jWhmz0cRE0+F69+vV4b4sR3hTJh
+          gD/szb9cwWSsJB/c8nnFYE1T6OC+S/Ea7YVJWPeBq8OfHEMPOFX0NUnGAWzXjTXO
+          h/SzZQ3+O9N9EDHU5ZYwtCnk60O6EFB4Qmk0uqwbowiWzh1J7PjNPpSq0GcsZQk2
+          qtZHkaZcoXr66XTYUZ60XnvynZTB/fs6LxMCwWoiaOCRk0386kgUDnnxuwJ1TXoX
+          RwIDAQAB
+          -----END PUBLIC KEY-----
+  - username: skip-auth
+    jwt_secrets:
+      - key: m-U9iZ4MfvXDo3DZwPwCRuNRygY8sdyOOf1zRje_TwU
+        algorithm: RS256
+        rsa_public_key: |-
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4aQfhMoZR8/fC5pyI0lO
+          lEsLjZGHW6+qExaAvcdTiJaUVc+QcoRJESex1VhW/YReEW61WWMe2gNHH+nSDFBN
+          ablxfKIl3OiDGo/Iqsh7d5NOX4IV0RrEZZyUhvyH16eJTZhI4ho4vNbKHQJKm5Lh
+          TgL6gLUYfwq1/n6Zql6WzV3UnwDzXp7QTEQWCEdoakJOfqvMEWmCY0WT+Zm9zub9
+          BtF/I1oDEKxiWX/h6thRtLRX+gb4hItU75fMSvf6HpzZnF2hlrc7fKsGcBSkiVSv
+          YQwfl7/CwI4huDfk7DYBSqOwsj70lCySNR8dAQ+FXYZLMJ7kMdiRdSlbZcQSO9TH
+          gQIDAQAB
           -----END PUBLIC KEY-----

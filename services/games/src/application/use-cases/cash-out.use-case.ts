@@ -1,13 +1,15 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { Round } from '@/domain/entities/round.entity';
+import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Round, RoundStatus } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import type { IEventPublisher } from '@crash/messaging';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 import { RoundLifecycleManager } from '@/infrastructure/scheduling/round-lifecycle-manager';
 import { RedisService, type CashoutIdempotencyResult } from '@/infrastructure/redis/redis.service';
 import { RoundNotFoundError, NoActiveBetError, InvalidIdempotencyKeyError } from '@/domain/errors/domain.errors';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
 
 /**
  * Cash Out Use Case
@@ -32,12 +34,15 @@ export interface CashOutOutput {
 
 @Injectable()
 export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
+  private readonly logger = new Logger(CashOutUseCase.name);
+
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
     private readonly roundLifecycleManager: RoundLifecycleManager,
     private readonly redisService: RedisService,
+    private readonly gamesGateway: GamesGateway,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
@@ -47,6 +52,12 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     const round = await this.loadRound(input.roundId);
     const bet = await this.loadBet(input.playerId, round.id);
     const payout = round.cashOut(input.playerId);
+
+    // Persist updated bet status (separate from round aggregate)
+    const cashedOutBet = round.getBetByPlayer(input.playerId);
+    if (cashedOutBet) {
+      await this.betRepository.update(cashedOutBet);
+    }
 
     await this.roundRepository.save(round);
     await this.storeIdempotencyResult(input.idempotencyKey, input.playerId, bet, round, payout);
@@ -62,7 +73,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     if (!cached) return null;
 
     if (cached.playerId !== input.playerId) {
-      throw new InvalidIdempotencyKeyError('Idempotency key belongs to different player');
+      throw new InvalidIdempotencyKeyError();
     }
 
     return {
@@ -77,14 +88,18 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   private async loadRound(roundId?: string): Promise<Round> {
     let round: Round | null = null;
 
-    if (roundId) {
+    const liveRound = this.roundLifecycleManager.getCurrentRound();
+
+    if (liveRound && liveRound.getStatus() === RoundStatus.ACTIVE) {
+      round = liveRound;
+    } else if (roundId) {
       round = await this.roundRepository.findById(roundId);
     } else {
-      round = this.roundLifecycleManager.getCurrentRound();
+      round = liveRound;
     }
 
     if (!round) {
-      throw new RoundNotFoundError(roundId || 'current');
+      throw new RoundNotFoundError();
     }
 
     return round;
@@ -94,7 +109,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     const bet = await this.betRepository.findByPlayerAndRound(playerId, roundId);
 
     if (!bet) {
-      throw new NoActiveBetError(playerId, roundId);
+      throw new NoActiveBetError();
     }
 
     return bet;
@@ -124,6 +139,24 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     if (events.length === 0) return;
 
     await this.eventPublisher.publishBatch(events);
+
+    // Broadcast player cashed out via WebSocket (fire-and-forget)
+    const cashedOut = events.find(
+      (e): e is PlayerCashedOutEvent => e.eventType === 'PlayerCashedOut',
+    );
+    if (cashedOut) {
+      try {
+        this.gamesGateway.broadcastPlayerCashedOut(
+          cashedOut.roundId,
+          cashedOut.betId,
+          cashedOut.playerId,
+          cashedOut.cashOutMultiplier,
+          cashedOut.winAmount,
+        );
+      } catch (error) {
+        this.logger.error('Failed to broadcast player cashed out event', error);
+      }
+    }
   }
 
   private mapToOutput(
@@ -145,7 +178,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
     if (!UUID_V4_REGEX.test(key)) {
-      throw new InvalidIdempotencyKeyError(key);
+      throw new InvalidIdempotencyKeyError();
     }
   }
 }

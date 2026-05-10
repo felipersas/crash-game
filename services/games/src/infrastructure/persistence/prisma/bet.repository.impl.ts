@@ -14,23 +14,23 @@ export class PrismaBetRepository implements IBetRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(bet: Bet): Promise<void> {
-    const data = this.toPersistence(bet);
+    const data = bet.toPersistence();
     await this.prisma.bet.create({
       data: {
         ...data,
-        status: data.status as any, // Cast to Prisma enum
+        status: data.status as any,
       },
     });
   }
 
   async update(bet: Bet): Promise<void> {
-    const data = this.toPersistence(bet);
+    const data = bet.toPersistence();
     await this.prisma.bet.update({
       where: { id: data.id },
       data: {
-        status: data.status as any, // Cast to Prisma enum
+        status: data.status as any,
         cashOutMultiplier: data.cashOutMultiplier,
-        cashOutAmount: data.cashOutAmount || null,
+        cashOutAmount: data.cashOutAmount,
         cashedOutAt: data.cashedOutAt,
       },
     });
@@ -41,19 +41,14 @@ export class PrismaBetRepository implements IBetRepository {
       where: { id: betId },
     });
 
-    if (!record) {
-      return null;
-    }
-
+    if (!record) return null;
     return this.toDomain(record);
   }
 
   async findByRound(roundId: string): Promise<Bet[]> {
     const records = await this.prisma.bet.findMany({
       where: { roundId },
-      orderBy: {
-        createdAt: "asc",
-      },
+      orderBy: { createdAt: "asc" },
     });
 
     return records.map((record) => this.toDomain(record));
@@ -61,25 +56,17 @@ export class PrismaBetRepository implements IBetRepository {
 
   async findByPlayerAndRound(playerId: string, roundId: string): Promise<Bet | null> {
     const record = await this.prisma.bet.findFirst({
-      where: {
-        playerId,
-        roundId,
-      },
+      where: { playerId, roundId },
     });
 
-    if (!record) {
-      return null;
-    }
-
+    if (!record) return null;
     return this.toDomain(record);
   }
 
   async findByPlayer(playerId: string, limit?: number): Promise<Bet[]> {
     const records = await this.prisma.bet.findMany({
       where: { playerId },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: { createdAt: "desc" },
       take: limit,
     });
 
@@ -90,14 +77,67 @@ export class PrismaBetRepository implements IBetRepository {
     const records = await this.prisma.bet.findMany({
       where: {
         roundId,
-        status: status as any, // Cast to Prisma enum
+        status: status as any,
       },
-      orderBy: {
-        createdAt: "asc",
-      },
+      orderBy: { createdAt: "asc" },
     });
 
     return records.map((record) => this.toDomain(record));
+  }
+
+  async findByPlayerPaginated(playerId: string, limit: number, offset: number): Promise<Bet[]> {
+    const records = await this.prisma.bet.findMany({
+      where: { playerId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset,
+    });
+
+    return records.map((record) => this.toDomain(record));
+  }
+
+  async countByPlayer(playerId: string): Promise<number> {
+    return this.prisma.bet.count({ where: { playerId } });
+  }
+
+  async getSummaryByPlayer(playerId: string): Promise<{
+    totalWageredCents: number;
+    wins: number;
+    losses: number;
+    profitCents: number;
+  }> {
+    // Single query, single table scan — all aggregation in DB
+    // $queryRaw tagged template is parameterized: safe from SQL injection
+    const [row] = await this.prisma.$queryRaw<Array<{
+      total_wagered_cents: bigint;
+      wins: bigint;
+      losses: bigint;
+      total_payout_cents: bigint;
+      cashed_out_wagered: bigint;
+      lost_wagered_cents: bigint;
+    }>>`
+      SELECT
+        COALESCE(SUM(amount_cents), 0)              AS total_wagered_cents,
+        COUNT(CASE WHEN status = 'CASHED_OUT' THEN 1 END) AS wins,
+        COUNT(CASE WHEN status = 'LOST' THEN 1 END)      AS losses,
+        COALESCE(SUM(CASE WHEN status = 'CASHED_OUT' THEN cash_out_amount END), 0) AS total_payout_cents,
+        COALESCE(SUM(CASE WHEN status = 'CASHED_OUT' THEN amount_cents END), 0)    AS cashed_out_wagered,
+        COALESCE(SUM(CASE WHEN status = 'LOST' THEN amount_cents END), 0)           AS lost_wagered_cents
+      FROM bets
+      WHERE player_id = ${playerId}
+    `;
+
+    const totalWageredCents = Number(row.total_wagered_cents);
+    const totalPayoutCents = Number(row.total_payout_cents);
+    const cashedOutWagered = Number(row.cashed_out_wagered);
+    const lostWageredCents = Number(row.lost_wagered_cents);
+
+    return {
+      totalWageredCents,
+      wins: Number(row.wins),
+      losses: Number(row.losses),
+      profitCents: totalPayoutCents - cashedOutWagered - lostWageredCents,
+    };
   }
 
   private toDomain(record: any): Bet {
@@ -110,19 +150,7 @@ export class PrismaBetRepository implements IBetRepository {
       record.cashOutMultiplier,
       record.cashOutAmount ? BigInt(record.cashOutAmount) : null,
       record.cashedOutAt,
+      record.createdAt,
     );
-  }
-
-  private toPersistence(bet: Bet) {
-    return {
-      id: bet.id,
-      roundId: bet.roundId,
-      playerId: bet.playerId,
-      amountCents: bet.getAmount().toCents(),
-      status: bet.getStatus(),
-      cashOutMultiplier: bet.getCashOutMultiplier()?.getValue() || null,
-      cashOutAmount: bet.getCashOutAmount()?.toCents() || null,
-      cashedOutAt: bet.getCashedOutAt(),
-    };
   }
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post } from '@nestjs/common';
 import { UserContext, type UserContext as UserContextType } from '../decorators/user-context.decorator';
 import { HealthCheckResponseDto } from '../dtos/health-check-response.dto';
 import { CreateWalletResponseDto } from '../dtos/create-wallet.dto';
