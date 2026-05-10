@@ -1,7 +1,8 @@
 import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import type { OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
-import { Logger, Injectable } from '@nestjs/common';
+import { Logger, Injectable, Inject } from '@nestjs/common';
 import { type Server, type Socket } from 'socket.io';
+import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
 
 /**
@@ -58,16 +59,22 @@ export class GamesGateway
 
   private readonly logger = new Logger(GamesGateway.name);
 
+  constructor(
+    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
+  ) {}
+
   afterInit(_server: Server) {
     this.logger.log('WebSocket Gateway initialized');
   }
 
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
+    this.metrics.setWsConnections(this.server.sockets.sockets.size);
   }
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
+    this.metrics.setWsConnections(this.server.sockets.sockets.size);
   }
 
   broadcastRoundStarted(roundId: string, seedHash: string, bettingEndTime: Date) {
@@ -76,10 +83,12 @@ export class GamesGateway
       seedHash,
       bettingEndTime,
     });
+    this.metrics.incrWsBroadcast('round_started');
   }
 
   broadcastBettingEnded(roundId: string) {
     this.server.emit('bettingEnded', { roundId });
+    this.metrics.incrWsBroadcast('betting_ended');
   }
 
   broadcastMultiplierUpdate(roundId: string, multiplier: number) {
@@ -87,6 +96,7 @@ export class GamesGateway
       roundId,
       multiplier,
     });
+    this.metrics.incrWsBroadcast('multiplier_update');
   }
 
   broadcastCrash(roundId: string, crashPoint: number, seed: string) {
@@ -95,6 +105,7 @@ export class GamesGateway
       crashPoint,
       seed,
     });
+    this.metrics.incrWsBroadcast('crash');
   }
 
   broadcastBetPlaced(roundId: string, betId: string, playerId: string, playerName: string, amountCents: bigint) {
@@ -105,6 +116,7 @@ export class GamesGateway
       playerName,
       amountCents: Number(amountCents),
     });
+    this.metrics.incrWsBroadcast('bet_placed');
   }
 
   broadcastBetConfirmed(roundId: string, betId: string, playerId: string, playerName: string, amountCents: bigint) {
@@ -115,6 +127,7 @@ export class GamesGateway
       playerName,
       amountCents: Number(amountCents),
     });
+    this.metrics.incrWsBroadcast('bet_confirmed');
   }
 
   broadcastBetCancelled(
@@ -133,6 +146,7 @@ export class GamesGateway
       amountCents: Number(amountCents),
       reason,
     });
+    this.metrics.incrWsBroadcast('bet_cancelled');
   }
 
   broadcastPlayerCashedOut(
@@ -151,5 +165,6 @@ export class GamesGateway
       multiplier,
       payoutCents: Number(payoutCents),
     });
+    this.metrics.incrWsBroadcast('player_cashed_out');
   }
 }

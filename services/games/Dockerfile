@@ -18,6 +18,7 @@ RUN bun install
 # Build dos workspace packages
 RUN cd packages/domain && bun run build
 RUN cd packages/messaging && bun run build
+RUN cd packages/observability && bun run build
 
 # Gera Prisma Client do serviço de games
 # (usa uma URL dummy só pra fase de generate)

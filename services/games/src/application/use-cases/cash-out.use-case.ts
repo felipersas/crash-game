@@ -4,6 +4,7 @@ import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import type { IEventPublisher } from '@crash/messaging';
+import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import {
   RoundNotFoundError,
   NoActiveBetError,
@@ -57,6 +58,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     @Inject(ROUND_STATE_PROVIDER) private readonly roundStateProvider: IRoundStateProvider,
     @Inject(IDEMPOTENCY_CACHE) private readonly idempotencyCache: IIdempotencyCache,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
+    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
@@ -74,6 +76,10 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     }
 
     await this.roundRepository.save(round);
+
+    this.metrics.incrBet('cashed_out', Number(bet.getAmount().toCents()));
+    this.metrics.incrPayout(Number(payout.toCents()));
+
     await this.storeIdempotencyResult(input.idempotencyKey, input.playerId, bet, round, payout);
     await this.publishEvents(round);
 

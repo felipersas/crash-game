@@ -6,6 +6,7 @@ import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { IEventPublisher } from '@crash/messaging';
 import type { IUseCase } from '@/application/interfaces/use-case';
 import { Money } from '@crash/domain';
+import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { BetNotFoundError, DuplicateBetError } from '@/domain/errors/domain.errors';
 import {
   ROUND_REPOSITORY,
@@ -37,6 +38,7 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
+    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
   ) {}
 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {
@@ -59,6 +61,7 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
       if (existingBet.getStatus() === BetStatus.PENDING) {
         existingBet.cancel('Replaced by new bet attempt');
         await this.betRepository.update(existingBet);
+        this.metrics.incrBet('cancelled', Number(existingBet.getAmount().toCents()));
         round.removeBet(input.playerId);
 
         try {
@@ -86,6 +89,8 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
     }
 
     await this.betRepository.create(bet);
+
+    this.metrics.incrBet('placed', Number(input.amountCents));
 
     await this.roundRepository.save(round);
 

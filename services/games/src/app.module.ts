@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { ObservabilityModule } from '@crash/observability';
 import { GamesController } from './presentation/controllers/games.controller';
 import { PrismaModule } from './infrastructure/persistence/prisma/prisma.module';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
@@ -15,6 +17,7 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
 import { RoundLifecycleManager } from './infrastructure/scheduling/round-lifecycle-manager';
 import { RoundCrashHandler } from './infrastructure/scheduling/round-crash-handler';
 import { RedisService } from './infrastructure/redis/redis.service';
+import { MetricsInterceptor } from './infrastructure/interceptors/metrics.interceptor';
 import { PlaceBetUseCase } from './application/use-cases/place-bet.use-case';
 import { CashOutUseCase } from './application/use-cases/cash-out.use-case';
 import { GetCurrentRoundUseCase } from './application/use-cases/get-current-round.use-case';
@@ -36,7 +39,6 @@ import {
   ROUND_STATE_PROVIDER,
 } from './infrastructure/di/tokens';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
-import { APP_FILTER } from '@nestjs/core';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-chain.repository.impl';
 
@@ -46,6 +48,7 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
       isGlobal: true,
     }),
     ScheduleModule.forRoot(),
+    ObservabilityModule,
     PrismaModule,
     ClientsModule.register([
       {
@@ -65,6 +68,11 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
     {
       provide: APP_FILTER,
       useClass: AllExceptionsFilter,
+    },
+    // Metrics Interceptor (global - records HTTP request metrics)
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
     },
     // Infrastructure
     PrismaService,
