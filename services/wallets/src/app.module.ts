@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import { WalletsController } from '@/presentation/controllers/wallets.controller';
 import { PrismaModule } from '@/infrastructure/persistence/prisma/prisma.module';
 import { PrismaWalletRepository } from '@/infrastructure/persistence/prisma/wallet.repository.impl';
@@ -8,9 +9,10 @@ import { PrismaInboxRepository } from '@/infrastructure/persistence/prisma/inbox
 import { RabbitMQEventPublisher } from '@/infrastructure/messaging/rabbitmq/event-publisher.impl';
 import { OutboxProcessor } from '@/infrastructure/messaging/rabbitmq/outbox-processor';
 import { InboxProcessor } from '@/infrastructure/messaging/rabbitmq/inbox-processor';
-import { GamesEventsConsumer } from '@/infrastructure/messaging/rabbitmq/games-events.consumer';
+import { GamesEventsController } from '@/infrastructure/messaging/rabbitmq/games-events.controller';
 import { BetPlacedEventHandler } from '@/infrastructure/messaging/rabbitmq/handlers/bet-placed.handler';
 import { PlayerCashedOutEventHandler } from '@/infrastructure/messaging/rabbitmq/handlers/player-cashed-out.handler';
+import { DlqSetupService } from '@/infrastructure/messaging/rabbitmq/dlq-setup.service';
 import { CreateWalletUseCase } from '@/application/use-cases/create-wallet.use-case';
 import { GetWalletUseCase } from '@/application/use-cases/get-wallet.use-case';
 import { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
@@ -25,34 +27,37 @@ import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.fil
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     ScheduleModule.forRoot(),
+    ClientsModule.register([
+      {
+        name: 'WALLET_EVENTS_CLIENT',
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL || 'amqp://admin:admin@localhost:5672'],
+          exchange: 'wallet.events',
+          exchangeType: 'fanout',
+        },
+      },
+    ]),
   ],
-  controllers: [WalletsController],
+  controllers: [WalletsController, GamesEventsController],
   providers: [
     // Exception Filter (global - handles all exceptions)
     {
       provide: APP_FILTER,
       useClass: AllExceptionsFilter,
     },
-    // Authentication Guard removed - now handled by Kong OIDC plugin
     // Repositories
     { provide: WALLET_REPOSITORY, useClass: PrismaWalletRepository },
     { provide: INBOX_REPOSITORY, useClass: PrismaInboxRepository },
-
-    // Event Publisher
+    // Messaging
     { provide: EVENT_PUBLISHER, useClass: RabbitMQEventPublisher },
-
-    // Outbox/Inbox Processors
-    OutboxProcessor,
-    InboxProcessor,
-
-    // Application Services
-    { provide: PLAYER_WALLET_RESOLVER, useClass: PlayerWalletResolver },
-
-    // Games Events Consumer & Handlers
-    GamesEventsConsumer,
+    DlqSetupService,
     BetPlacedEventHandler,
     PlayerCashedOutEventHandler,
-
+    OutboxProcessor,
+    InboxProcessor,
+    // Application Services
+    { provide: PLAYER_WALLET_RESOLVER, useClass: PlayerWalletResolver },
     // Use Cases
     CreateWalletUseCase,
     GetWalletUseCase,

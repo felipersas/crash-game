@@ -1,7 +1,9 @@
-import "reflect-metadata";
-import { NestFactory } from "@nestjs/core";
-import { ValidationPipe } from "@nestjs/common";
-import { AppModule } from "./app.module";
+import 'reflect-metadata';
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
+import { Transport } from '@nestjs/microservices';
+import type { MicroserviceOptions } from '@nestjs/microservices';
+import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
@@ -34,8 +36,10 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  const port = process.env.PORT || 4002;
-  await app.listen(port, "0.0.0.0");
+  await app.startAllMicroservices();
+
+  const port = process.env.PORT || '4002';
+  await app.listen(port, '0.0.0.0');
   console.log(`Wallets service running on port ${port}`);
 }
 
