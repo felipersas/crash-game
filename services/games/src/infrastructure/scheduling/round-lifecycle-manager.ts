@@ -6,8 +6,10 @@ import type { IRoundRepository } from '@/application/interfaces/round.repository
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
-import { RedisService, type RoundState } from '@/infrastructure/redis/redis.service';
+import { RedisService } from '@/infrastructure/redis/redis.service';
+import type { RoundState } from '@/infrastructure/redis/redis.service';
 import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/infrastructure/di/tokens';
+import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
 
@@ -23,7 +25,7 @@ import { OptimisticLockError } from '@/domain/errors/domain.errors';
  */
 
 @Injectable()
-export class RoundLifecycleManager {
+export class RoundLifecycleManager implements IRoundStateProvider {
   private readonly logger = new Logger(RoundLifecycleManager.name);
   private currentRound: Round | null = null;
   private currentSeedChain: SeedChain | null = null;

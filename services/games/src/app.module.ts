@@ -22,7 +22,7 @@ import { CancelBetUseCase } from './application/use-cases/cancel-bet.use-case';
 import { GetBetStatusUseCase } from './application/use-cases/get-bet-status.use-case';
 import { GetMyBetsUseCase } from './application/use-cases/get-my-bets.use-case';
 import { BetTimeoutHandler } from './infrastructure/scheduling/bet-timeout.handler';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY, GAMES_GATEWAY, GAME_BROADCASTER } from './infrastructure/di/tokens';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY, GAMES_GATEWAY, GAME_BROADCASTER, IDEMPOTENCY_CACHE, ROUND_STATE_PROVIDER } from './infrastructure/di/tokens';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
 import { APP_FILTER } from '@nestjs/core';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
@@ -83,7 +83,15 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
     // Outbox Pattern for reliable event publishing
     OutboxProcessor,
     RedisService,
+    {
+      provide: IDEMPOTENCY_CACHE,
+      useExisting: RedisService,
+    },
     RoundLifecycleManager,
+    {
+      provide: ROUND_STATE_PROVIDER,
+      useExisting: RoundLifecycleManager,
+    },
     // Scheduled Jobs
     BetTimeoutHandler,
     // Use Cases
