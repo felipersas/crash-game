@@ -31,6 +31,7 @@ export default function BetControls() {
   const hasCashedOut = myActiveBet?.status === "CASHED_OUT";
   const canBet = isBettingPhase && !myActiveBet && isAuthenticated;
   const canCashOut = isActivePhase && myActiveBet && !hasCashedOut;
+  const showCashOut = myActiveBet && !hasCashedOut && !isCrashed;
 
   const handlePlaceBet = () => {
     const cents = Math.round(parseFloat(amount) * 100);
@@ -90,12 +91,13 @@ export default function BetControls() {
         </button>
       )}
 
-      {canCashOut && myActiveBet && (
+      {showCashOut && myActiveBet && (
         <CashOutButton
           myActiveBet={myActiveBet}
           liveMultiplier={liveMultiplier}
           onCashOut={() => cashOut()}
           isCashingOut={isCashingOut}
+          disabled={!canCashOut}
         />
       )}
 

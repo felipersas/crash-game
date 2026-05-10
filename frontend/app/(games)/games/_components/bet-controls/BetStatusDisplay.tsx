@@ -81,11 +81,13 @@ export function CashOutButton({
   liveMultiplier,
   onCashOut,
   isCashingOut,
+  disabled,
 }: {
   myActiveBet: Bet;
   liveMultiplier: number;
   onCashOut: () => void;
   isCashingOut: boolean;
+  disabled?: boolean;
 }) {
   const potentialWin = calculatePayout(myActiveBet.amountCents, liveMultiplier);
 
@@ -103,14 +105,16 @@ export function CashOutButton({
       </div>
       <button
         onClick={onCashOut}
-        disabled={isCashingOut}
-        className="w-full btn-cyber-primary py-4 text-lg font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed animate-pulse-glow"
+        disabled={isCashingOut || disabled}
+        className="w-full btn-cyber-primary py-4 text-lg font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isCashingOut ? (
           <span className="flex items-center justify-center gap-2">
             <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
             Cashing Out...
           </span>
+        ) : disabled ? (
+          "WAITING FOR ROUND..."
         ) : (
           `CASH OUT @ ${liveMultiplier.toFixed(2)}x`
         )}
