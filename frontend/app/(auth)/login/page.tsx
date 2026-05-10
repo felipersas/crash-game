@@ -1,31 +1,12 @@
-"use client";
+import { LoginActions } from "./login-actions";
+import type { Metadata } from "next";
 
-/**
- * Login Page - Redirects to Keycloak
- */
-
-import { useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+export const metadata: Metadata = {
+  title: "Login | Crash Game",
+  description: "Sign in to play Crash Game",
+};
 
 export default function LoginPage() {
-  const { login, status } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (status === "authenticated") router.push("/games");
-  }, [status, router]);
-
-  if (status === "authenticated" || status === "loading") {
-    return (
-      <div className="flex h-screen items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen items-center justify-center bg-zinc-950">
       <div className="text-center space-y-6">
@@ -36,16 +17,7 @@ export default function LoginPage() {
           <p className="text-zinc-400">Jungle Gaming Casino</p>
         </div>
 
-        <div className="space-y-4">
-          <p className="text-zinc-500">Sign in to play</p>
-          <Button
-            onClick={login}
-            size="lg"
-            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-          >
-            Login with Keycloak
-          </Button>
-        </div>
+        <LoginActions />
 
         <div className="text-sm text-zinc-600">
           <p>
