@@ -8,22 +8,43 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="flex h-screen items-center justify-center bg-zinc-950">
-      <div className="text-center space-y-6">
-        <div className="space-y-2">
-          <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
-            Crash Game
-          </h1>
-          <p className="text-zinc-400">Jungle Gaming Casino</p>
-        </div>
+    <div className="relative flex h-screen items-center justify-center overflow-hidden bg-background">
+      {/* Background layers */}
+      <div className="cyber-grid absolute inset-0 opacity-20" />
+      <div className="scanlines absolute inset-0" />
 
-        <LoginActions />
+      {/* Radial glow */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at center, hsl(var(--primary) / 0.04) 0%, transparent 60%)",
+        }}
+      />
 
-        <div className="text-sm text-zinc-600">
-          <p>
-            Test user: <code className="text-purple-400">player</code> /{" "}
-            <code className="text-purple-400">player123</code>
-          </p>
+      {/* Login panel */}
+      <div className="panel-cyber relative z-10 w-full max-w-sm px-8 py-10">
+        <div className="space-y-8">
+          {/* Branding */}
+          <div className="space-y-1 text-center">
+            <h1 className="text-3xl font-bold tracking-tight text-primary">
+              CRASH GAME
+            </h1>
+            <p className="font-terminal text-xs uppercase tracking-widest text-text-muted">
+              Jungle Gaming
+            </p>
+          </div>
+
+          <LoginActions />
+
+          {/* Test credentials */}
+          <div className="border-t border-border pt-4 text-center font-terminal text-xs text-text-muted">
+            <p>
+              Test:{" "}
+              <code className="text-primary">player</code> /{" "}
+              <code className="text-primary">player123</code>
+            </p>
+          </div>
         </div>
       </div>
     </div>

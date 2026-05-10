@@ -16,20 +16,16 @@ export function LoginActions() {
 
   if (status === "authenticated" || status === "loading") {
     return (
-      <div className="flex h-screen items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-zinc-500">Sign in to play</p>
-      <Button
-        onClick={login}
-        size="lg"
-        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-      >
+      <p className="text-center text-sm text-text-muted">Sign in to play</p>
+      <Button onClick={login} size="lg" className="btn-cyber-primary w-full">
         Login with Keycloak
       </Button>
     </div>

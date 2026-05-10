@@ -106,7 +106,7 @@ export function CashOutButton({
       <button
         onClick={onCashOut}
         disabled={isCashingOut || disabled}
-        className="w-full btn-cyber-primary py-4 text-lg font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full btn-cyber-primary py-4 text-lg font-black uppercase tracking-widest rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isCashingOut ? (
           <span className="flex items-center justify-center gap-2">
