@@ -10,7 +10,8 @@
     "test:e2e": "bun test tests/e2e",
     "start:prod": "NODE_ENV=production bun dist/main.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "seed": "DATABASE_URL='postgresql://admin:admin@localhost:5432/wallets' bun run prisma/seed.ts"
   },
   "dependencies": {
     "@crash/domain": "workspace:*",

@@ -65,4 +65,10 @@ export interface IBetRepository {
     losses: number;
     profitCents: number;
   }>;
+
+  /**
+   * Find PENDING bets created before the given threshold.
+   * Used by timeout handler to cancel stale unconfirmed bets.
+   */
+  findStalePendingBets(olderThan: Date): Promise<Bet[]>;
 }

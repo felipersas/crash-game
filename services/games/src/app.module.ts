@@ -11,6 +11,7 @@ import { WalletEventsConsumer } from './infrastructure/messaging/rabbitmq/wallet
 import { WalletDebitedEventHandler } from './infrastructure/messaging/rabbitmq/handlers/wallet-debited.handler';
 import { WalletDebitFailedEventHandler } from './infrastructure/messaging/rabbitmq/handlers/wallet-debit-failed.handler';
 import { RoundLifecycleManager } from './infrastructure/scheduling/round-lifecycle-manager';
+import { RoundCrashHandler } from './infrastructure/scheduling/round-crash-handler';
 import { RedisService } from './infrastructure/redis/redis.service';
 import { PlaceBetUseCase } from './application/use-cases/place-bet.use-case';
 import { CashOutUseCase } from './application/use-cases/cash-out.use-case';
@@ -22,9 +23,8 @@ import { CancelBetUseCase } from './application/use-cases/cancel-bet.use-case';
 import { GetBetStatusUseCase } from './application/use-cases/get-bet-status.use-case';
 import { GetMyBetsUseCase } from './application/use-cases/get-my-bets.use-case';
 import { BetTimeoutHandler } from './infrastructure/scheduling/bet-timeout.handler';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY } from './infrastructure/di/tokens';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY, GAMES_GATEWAY, GAME_BROADCASTER, IDEMPOTENCY_CACHE, ROUND_STATE_PROVIDER } from './infrastructure/di/tokens';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
-import { GAMES_GATEWAY } from './infrastructure/di/tokens';
 import { APP_FILTER } from '@nestjs/core';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-chain.repository.impl';
@@ -53,7 +53,10 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
       provide: GAMES_GATEWAY,
       useClass: GamesGateway,
     },
-    GamesGateway,
+    {
+      provide: GAME_BROADCASTER,
+      useExisting: GAMES_GATEWAY,
+    },
     {
       provide: ROUND_REPOSITORY,
       useClass: PrismaRoundRepository,
@@ -62,17 +65,14 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
       provide: BET_REPOSITORY,
       useClass: PrismaBetRepository,
     },
-    PrismaBetRepository,
     {
       provide: SEED_CHAIN_REPOSITORY,
       useClass: FileSeedChainRepository,
     },
-    FileSeedChainRepository,
     {
       provide: EVENT_PUBLISHER,
       useClass: RabbitMQEventPublisher,
     },
-    RabbitMQEventPublisher,
     // Wallet Events Consumer & Handlers
     WalletEventsConsumer,
     WalletDebitedEventHandler,
@@ -80,7 +80,16 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
     // Outbox Pattern for reliable event publishing
     OutboxProcessor,
     RedisService,
+    {
+      provide: IDEMPOTENCY_CACHE,
+      useExisting: RedisService,
+    },
+    RoundCrashHandler,
     RoundLifecycleManager,
+    {
+      provide: ROUND_STATE_PROVIDER,
+      useExisting: RoundLifecycleManager,
+    },
     // Scheduled Jobs
     BetTimeoutHandler,
     // Use Cases

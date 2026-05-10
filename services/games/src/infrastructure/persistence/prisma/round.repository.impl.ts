@@ -4,6 +4,8 @@ import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/roun
 import { Bet, BetStatus } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
+import type { Round as RoundRow } from '@prisma/client'
+import type { Bet as BetRow } from '@prisma/client'
 
 @Injectable()
 export class PrismaRoundRepository implements IRoundRepository {
@@ -69,7 +71,7 @@ export class PrismaRoundRepository implements IRoundRepository {
       include: { bets: true },
     });
 
-    return records.map((record: any) => this.toDomain(record));
+    return records.map((record) => this.toDomain(record));
   }
 
   async findHistoryCount(): Promise<number> {
@@ -78,8 +80,8 @@ export class PrismaRoundRepository implements IRoundRepository {
     });
   }
 
-  private toDomain(record: any): Round {
-    const bets = record.bets?.map((b: any) => this.betToDomain(b)) || [];
+  private toDomain(record: RoundRow): Round {
+    const bets = record.bets?.map((b) => this.betToDomain(b)) || [];
 
     return Round.restore(
       record.id,
@@ -97,7 +99,7 @@ export class PrismaRoundRepository implements IRoundRepository {
     );
   }
 
-  private betToDomain(record: any): Bet {
+  private betToDomain(record: BetRow): Bet {
     return Bet.restore(
       record.id,
       record.roundId,

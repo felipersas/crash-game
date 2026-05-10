@@ -6,8 +6,8 @@ import type { IEventPublisher } from '@crash/messaging';
 import type { IUseCase } from '@/application/interfaces/use-case';
 import { Money } from '@crash/domain';
 import { BetNotFoundError } from '@/domain/errors/domain.errors';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
-import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, GAME_BROADCASTER } from '@/infrastructure/di/tokens';
+import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
 
 export interface PlaceBetInput {
   playerId: string;
@@ -29,7 +29,7 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
-    private readonly gamesGateway: GamesGateway,
+    @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
   ) {}
 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {
@@ -70,7 +70,7 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
 
     // Broadcast via WebSocket (fire-and-forget, non-blocking)
     try {
-      this.gamesGateway.broadcastBetPlaced(
+      this.broadcaster.broadcastBetPlaced(
         round.id,
         bet.id,
         input.playerId,

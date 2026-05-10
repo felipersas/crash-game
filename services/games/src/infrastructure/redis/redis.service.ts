@@ -16,6 +16,10 @@
 
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
+import type { IIdempotencyCache } from '@/application/interfaces/idempotency-cache';
+import type { CashoutIdempotencyResult } from '@/application/interfaces/idempotency-cache';
+
+export type { CashoutIdempotencyResult } from '@/application/interfaces/idempotency-cache';
 
 /**
  * Round state stored in Redis
@@ -33,22 +37,10 @@ export interface RoundState {
 }
 
 /**
- * Cached cashout result for idempotency
- */
-export interface CashoutIdempotencyResult {
-  betId: string;
-  roundId: string;
-  playerId: string;
-  cashOutMultiplier: number;
-  payoutCents: number; // Stored as number for JSON serialization
-  cashedOutAt: string;
-}
-
-/**
  * Redis service for managing active game state.
  */
 @Injectable()
-export class RedisService implements OnModuleDestroy {
+export class RedisService implements OnModuleDestroy, IIdempotencyCache {
   private readonly logger = new Logger(RedisService.name);
   private client: Redis | null = null;
   private readonly DEFAULT_TTL = 300; // 5 minutes - rounds don't last longer

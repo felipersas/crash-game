@@ -1,14 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
+import type { IEventPublisher } from '@crash/messaging';
+import { EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { Inject } from '@nestjs/common';
 
 @Injectable()
 export class OutboxProcessor {
   private readonly logger = new Logger(OutboxProcessor.name);
   private readonly MAX_RETRY_ATTEMPTS = 5;
-  private readonly RETRY_DELAY_MS = 1000; // Start with 1 second
+  private readonly RETRY_DELAY_MS = 1000;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+  ) {}
 
   @Cron(CronExpression.EVERY_SECOND)
   async processPendingEvents() {
@@ -32,8 +38,9 @@ export class OutboxProcessor {
 
   private async processEvent(event: any) {
     try {
-      // In a real implementation, this would publish to RabbitMQ
-      // For now, we'll just mark as sent
+      const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
+      await this.eventPublisher.publish(payload);
+
       await this.prisma.outboxEvent.update({
         where: { id: event.id },
         data: {
@@ -42,9 +49,9 @@ export class OutboxProcessor {
         },
       });
 
-      this.logger.debug(`Processed outbox event: ${event.eventType}`);
+      this.logger.debug(`Published outbox event: ${event.eventType}`);
     } catch (error: unknown) {
-      this.logger.error(`Failed to process outbox event ${event.id}:`, error);
+      this.logger.error(`Failed to publish outbox event ${event.id}:`, error);
 
       const retryCount = (event.retryCount || 0) + 1;
       const delay = this.RETRY_DELAY_MS * Math.pow(2, retryCount - 1);
@@ -57,7 +64,6 @@ export class OutboxProcessor {
         },
       });
 
-      // Exponential backoff - don't retry immediately
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }

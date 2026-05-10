@@ -4,11 +4,11 @@ import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import type { IEventPublisher } from '@crash/messaging';
-import { RoundLifecycleManager } from '@/infrastructure/scheduling/round-lifecycle-manager';
-import { RedisService, type CashoutIdempotencyResult } from '@/infrastructure/redis/redis.service';
 import { RoundNotFoundError, NoActiveBetError, InvalidIdempotencyKeyError } from '@/domain/errors/domain.errors';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
-import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, GAME_BROADCASTER, IDEMPOTENCY_CACHE, ROUND_STATE_PROVIDER } from '@/infrastructure/di/tokens';
+import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
+import type { IIdempotencyCache, CashoutIdempotencyResult } from '@/application/interfaces/idempotency-cache';
+import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
 
 /**
@@ -40,9 +40,9 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
-    private readonly roundLifecycleManager: RoundLifecycleManager,
-    private readonly redisService: RedisService,
-    private readonly gamesGateway: GamesGateway,
+    @Inject(ROUND_STATE_PROVIDER) private readonly roundStateProvider: IRoundStateProvider,
+    @Inject(IDEMPOTENCY_CACHE) private readonly idempotencyCache: IIdempotencyCache,
+    @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
@@ -68,7 +68,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
 
   private async getCachedResultIfValid(input: CashOutInput): Promise<CashOutOutput | null> {
     this.validateIdempotencyKey(input.idempotencyKey);
-    const cached = await this.redisService.checkCashoutIdempotency(input.idempotencyKey);
+    const cached = await this.idempotencyCache.checkCashoutIdempotency(input.idempotencyKey);
 
     if (!cached) return null;
 
@@ -88,7 +88,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   private async loadRound(roundId?: string): Promise<Round> {
     let round: Round | null = null;
 
-    const liveRound = this.roundLifecycleManager.getCurrentRound();
+    const liveRound = this.roundStateProvider.getCurrentRound();
 
     if (liveRound && liveRound.getStatus() === RoundStatus.ACTIVE) {
       round = liveRound;
@@ -131,7 +131,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
       cashedOutAt: new Date().toISOString(),
     };
 
-    await this.redisService.setCashoutIdempotency(idempotencyKey, result);
+    await this.idempotencyCache.setCashoutIdempotency(idempotencyKey, result);
   }
 
   private async publishEvents(round: Round): Promise<void> {
@@ -146,7 +146,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     );
     if (cashedOut) {
       try {
-        this.gamesGateway.broadcastPlayerCashedOut(
+        this.broadcaster.broadcastPlayerCashedOut(
           cashedOut.roundId,
           cashedOut.betId,
           cashedOut.playerId,

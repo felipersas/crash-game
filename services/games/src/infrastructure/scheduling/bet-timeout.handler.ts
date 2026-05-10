@@ -2,7 +2,6 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
-import { BetStatus } from '@prisma/client';
 import { CancelBetUseCase } from '@/application/use-cases/cancel-bet.use-case';
 
 /**
@@ -41,20 +40,12 @@ export class BetTimeoutHandler {
     try {
       const staleThreshold = new Date(Date.now() - this.PENDING_TIMEOUT_MS);
       
-      // Find all PENDING bets (we need to filter by time in application)
-      // In production, you'd add a createdAt field and query by it
-      const allPendingBets = await this.betRepository.findByRoundAndStatus(
-        '*', // Any round - in production, you'd want a better approach
-        BetStatus.PENDING,
-      );
+      // Find PENDING bets older than the stale threshold
+      const staleBets = await this.betRepository.findStalePendingBets(staleThreshold);
 
       let cancelledCount = 0;
 
-      for (const bet of allPendingBets) {
-        // Check if bet is stale (older than timeout)
-        // Note: In production, you'd add createdAt to Bet entity and repository
-        // For now, we'll skip this check and rely on the wallet service timeout
-        
+      for (const bet of staleBets) {
         await this.cancelBetUseCase.execute({
           roundId: bet.roundId,
           betId: bet.id,

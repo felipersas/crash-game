@@ -4,7 +4,7 @@ import { CrashPoint } from '@/domain/value-objects/crash-point.value-object';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
-import { RoundStatus } from '@prisma/client';
+import { RoundStatus } from '@/domain/entities/round.entity';
 import { RoundNotFoundError, VerificationFailedError } from '@/domain/errors/domain.errors';
 
 export interface VerifyRoundInput {
