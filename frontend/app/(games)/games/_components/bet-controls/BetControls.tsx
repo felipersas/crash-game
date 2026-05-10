@@ -72,7 +72,11 @@ export default function BetControls() {
 
       <BetInput amount={amount} onAmountChange={setAmount} disabled={!canBet} />
 
-      <AutoCashoutInput value={autoCashOut} onChange={setAutoCashOut} disabled={!canBet} />
+      <AutoCashoutInput
+        value={autoCashOut}
+        onChange={setAutoCashOut}
+        disabled={!canBet}
+      />
 
       {canBet && (
         <button
