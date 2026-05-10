@@ -55,7 +55,7 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
     },
     {
       provide: GAME_BROADCASTER,
-      useExisting: GamesGateway,
+      useExisting: GAMES_GATEWAY,
     },
     {
       provide: ROUND_REPOSITORY,

@@ -3,7 +3,7 @@ import { Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY } from '@/infrastructure/di/tokens';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
 import { RedisService } from '@/infrastructure/redis/redis.service';
 
@@ -25,7 +25,7 @@ export class RoundCrashHandler {
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
-    private readonly gamesGateway: GamesGateway,
+    @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
     private readonly redisService: RedisService,
   ) {}
 
