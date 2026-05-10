@@ -7,6 +7,7 @@ import RoundHistory from "./components/round-history/RoundHistory";
 import { useGameStore } from "@/store/game-store";
 import { RoundStatus } from "@/types/game.types";
 import { useGameWebSocket } from "@/hooks/useGameWebSocket";
+import { useRoundHistory } from "@/hooks/useRoundHistory";
 import { useSession } from "next-auth/react";
 
 export default function GameContent() {
@@ -20,6 +21,8 @@ export default function GameContent() {
     enabled: true,
   });
 
+  const { data: historyData } = useRoundHistory({ page: 1, limit: 10 });
+
   const roundPhase =
     roundStatus === RoundStatus.BETTING
       ? "betting"
@@ -32,7 +35,7 @@ export default function GameContent() {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
         {/* Center - Crash Graph (first on mobile) */}
         <div className="md:col-span-6 md:order-2">
-          <CrashGraph multiplier={liveMultiplier} phase={roundPhase} />
+          <CrashGraph multiplier={liveMultiplier} phase={roundPhase} recentRounds={historyData?.data} />
         </div>
 
         {/* Left Panel - Bet Controls (second on mobile) */}

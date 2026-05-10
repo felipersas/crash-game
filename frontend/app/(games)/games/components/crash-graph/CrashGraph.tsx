@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState, useRef } from "react";
 import { formatMultiplier } from "@/shared/utils/money";
 import { useGameStore } from "@/store/game-store";
-import { useRoundHistory } from "@/hooks/useRoundHistory";
+import type { RoundHistoryItem } from "../round-history/RoundHistoryTable";
 
 interface Props {
   multiplier: number;
   phase: "betting" | "active" | "crashed";
+  recentRounds?: RoundHistoryItem[];
 }
 
 function getCrashChipColor(cp: number | null): string {
@@ -18,7 +19,7 @@ function getCrashChipColor(cp: number | null): string {
   return "bg-primary/20 text-primary";
 }
 
-export default function CrashGraph({ multiplier, phase }: Props) {
+export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Props) {
   const isCrashed = phase === "crashed";
   const isBetting = phase === "betting";
 
@@ -29,10 +30,6 @@ export default function CrashGraph({ multiplier, phase }: Props) {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [shouldShake, setShouldShake] = useState(false);
   const prevPhase = useRef(phase);
-
-  // Fetch last 10 rounds for history bar
-  const { data: historyData } = useRoundHistory({ page: 1, limit: 10 });
-  const recentRounds = historyData?.data ?? [];
 
   useEffect(() => {
     if (isBetting) {

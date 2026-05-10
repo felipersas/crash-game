@@ -10,6 +10,7 @@ import { useGameSounds } from "@/hooks/useGameSounds";
 import { Input } from "@/components/ui/input";
 import { calculatePayout, formatMoney } from "@/shared/utils/money";
 import { RoundStatus } from "@/types/game.types";
+import { GAME_CONSTANTS } from "@/shared/constants/game.constants";
 import { BetButton } from "./BetButton";
 
 export default function BetControls() {
@@ -102,16 +103,16 @@ export default function BetControls() {
 
   const handleHalfBet = () => {
     const current = parseFloat(amount) || 0;
-    setAmount(Math.max(1, current / 2).toFixed(2));
+    setAmount(Math.max(GAME_CONSTANTS.MIN_BET, current / 2).toFixed(2));
   };
 
   const handleDoubleBet = () => {
     const current = parseFloat(amount) || 0;
-    setAmount(Math.min(1000, current * 2).toFixed(2));
+    setAmount(Math.min(GAME_CONSTANTS.MAX_BET, current * 2).toFixed(2));
   };
 
   const handleMaxBet = () => {
-    setAmount("1000.00");
+    setAmount(GAME_CONSTANTS.MAX_BET.toFixed(2));
   };
 
   return (
