@@ -1,12 +1,8 @@
 /**
- * Base HTTP Client - Axios wrapper with auth, error handling, and token refresh
+ * Shared HTTP Client - Singleton axios instance with auto-auth
  *
- * Features:
- * - Automatic auth token injection
- * - 401 error handling with token refresh
- * - Sanitized error responses (no server detail leakage)
- * - Request timeout (10s default)
- * - Generic HTTP method wrappers
+ * Token is fetched automatically from NextAuth session via interceptor.
+ * No need to pass tokens manually — just import and use.
  */
 
 import axios, {
@@ -16,12 +12,10 @@ import axios, {
   type AxiosResponse,
   type InternalAxiosRequestConfig,
 } from 'axios';
+import { getSession } from 'next-auth/react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-/**
- * Backend error response format
- */
 interface BackendErrorResponse {
   statusCode: number;
   code?: string;
@@ -31,79 +25,50 @@ interface BackendErrorResponse {
   timestamp: string;
 }
 
-/**
- * Sanitized API error shape - safe to expose to clients
- */
 export interface ApiError {
   message: string;
   status: number;
   code?: string;
 }
 
-/**
- * Extended request config with skipAuth flag for public endpoints
- */
 interface HttpRequestConfig extends AxiosRequestConfig {
   skipAuth?: boolean;
 }
 
 /**
- * Creates an authenticated axios instance with interceptors
- *
- * @param accessToken - Current access token from session
- * @param onTokenExpired - Callback for 401 errors (triggers refresh)
- * @returns Configured axios instance
+ * Shared axios instance — created once, reused everywhere.
+ * Token injected automatically via interceptor from NextAuth session.
  */
-export function createHttpClient(
-  accessToken?: string,
-  onTokenExpired?: () => void
-): AxiosInstance {
-  const client = axios.create({
-    baseURL: API_URL,
-    timeout: 10000,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+export const apiClient: AxiosInstance = axios.create({
+  baseURL: API_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-  // Request interceptor - inject auth token
-  client.interceptors.request.use(
-    (config: InternalAxiosRequestConfig) => {
-      const httpConfig = config as HttpRequestConfig;
-      if (accessToken && !httpConfig.skipAuth) {
-        config.headers.Authorization = `Bearer ${accessToken}`;
+// Request interceptor — auto-inject auth token from session
+apiClient.interceptors.request.use(
+  async (config: InternalAxiosRequestConfig) => {
+    const httpConfig = config as HttpRequestConfig;
+    if (!httpConfig.skipAuth) {
+      const session = await getSession();
+      if (session?.accessToken) {
+        config.headers.Authorization = `Bearer ${session.accessToken}`;
       }
-      return config;
-    },
-    (error: AxiosError) => Promise.reject(toApiError(error))
-  );
-
-  // Response interceptor - handle errors and token refresh
-  client.interceptors.response.use(
-    (response: AxiosResponse) => response,
-    (error: AxiosError) => {
-      // Trigger token refresh on 401
-      if (error.response?.status === 401 && onTokenExpired) {
-        onTokenExpired();
-      }
-
-      return Promise.reject(toApiError(error));
     }
-  );
+    return config;
+  },
+  (error: AxiosError) => Promise.reject(toApiError(error))
+);
 
-  return client;
-}
+// Response interceptor — sanitized errors
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => response,
+  (error: AxiosError) => Promise.reject(toApiError(error))
+);
 
-/**
- * Converts Axios error to sanitized ApiError
- *
- * Strategy:
- * - 4xx errors (client errors): Show backend message (domain errors are user-friendly)
- * - 5xx errors (server errors): Show generic message (don't leak internal details)
- * - Network errors: Show connection message
- */
 function toApiError(error: AxiosError): ApiError {
-  // Network errors or timeout
   if (!error.response) {
     return {
       message: error.message === 'Network Error'
@@ -117,15 +82,10 @@ function toApiError(error: AxiosError): ApiError {
   const status = error.response.status;
   const data = error.response.data as BackendErrorResponse | unknown;
 
-  // Extract backend error if response matches our format
   const backendError = isBackendErrorResponse(data)
-    ? {
-        message: data.message,
-        code: data.code,
-      }
+    ? { message: data.message, code: data.code }
     : {};
 
-  // 4xx errors: Use backend message (domain errors are safe and user-friendly)
   if (status >= 400 && status < 500) {
     return {
       message: backendError.message || getDefaultMessage(status),
@@ -134,16 +94,12 @@ function toApiError(error: AxiosError): ApiError {
     };
   }
 
-  // 5xx errors: Use generic message (don't leak internal errors)
   return {
     message: getDefaultMessage(status),
     status,
   };
 }
 
-/**
- * Type guard for backend error response format
- */
 function isBackendErrorResponse(data: unknown): data is BackendErrorResponse {
   return (
     typeof data === 'object' &&
@@ -154,100 +110,36 @@ function isBackendErrorResponse(data: unknown): data is BackendErrorResponse {
   );
 }
 
-/**
- * Generic fallback messages by status code
- */
 function getDefaultMessage(status: number): string {
   switch (status) {
-    case 400:
-      return 'Invalid request. Please check your input.';
-    case 401:
-      return 'Authentication required. Please log in.';
-    case 403:
-      return 'Access denied.';
-    case 404:
-      return 'Resource not found.';
-    case 409:
-      return 'Conflict. Please refresh and try again.';
-    case 429:
-      return 'Too many requests. Please try again later.';
-    case 500:
-      return 'Server error. Please try again later.';
-    case 503:
-      return 'Service temporarily unavailable.';
-    default:
-      return 'Request failed. Please try again.';
+    case 400: return 'Invalid request. Please check your input.';
+    case 401: return 'Authentication required. Please log in.';
+    case 403: return 'Access denied.';
+    case 404: return 'Resource not found.';
+    case 409: return 'Conflict. Please refresh and try again.';
+    case 429: return 'Too many requests. Please try again later.';
+    case 500: return 'Server error. Please try again later.';
+    case 503: return 'Service temporarily unavailable.';
+    default: return 'Request failed. Please try again.';
   }
 }
 
-/**
- * Generic GET request
- *
- * @param client - Axios instance
- * @param url - Endpoint path
- * @param config - Optional request config
- * @returns Response data
- */
-export async function get<T>(
-  client: AxiosInstance,
-  url: string,
-  config?: AxiosRequestConfig
-): Promise<T> {
-  const response = await client.get<T>(url, config);
+export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  const response = await apiClient.get<T>(url, config);
   return response.data;
 }
 
-/**
- * Generic POST request
- *
- * @param client - Axios instance
- * @param url - Endpoint path
- * @param data - Request payload
- * @param config - Optional request config
- * @returns Response data
- */
-export async function post<T>(
-  client: AxiosInstance,
-  url: string,
-  data?: unknown,
-  config?: AxiosRequestConfig
-): Promise<T> {
-  const response = await client.post<T>(url, data, config);
+export async function post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  const response = await apiClient.post<T>(url, data, config);
   return response.data;
 }
 
-/**
- * Generic PUT request
- *
- * @param client - Axios instance
- * @param url - Endpoint path
- * @param data - Request payload
- * @param config - Optional request config
- * @returns Response data
- */
-export async function put<T>(
-  client: AxiosInstance,
-  url: string,
-  data?: unknown,
-  config?: AxiosRequestConfig
-): Promise<T> {
-  const response = await client.put<T>(url, data, config);
+export async function put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  const response = await apiClient.put<T>(url, data, config);
   return response.data;
 }
 
-/**
- * Generic DELETE request
- *
- * @param client - Axios instance
- * @param url - Endpoint path
- * @param config - Optional request config
- * @returns Response data
- */
-export async function del<T>(
-  client: AxiosInstance,
-  url: string,
-  config?: AxiosRequestConfig
-): Promise<T> {
-  const response = await client.delete<T>(url, config);
+export async function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  const response = await apiClient.delete<T>(url, config);
   return response.data;
 }

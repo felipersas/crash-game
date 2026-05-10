@@ -11,7 +11,7 @@ import {
   createGamesWebSocket,
   GamesWebSocket,
 } from "../websocket/games-websocket";
-import { createGamesApi } from "@/infrastructure/api/games-api";
+import { getCurrentRound } from "@/infrastructure/api/games-api";
 import {
   RoundStatus,
   BetStatus,
@@ -66,10 +66,9 @@ export function useGameWebSocket(
 
   // Fetch current round on connect to sync state with store
   const syncCurrentRound = useCallback(
-    async (accessToken: string | undefined) => {
+    async () => {
       try {
-        const api = createGamesApi(accessToken);
-        const round: Round = await api.getCurrentRound();
+        const round: Round = await getCurrentRound();
 
         // Sync store with current round
         currentRoundIdRef.current = round.roundId;
@@ -149,7 +148,7 @@ export function useGameWebSocket(
         setStoreConnectionStatus("connected");
         setReconnectAttempt(0);
         // Sync current round state on connect
-        syncCurrentRound(token);
+        syncCurrentRound();
       },
       onDisconnect: () => {
         setIsConnected(false);

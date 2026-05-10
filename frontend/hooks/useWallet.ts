@@ -2,12 +2,12 @@
 
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSession } from "next-auth/react";
-import { createWalletsApi } from "../infrastructure/api/wallets-api";
+import { getWallet } from "../infrastructure/api/wallets-api";
 import type { Wallet } from "../types/game.types";
 import type { ApiError } from "../infrastructure/api/http-client";
 import { getErrorMessage } from "../shared/constants/error-codes";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 
 export function useWallet() {
   const { data: session } = useSession();
@@ -15,10 +15,7 @@ export function useWallet() {
 
   const query = useQuery<Wallet>({
     queryKey: ["wallet"],
-    queryFn: () => {
-      const api = createWalletsApi(session?.accessToken);
-      return api.getWallet();
-    },
+    queryFn: getWallet,
     enabled: !!session?.accessToken,
     staleTime: 5000,
     refetchInterval: 10000,

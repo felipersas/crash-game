@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { createGamesApi } from "@/infrastructure/api/games-api";
+import { placeBet, cashOut, getCurrentRound } from "@/infrastructure/api/games-api";
 import { useGameStore } from "@/store/game-store";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
@@ -28,13 +28,6 @@ import { getErrorMessage } from "@/shared/constants/error-codes";
  * IMPORTANT: Multiplier and round phase are managed by WebSocket via Zustand store.
  * This hook only provides REST-based mutations (bet placement, cash out) and
  * periodic polling during BETTING phase for round synchronization.
- *
- * @example
- * ```ts
- * const { placeBet, cashOut, isPlacingBet } = useGame();
- * // Get real-time state from useGameStore instead
- * const { liveMultiplier, roundStatus } = useGameStore();
- * ```
  */
 export function useGame() {
   const queryClient = useQueryClient();
@@ -43,37 +36,23 @@ export function useGame() {
     useGameStore();
 
   // Current round query with smart polling
-  // Only poll during BETTING phase - ACTIVE phase is handled by WebSocket
   const currentRoundQuery = useQuery<Round>({
     queryKey: ["current-round"],
-    queryFn: () => {
-      const api = createGamesApi(session?.accessToken);
-      return api.getCurrentRound();
-    },
+    queryFn: getCurrentRound,
     refetchInterval: (query) => {
       const status = query.state.data?.status ?? roundStatus;
-      // Don't poll during ACTIVE phase - WebSocket handles real-time updates
       if (status === RoundStatus.ACTIVE) {
-        return false; // Disable polling during active phase
+        return false;
       }
-      // Poll every 3 seconds during BETTING phase to sync round state
       return status === RoundStatus.BETTING ? 3000 : false;
     },
-    // Only refetch on window focus during betting phase
     refetchOnWindowFocus: roundStatus === RoundStatus.BETTING,
   });
 
   // Place bet mutation
   const placeBetMutation = useMutation<PlaceBetResponse, ApiError, number>({
-    mutationFn: (amountCents: number) => {
-      const api = createGamesApi(session?.accessToken);
-      return api.placeBet(amountCents);
-    },
+    mutationFn: placeBet,
     onSuccess: (data: PlaceBetResponse) => {
-      // Bet is PENDING — don't show success yet.
-      // Real confirmation/cancellation comes via WebSocket events.
-
-      // Update local store with new bet
       const newBet: Bet = {
         id: data.betId,
         roundId: data.roundId,
@@ -89,7 +68,6 @@ export function useGame() {
 
       setMyActiveBet(newBet);
 
-      // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: ["wallet"] });
       queryClient.invalidateQueries({ queryKey: ["current-round"] });
     },
@@ -102,21 +80,17 @@ export function useGame() {
   const cashOutMutation = useMutation<CashOutResponse, ApiError, void>({
     mutationFn: () => {
       if (!myActiveBet) throw new Error("No active bet to cash out");
-
-      const api = createGamesApi(session?.accessToken);
-      return api.cashOut(uuidv4(), myActiveBet.roundId);
+      return cashOut(uuidv4(), myActiveBet.roundId);
     },
     onSuccess: (data: CashOutResponse) => {
       toast.success(`Cashed out at ${data.cashOutMultiplier.toFixed(2)}x!`);
 
-      // Update bet status in store
       updateBetStatus(data.betId, BetStatus.CASHED_OUT, {
         multiplier: data.cashOutMultiplier,
         payoutCents: data.payoutCents,
         payoutDecimal: data.payoutDecimal,
       });
 
-      // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: ["wallet"] });
       queryClient.invalidateQueries({ queryKey: ["current-round"] });
     },
