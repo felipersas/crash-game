@@ -3,12 +3,12 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { Transport } from '@nestjs/microservices';
 import type { MicroserviceOptions } from '@nestjs/microservices';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
-  // Connect as microservice to consume games events
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {
@@ -35,6 +35,20 @@ async function bootstrap(): Promise<void> {
       transform: true,
     }),
   );
+
+  const config = new DocumentBuilder()
+    .setTitle('Crash Game - Wallets Service')
+    .setDescription('Wallet management API — balance, create, credit/debit operations')
+    .setVersion('1.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'Keycloak JWT token' },
+      'bearer',
+    )
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api-docs', app, document, {
+    useGlobalPrefix: false,
+  });
 
   await app.startAllMicroservices();
 

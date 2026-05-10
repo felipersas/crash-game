@@ -6,6 +6,8 @@ await $`rm -rf dist`;
 const alwaysExternal = [
   '@nestjs/microservices',
   '@nestjs/websockets',
+  '@nestjs/swagger',
+  '@nestjs/mapped-types',
 ];
 
 const optionalRequirePackages = [
