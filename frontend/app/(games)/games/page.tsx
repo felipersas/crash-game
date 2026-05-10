@@ -16,7 +16,7 @@ export default function GameContent() {
   useGameWebSocket({
     token: session?.accessToken,
     playerId: session?.playerId,
-    enabled: !!session?.accessToken,
+    enabled: true,
   });
 
   const roundPhase =

@@ -49,7 +49,8 @@ export interface RoundSummary {
   startedAt: Date | null;
   crashedAt: Date | null;
   totalBets: number;
-  totalWageredCents?: number;
+  totalWageredCents: number;
+  totalWageredDecimal: string;
 }
 
 export interface Wallet {
@@ -74,11 +75,11 @@ export interface MyBet {
   cashOutMultiplier: number | null;
   payoutCents: number | null;
   payoutDecimal: string | null;
-  profitCents: number | null;
-  profitDecimal: string | null;
+  profitCents: number;
+  profitDecimal: string;
   status: BetStatus;
   cashedOutAt: Date | null;
-  placedAt: Date | null;
+  placedAt: Date;
 }
 
 export interface BetsSummary {

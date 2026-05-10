@@ -41,7 +41,8 @@ export const roundSummarySchema = z.object({
   startedAt: z.coerce.date().nullable(),
   crashedAt: z.coerce.date().nullable(),
   totalBets: z.number().int().nonnegative(),
-  totalWageredCents: z.number().int().nonnegative().optional(),
+  totalWageredCents: z.number().int().nonnegative(),
+  totalWageredDecimal: z.string(),
 });
 
 // Pagination meta schema
@@ -115,11 +116,11 @@ export const myBetSchema = z.object({
   cashOutMultiplier: z.number().nonnegative().nullable(),
   payoutCents: z.number().int().nonnegative().nullable(),
   payoutDecimal: z.string().nullable(),
-  profitCents: z.number().nullable(),
-  profitDecimal: z.string().nullable(),
+  profitCents: z.number(),
+  profitDecimal: z.string(),
   status: z.nativeEnum(BetStatus),
   cashedOutAt: z.coerce.date().nullable(),
-  placedAt: z.coerce.date().nullable(),
+  placedAt: z.coerce.date(),
 });
 
 // Bets summary schema
