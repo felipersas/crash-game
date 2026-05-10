@@ -1,4 +1,4 @@
-import { Bet } from './bet.entity';
+import { Bet, BetStatus } from './bet.entity';
 import { CrashPoint } from '../value-objects/crash-point.value-object';
 import { Multiplier } from '../value-objects/multiplier.value-object';
 import { SeedChain } from '../value-objects/seed-chain.value-object';
@@ -158,7 +158,9 @@ export class Round {
     round.currentMultiplier = Multiplier.start();
 
     for (const bet of bets) {
-      round.bets.set(bet.playerId, bet);
+      if (bet.getStatus() !== BetStatus.CANCELLED) {
+        round.bets.set(bet.playerId, bet);
+      }
     }
 
     return round;
