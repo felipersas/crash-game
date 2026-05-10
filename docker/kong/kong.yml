@@ -6,9 +6,9 @@ services:
     plugins:
       - name: rate-limiting
         config:
-          second: 10
-          minute: 60
-          hour: 1000
+          second: 20
+          minute: 200
+          hour: 5000
           policy: local
           limit_by: consumer
           fault_tolerant: true
@@ -115,9 +115,9 @@ services:
     plugins:
       - name: rate-limiting
         config:
-          second: 5
-          minute: 30
-          hour: 500
+          second: 10
+          minute: 100
+          hour: 2000
           policy: local
           limit_by: consumer
           fault_tolerant: true
