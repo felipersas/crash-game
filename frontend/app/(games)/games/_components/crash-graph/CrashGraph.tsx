@@ -117,7 +117,7 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
       </AnimatePresence>
 
       {/* Main Graph Area */}
-      <div className="relative flex-1 min-h-64 md:min-h-80 flex items-center justify-center">
+      <div className="relative flex-1 min-h-80 md:min-h-96 flex items-center justify-center">
         <div className="absolute inset-0 cyber-grid opacity-30" />
 
         <div className="relative z-10 text-center">
@@ -132,10 +132,10 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
           {/* Seed hash display during betting */}
           {isBetting && currentSeedHash && (
             <p
-              className="text-[10px] text-text-muted font-terminal mt-2 truncate max-w-xs"
+              className="text-[10px] text-text-muted font-terminal mt-2 break-all px-2"
               title={currentSeedHash}
             >
-              Hash: {currentSeedHash.slice(0, 16)}...
+              Hash: {currentSeedHash}
             </p>
           )}
 
