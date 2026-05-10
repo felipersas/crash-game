@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
-import { MetricsRecorderService } from './services/metrics-recorder.service.js';
+import { MetricsRecorderService, METRICS_RECORDER } from './services/metrics-recorder.service.js';
 
 @Module({
   imports: [
@@ -9,7 +9,13 @@ import { MetricsRecorderService } from './services/metrics-recorder.service.js';
       path: '/metrics',
     }),
   ],
-  providers: [MetricsRecorderService],
-  exports: [MetricsRecorderService],
+  providers: [
+    MetricsRecorderService,
+    { provide: METRICS_RECORDER, useExisting: MetricsRecorderService },
+  ],
+  exports: [
+    MetricsRecorderService,
+    { provide: METRICS_RECORDER, useExisting: MetricsRecorderService },
+  ],
 })
 export class ObservabilityModule {}
