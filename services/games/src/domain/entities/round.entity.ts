@@ -381,6 +381,14 @@ export class Round {
   }
 
   /**
+   * Remove a player's bet from the aggregate.
+   * Used when cancelling a stale PENDING bet before retry.
+   */
+  removeBet(playerId: string): void {
+    this.bets.delete(playerId);
+  }
+
+  /**
    * Get the round version for optimistic locking.
    */
   getVersion(): number {

@@ -44,6 +44,8 @@ model Bet {
 
   @@index([roundId])
   @@index([playerId])
+  // Partial unique index enforced via migration 20260510201800
+  // Prisma does not support WHERE clause in @@unique
   @@map("bets")
 }
 

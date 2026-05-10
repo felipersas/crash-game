@@ -1,11 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Round, type RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
+import { BetStatus } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { IEventPublisher } from '@crash/messaging';
 import type { IUseCase } from '@/application/interfaces/use-case';
 import { Money } from '@crash/domain';
-import { BetNotFoundError } from '@/domain/errors/domain.errors';
+import { BetNotFoundError, DuplicateBetError } from '@/domain/errors/domain.errors';
 import {
   ROUND_REPOSITORY,
   BET_REPOSITORY,
@@ -40,7 +41,6 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {
     let round = await this.roundRepository.findCurrentRound();
 
-    // If no current round, create one
     if (!round) {
       round = await Round.create(DEFAULT_ROUND_CONFIG);
       await this.roundRepository.create(round);
@@ -53,19 +53,26 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
 
     const amount = Money.fromCents(input.amountCents);
 
-    // Create bet in memory (validates business rules)
+    const existingBet = await this.betRepository.findByPlayerAndRound(input.playerId, round.id);
+    if (existingBet) {
+      if (existingBet.getStatus() === BetStatus.PENDING) {
+        existingBet.cancel('Replaced by new bet attempt');
+        await this.betRepository.update(existingBet);
+        round.removeBet(input.playerId);
+      } else {
+        throw new DuplicateBetError();
+      }
+    }
+
     round.placeBet(input.playerId, amount);
 
-    // Get the bet from round
     const bet = round.getBetByPlayer(input.playerId);
     if (!bet) {
       throw new BetNotFoundError();
     }
 
-    // Persist bet independently (no round version lock)
     await this.betRepository.create(bet);
 
-    // Update round version for state change
     await this.roundRepository.save(round);
 
     const events = round.pullEvents();
@@ -73,7 +80,6 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
       await this.eventPublisher.publishBatch(events);
     }
 
-    // Broadcast via WebSocket (fire-and-forget, non-blocking)
     try {
       this.broadcaster.broadcastBetPlaced(round.id, bet.id, input.playerId, input.amountCents);
     } catch (error) {
