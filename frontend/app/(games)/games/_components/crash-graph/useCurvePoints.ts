@@ -1,4 +1,5 @@
 import { useEffect, useRef, useMemo } from "react";
+import { useGameStore } from "@/store/game-store";
 
 export type Phase = "betting" | "active" | "crashed";
 type DataPoint = [number, number]; // [elapsedMs, multiplier]
@@ -63,30 +64,77 @@ function computeCurve(points: DataPoint[]): CurveData | null {
   return { path, areaPath, endX, endY };
 }
 
+function buildSyntheticCurve(elapsedMs: number, multiplier: number): DataPoint[] {
+  if (elapsedMs < 100 || multiplier <= 1.01) return [[0, multiplier]];
+  const numPoints = Math.min(30, Math.max(8, Math.floor(elapsedMs / 250)));
+  const k = Math.log(multiplier) / elapsedMs;
+  const points: DataPoint[] = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const t = (i / numPoints) * elapsedMs;
+    points.push([t, Math.exp(k * t)]);
+  }
+  return points;
+}
+
 export function useCurvePoints(multiplier: number, phase: Phase): CurveData | null {
   const pointsRef = useRef<DataPoint[]>([]);
   const startTimeRef = useRef(0);
   const prevPhaseRef = useRef<Phase>(phase);
+  const initializedRef = useRef(false);
+  const roundStartedAt = useGameStore((s) => s.roundStartedAt);
 
   useEffect(() => {
     const prev = prevPhaseRef.current;
 
     if (phase === "active" && prev !== "active") {
-      pointsRef.current = [[0, multiplier]];
-      startTimeRef.current = performance.now();
-    } else if (phase === "active") {
+      if (roundStartedAt) {
+        initializedRef.current = true;
+        const elapsedMs = Date.now() - roundStartedAt.getTime();
+        startTimeRef.current = performance.now() - elapsedMs;
+        pointsRef.current = buildSyntheticCurve(elapsedMs, multiplier);
+      } else {
+        startTimeRef.current = performance.now();
+        pointsRef.current = [[0, 1.0]];
+        initializedRef.current = true;
+      }
+    } else if (phase === "active" && !initializedRef.current) {
+      initializedRef.current = true;
+      if (roundStartedAt) {
+        const elapsedMs = Date.now() - roundStartedAt.getTime();
+        startTimeRef.current = performance.now() - elapsedMs;
+        pointsRef.current = buildSyntheticCurve(elapsedMs, multiplier);
+      } else {
+        startTimeRef.current = performance.now();
+        pointsRef.current = [[0, multiplier]];
+      }
+    } else if (phase === "active" && pointsRef.current.length > 0) {
       const elapsed = performance.now() - startTimeRef.current;
-      pointsRef.current.push([elapsed, multiplier]);
+      const last = pointsRef.current[pointsRef.current.length - 1];
+      const multJump = multiplier - last[1];
 
+      if (multJump > 0.5 && elapsed - last[0] < 500) {
+        const gapTime = elapsed - last[0];
+        const k = Math.log(multiplier / last[1]) / gapTime;
+        const numInterp = Math.max(5, Math.min(25, Math.floor(gapTime / 100)));
+        const interpPoints: DataPoint[] = [];
+        for (let i = 1; i < numInterp; i++) {
+          const t = last[0] + (i / numInterp) * gapTime;
+          interpPoints.push([t, last[1] * Math.exp(k * (t - last[0]))]);
+        }
+        pointsRef.current.push(...interpPoints);
+      }
+
+      pointsRef.current.push([elapsed, multiplier]);
       if (pointsRef.current.length > MAX_POINTS) {
         pointsRef.current = pointsRef.current.filter((_, i) => i % 2 === 0);
       }
     } else if (phase === "betting" && prev !== "betting") {
       pointsRef.current = [];
+      initializedRef.current = false;
     }
 
     prevPhaseRef.current = phase;
-  }, [multiplier, phase]);
+  }, [multiplier, phase, roundStartedAt]);
 
   return useMemo(() => {
     if (phase === "betting") return null;
