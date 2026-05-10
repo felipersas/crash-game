@@ -15,6 +15,7 @@ interface GameState {
   roundStatus: RoundStatus;
   liveMultiplier: number;
   bettingEndTime: Date | null;
+  roundStartedAt: Date | null;
   currentSeedHash: string | null;
   myActiveBet: Bet | null;
   currentBets: Bet[];
@@ -27,6 +28,14 @@ interface GameState {
     roundId: string,
     seedHash: string,
     bettingEndTime: Date,
+    startedAt?: Date | null,
+  ) => void;
+  rejoinActiveRound: (
+    roundId: string,
+    seedHash: string,
+    startedAt: Date,
+    multiplier: number,
+    bets: Bet[],
   ) => void;
   setBettingEnded: () => void;
   setMultiplier: (multiplier: number) => void;
@@ -53,6 +62,7 @@ const initialState = {
   roundStatus: RoundStatus.BETTING,
   liveMultiplier: 1.0,
   bettingEndTime: null,
+  roundStartedAt: null as Date | null,
   currentSeedHash: null as string | null,
   myActiveBet: null,
   currentBets: [],
@@ -66,15 +76,28 @@ export const useGameStore = create<GameState>()(
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       setConnected: (connected) => set({ isConnected: connected }),
 
-      setRoundStarted: (roundId, seedHash, bettingEndTime) =>
+      setRoundStarted: (roundId, seedHash, bettingEndTime, startedAt) =>
         set({
           currentRoundId: roundId,
           roundStatus: RoundStatus.BETTING,
           liveMultiplier: 1.0,
           bettingEndTime,
+          roundStartedAt: startedAt ?? null,
           currentSeedHash: seedHash,
           myActiveBet: null,
           currentBets: [],
+        }),
+
+      rejoinActiveRound: (roundId, seedHash, startedAt, multiplier, bets) =>
+        set({
+          currentRoundId: roundId,
+          roundStatus: RoundStatus.ACTIVE,
+          liveMultiplier: multiplier,
+          bettingEndTime: null,
+          roundStartedAt: startedAt,
+          currentSeedHash: seedHash,
+          myActiveBet: null,
+          currentBets: bets,
         }),
 
       setBettingEnded: () =>

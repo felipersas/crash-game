@@ -53,6 +53,7 @@ export function useGameWebSocket(
   );
   const setStoreConnected = useGameStore((state) => state.setConnected);
   const setStoreRoundStarted = useGameStore((state) => state.setRoundStarted);
+  const setStoreRejoinActiveRound = useGameStore((state) => state.rejoinActiveRound);
   const setStoreBettingEnded = useGameStore((state) => state.setBettingEnded);
   const setStoreMultiplier = useGameStore((state) => state.setMultiplier);
   const setStoreCrash = useGameStore((state) => state.setCrash);
@@ -86,20 +87,20 @@ export function useGameWebSocket(
             setStoreCurrentBets(round.bets || []);
             break;
           case RoundStatus.ACTIVE:
-            setStoreRoundStarted(
+            setStoreRejoinActiveRound(
               round.roundId,
               round.seedHash || "",
-              new Date(),
+              round.startedAt ? new Date(round.startedAt) : new Date(),
+              round.currentMultiplier ?? 1.0,
+              round.bets || [],
             );
-            setStoreBettingEnded();
-            setStoreMultiplier(round.currentMultiplier ?? 1.0);
-            setStoreCurrentBets(round.bets || []);
             break;
           case RoundStatus.CRASHED:
             setStoreRoundStarted(
               round.roundId,
               round.seedHash || "",
               new Date(),
+              round.startedAt ? new Date(round.startedAt) : null,
             );
             setStoreCrash(round.crashPoint ?? 1.0);
             setStoreCurrentBets(round.bets || []);
@@ -123,6 +124,7 @@ export function useGameWebSocket(
     },
     [
       setStoreRoundStarted,
+      setStoreRejoinActiveRound,
       setStoreBettingEnded,
       setStoreMultiplier,
       setStoreCrash,
