@@ -4,35 +4,8 @@ import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/roun
 import { Bet, BetStatus } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
-
-/** Prisma row types matching schema.prisma models */
-type RoundRow = {
-  id: string;
-  seed: string;
-  seedHash: string;
-  nextSeed: string | null;
-  status: string;
-  crashPoint: number | null;
-  bettingEndTime: Date | null;
-  startedAt: Date | null;
-  crashedAt: Date | null;
-  version: number;
-  createdAt: Date;
-  updatedAt: Date;
-  bets: BetRow[];
-};
-
-type BetRow = {
-  id: string;
-  roundId: string;
-  playerId: string;
-  amountCents: bigint;
-  status: string;
-  cashOutMultiplier: number | null;
-  cashOutAmount: bigint | null;
-  cashedOutAt: Date | null;
-  createdAt: Date;
-};
+import type { Round as RoundRow } from '@prisma/client'
+import type { Bet as BetRow } from '@prisma/client'
 
 @Injectable()
 export class PrismaRoundRepository implements IRoundRepository {
