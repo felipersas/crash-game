@@ -6,7 +6,7 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { type ConfirmBetUseCase } from '@/application/use-cases/confirm-bet.use-case';
+import { ConfirmBetUseCase } from '@/application/use-cases/confirm-bet.use-case';
 import type { WalletDebitedEvent } from '../../types/wallet.events';
 
 /**

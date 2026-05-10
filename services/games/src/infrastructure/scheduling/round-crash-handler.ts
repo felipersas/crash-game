@@ -9,8 +9,8 @@ import {
   EVENT_PUBLISHER,
   GAMES_GATEWAY,
 } from '@/infrastructure/di/tokens';
-import { type GamesGateway } from '@/infrastructure/websocket/games.gateway';
-import { type RedisService } from '@/infrastructure/redis/redis.service';
+import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import { RedisService } from '@/infrastructure/redis/redis.service';
 
 /**
  * Round Crash Handler - Infrastructure Layer

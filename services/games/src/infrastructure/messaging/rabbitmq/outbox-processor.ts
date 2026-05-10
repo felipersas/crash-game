@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { type PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
+import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import type { IEventPublisher } from '@crash/messaging';
 import { EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
 import { Inject } from '@nestjs/common';

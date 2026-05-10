@@ -1,7 +1,7 @@
 import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload, Ctx, type RmqContext } from '@nestjs/microservices';
-import { type WalletDebitedEventHandler } from './handlers/wallet-debited.handler';
-import { type WalletDebitFailedEventHandler } from './handlers/wallet-debit-failed.handler';
+import { WalletDebitedEventHandler } from './handlers/wallet-debited.handler';
+import { WalletDebitFailedEventHandler } from './handlers/wallet-debit-failed.handler';
 @Controller()
 export class WalletEventsController {
   private readonly logger = new Logger(WalletEventsController.name);

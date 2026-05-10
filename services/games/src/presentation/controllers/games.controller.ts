@@ -21,15 +21,15 @@ import {
   UserContext,
   type UserContext as UserContextType,
 } from '../decorators/user-context.decorator';
-import { type PlaceBetUseCase } from '@/application/use-cases/place-bet.use-case';
-import { type CashOutUseCase } from '@/application/use-cases/cash-out.use-case';
-import { type GetCurrentRoundUseCase } from '@/application/use-cases/get-current-round.use-case';
-import { type GetRoundHistoryUseCase } from '@/application/use-cases/get-round-history.use-case';
-import { type VerifyRoundUseCase } from '@/application/use-cases/verify-round.use-case';
-import { type GetBetStatusUseCase } from '@/application/use-cases/get-bet-status.use-case';
-import { type GetMyBetsUseCase } from '@/application/use-cases/get-my-bets.use-case';
-import { type PlaceBetRequestDto } from '../dtos/place-bet.dto';
-import { type CashOutRequestDto } from '../dtos/cash-out.dto';
+import { PlaceBetUseCase } from '@/application/use-cases/place-bet.use-case';
+import { CashOutUseCase } from '@/application/use-cases/cash-out.use-case';
+import { GetCurrentRoundUseCase } from '@/application/use-cases/get-current-round.use-case';
+import { GetRoundHistoryUseCase } from '@/application/use-cases/get-round-history.use-case';
+import { VerifyRoundUseCase } from '@/application/use-cases/verify-round.use-case';
+import { GetBetStatusUseCase } from '@/application/use-cases/get-bet-status.use-case';
+import { GetMyBetsUseCase } from '@/application/use-cases/get-my-bets.use-case';
+import { PlaceBetRequestDto, PlaceBetResponseDto } from '../dtos/place-bet.dto';
+import { CashOutRequestDto, CashOutResponseDto } from '../dtos/cash-out.dto';
 import {
   RoundOutputDto,
   GetRoundHistoryResponseDto,
@@ -81,7 +81,7 @@ export class GamesController {
   @ApiResponse({
     status: 202,
     description: 'Bet placed (pending confirmation)',
-    type: () => import('../dtos/place-bet.dto').PlaceBetResponseDto,
+    type: () => PlaceBetResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Invalid bet', type: ApiErrorResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -90,7 +90,7 @@ export class GamesController {
   async placeBet(
     @UserContext() user: UserContextType,
     @Body() dto: PlaceBetRequestDto,
-  ): Promise<import('../dtos/place-bet.dto').PlaceBetResponseDto> {
+  ): Promise<PlaceBetResponseDto> {
     const result = await this.placeBetUseCase.execute({
       playerId: user.playerId,
       amountCents: BigInt(dto.amount),
@@ -187,14 +187,14 @@ export class GamesController {
   @ApiResponse({
     status: 200,
     description: 'Cash out successful',
-    type: () => import('../dtos/cash-out.dto').CashOutResponseDto,
+    type: () => CashOutResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Cannot cash out', type: ApiErrorResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async cashOut(
     @UserContext() user: UserContextType,
     @Body() dto: CashOutRequestDto,
-  ): Promise<import('../dtos/cash-out.dto').CashOutResponseDto> {
+  ): Promise<CashOutResponseDto> {
     const result = await this.cashOutUseCase.execute({
       playerId: user.playerId,
       roundId: dto.roundId,

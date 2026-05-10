@@ -5,8 +5,8 @@ import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
-import { type GamesGateway } from '@/infrastructure/websocket/games.gateway';
-import { type RedisService } from '@/infrastructure/redis/redis.service';
+import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import { RedisService } from '@/infrastructure/redis/redis.service';
 import type { RoundState } from '@/infrastructure/redis/redis.service';
 import {
   ROUND_REPOSITORY,
@@ -16,7 +16,7 @@ import {
 } from '@/infrastructure/di/tokens';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
-import { type RoundCrashHandler } from './round-crash-handler';
+import { RoundCrashHandler } from './round-crash-handler';
 
 /**
  * Round Lifecycle Manager - Infrastructure Layer

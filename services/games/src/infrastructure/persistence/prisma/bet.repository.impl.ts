@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { type PrismaService } from './prisma.service';
+import { PrismaService } from './prisma.service';
 import { Bet, BetStatus } from '@/domain/entities/bet.entity';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 

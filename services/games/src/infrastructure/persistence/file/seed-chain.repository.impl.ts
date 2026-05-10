@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { type ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';

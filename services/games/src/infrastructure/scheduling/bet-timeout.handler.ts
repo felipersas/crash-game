@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
-import { type CancelBetUseCase } from '@/application/use-cases/cancel-bet.use-case';
+import { CancelBetUseCase } from '@/application/use-cases/cancel-bet.use-case';
 
 /**
  * Bet Timeout Handler - Infrastructure Layer

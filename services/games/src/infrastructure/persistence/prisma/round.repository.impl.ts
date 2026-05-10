@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { type PrismaService } from './prisma.service';
+import { PrismaService } from './prisma.service';
 import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
 import { Bet, type BetStatus } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
