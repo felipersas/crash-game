@@ -13,6 +13,7 @@
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
 import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
 import {
@@ -58,6 +59,7 @@ export class BetPlacedEventHandler {
     @Inject(PLAYER_WALLET_RESOLVER) private readonly playerWalletResolver: PlayerWalletResolver,
     @Inject(INBOX_REPOSITORY) private readonly inboxRepository: IInboxRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
   ) {}
 
   /**
@@ -67,6 +69,8 @@ export class BetPlacedEventHandler {
    */
   async handle(event: BetPlacedEvent): Promise<void> {
     const idempotencyKey = `bet-${event.betId}`;
+
+    this.metrics.incrRabbitConsumed('wallets.games.events', 'BetPlaced');
 
     this.logger.debug(
       `Processing BetPlacedEvent: player=${event.playerId}, amount=${event.amount}, betId=${event.betId}`,
