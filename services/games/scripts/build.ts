@@ -2,11 +2,15 @@ import { build, $ } from 'bun';
 
 await $`rm -rf dist`;
 
+// Packages that should always be externalized (optional deps with lazy requires)
+const alwaysExternal = [
+  '@nestjs/microservices',
+  '@nestjs/websockets',
+];
+
 const optionalRequirePackages = [
   'class-transformer',
   'class-validator',
-  '@nestjs/microservices',
-  '@nestjs/websockets',
   '@fastify/static',
 ];
 
@@ -18,14 +22,17 @@ const result = await build({
     syntax: true,
     whitespace: true,
   },
-  external: optionalRequirePackages.filter((pkg) => {
-    try {
-      require(pkg);
-      return false;
-    } catch (_) {
-      return true;
-    }
-  }),
+  external: [
+    ...alwaysExternal,
+    ...optionalRequirePackages.filter((pkg) => {
+      try {
+        require(pkg);
+        return false;
+      } catch (_) {
+        return true;
+      }
+    }),
+  ],
   splitting: true,
 });
 
