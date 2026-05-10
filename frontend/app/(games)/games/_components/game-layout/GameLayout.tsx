@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Bell, LogOut, Settings, User } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useWallet } from "@/hooks/useWallet";
@@ -13,6 +14,26 @@ export default function GameLayout({
 }) {
   const { balance } = useWallet();
   const { logout } = useAuth();
+
+  const prevBalance = useRef(balance);
+  const [balanceGlow, setBalanceGlow] = useState<"win" | "lose" | null>(null);
+
+  useEffect(() => {
+    if (prevBalance.current === balance || prevBalance.current == null) {
+      prevBalance.current = balance;
+      return;
+    }
+    const prev = Number(prevBalance.current) || 0;
+    const curr = Number(balance) || 0;
+    if (curr > prev) {
+      setBalanceGlow("win");
+    } else if (curr < prev) {
+      setBalanceGlow("lose");
+    }
+    prevBalance.current = balance;
+    const id = setTimeout(() => setBalanceGlow(null), 1500);
+    return () => clearTimeout(id);
+  }, [balance]);
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -32,7 +53,7 @@ export default function GameLayout({
               <span className="text-xs text-text-muted font-terminal uppercase">
                 Balance
               </span>
-              <span className="text-lg font-bold font-terminal text-text-primary">
+              <span className={`text-lg font-bold font-terminal text-text-primary ${balanceGlow === "win" ? "glow-balance-win" : balanceGlow === "lose" ? "glow-balance-lose" : ""}`}>
                 {formatMoney(Number(balance) || 0)}
               </span>
             </div>
