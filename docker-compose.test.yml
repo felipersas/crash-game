@@ -43,6 +43,19 @@ services:
       retries: 15
 
   # ---------------------------------------------------------------------------
+  # Redis (for Games service state)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
   # Games Service (for E2E tests)
   # ---------------------------------------------------------------------------
   games:
@@ -63,16 +76,19 @@ services:
       RABBITMQ_USER: admin
       RABBITMQ_PASS: admin
       NODE_ENV: test
+      REDIS_URL: redis://redis:6379
       # Deterministic seed for predictable crash points in E2E tests
-      # This seed produces ~2x crash (fast test execution)
-      DETERMINISTIC_SEED: test-crash-2-27
+      # test-crash-2-94 produces ~1.98x crash (fast test execution)
+      DETERMINISTIC_SEED: test-crash-2-94
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4001/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4001/games/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 15
@@ -100,15 +116,15 @@ services:
       RABBITMQ_PASS: admin
       NODE_ENV: test
       # Deterministic seed for predictable crash points in E2E tests
-      # This seed produces ~2x crash (fast test execution)
-      DETERMINISTIC_SEED: test-crash-2-27
+      # test-crash-2-94 produces ~1.98x crash (fast test execution)
+      DETERMINISTIC_SEED: test-crash-2-94
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4002/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4002/wallets/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 15
