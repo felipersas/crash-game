@@ -237,7 +237,6 @@ export class Round {
     this.status = RoundStatus.ACTIVE;
     this.startedAt = new Date();
 
-    // Calculate crash point from seed
     this.crashPoint = await CrashPoint.fromSeed(this.seedChain.getSeed());
 
     this.addEvent(createBettingPhaseEndedEvent(this.id, this.version));
@@ -254,7 +253,6 @@ export class Round {
 
     this.currentMultiplier = Multiplier.afterDuration(elapsedSeconds, this.config.growthRate);
 
-    // Check if round should crash
     if (this.crashPoint && this.crashPoint.shouldCrashAt(this.currentMultiplier.getValue())) {
       this.crash();
     }
@@ -282,7 +280,6 @@ export class Round {
       }
     }
 
-    // Calculate totals for the event
     let totalBets = 0;
     let totalBetAmount = 0n;
     let totalWinAmount = 0n;

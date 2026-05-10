@@ -66,7 +66,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let errorName = 'InternalServerError';
     let message = 'An unexpected error occurred';
 
-    // Handle DomainError instances
     let code: string | undefined;
 
     if (exception instanceof DomainError) {
@@ -77,7 +76,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       this.logger.warn(`[${errorName}] ${message} - ${request.method} ${request.url}`);
     }
-    // Handle HttpException instances (including built-in NestJS exceptions)
     else if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
       const exceptionResponse = exception.getResponse();
@@ -87,11 +85,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
           ? exceptionResponse
           : (exceptionResponse as any).message || exception.message;
     }
-    // Handle unexpected errors
     else if (exception instanceof Error) {
       message = exception.message;
 
-      // Log unexpected errors for debugging
       this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
     }
 

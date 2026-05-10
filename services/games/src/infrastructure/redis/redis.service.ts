@@ -153,8 +153,6 @@ export class RedisService implements OnModuleDestroy, IIdempotencyCache {
 
     try {
       const key = this.getRoundKey(roundId);
-      // Use HINCRBY for atomic counter, or use Lua script for complex updates
-      // For simplicity, we'll do a get-modify-set with watch
       await this.client.watch(key);
 
       const data = await this.client.get(key);

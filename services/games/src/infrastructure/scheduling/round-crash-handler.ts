@@ -46,7 +46,6 @@ export class RoundCrashHandler {
 
     this.logger.log(`Round ${roundId} crashed at ${crashPoint}x`);
 
-    // Reload Round from DB to get latest version (may have cashouts from API)
     const latestRound = await this.roundRepository.findById(roundId);
     if (!latestRound) {
       this.logger.error(`Round ${roundId} not found in DB during crash handling`);
@@ -76,10 +75,8 @@ export class RoundCrashHandler {
       }
     }
 
-    // Persist bet status changes (LOST/CANCELLED) to DB
     await this.settleBets(latestRound);
 
-    // Clear from Redis (round is over)
     await this.redisService.deleteRound(roundId);
 
     // Publish events from DB version (has authoritative state)
@@ -88,7 +85,6 @@ export class RoundCrashHandler {
       await this.eventPublisher.publishBatch(events);
     }
 
-    // Broadcast crash
     const crashEvent = events.find((e) => e.eventType === 'RoundCrashed');
     if (crashEvent && 'seed' in crashEvent) {
       this.gamesGateway.broadcastCrash(

@@ -41,31 +41,25 @@ export class CancelBetUseCase implements IUseCase<CancelBetInput, CancelBetOutpu
   ) {}
 
   async execute(input: CancelBetInput): Promise<CancelBetOutput> {
-    // Find bet directly by player and round
     const bet = await this.betRepository.findByPlayerAndRound(input.playerId, input.roundId);
 
     if (!bet) {
       throw new BetNotFoundError();
     }
 
-    // Cancel the bet (PENDING → CANCELLED)
     bet.cancel(input.reason);
-
-    // Save bet state change
     await this.betRepository.update(bet);
 
-    // Emit event for WebSocket notification
     const event = createBetCancelledEvent(
       input.roundId,
       input.betId,
       input.playerId,
       bet.getAmount().toCents(),
       input.reason,
-      1, // version for the event
+      1,
     );
     await this.eventPublisher.publishBatch([event]);
 
-    // Broadcast via WebSocket (fire-and-forget, non-blocking)
     try {
       this.broadcaster.broadcastBetCancelled(
         input.roundId,

@@ -52,7 +52,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
    * Called when the module initializes.
    */
   async onModuleInit() {
-    // Load or create seed chain
     this.currentSeedChain = await this.seedChainRepository.load();
 
     if (!this.currentSeedChain) {
@@ -78,7 +77,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       }
     }
 
-    // Try to load existing current round
     this.currentRound = await this.roundRepository.findCurrentRound();
 
     if (!this.currentRound) {
@@ -112,11 +110,9 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       );
     }
 
-    // Create round with current seed from chain
     const newRound = await Round.createWithSeedChain(this.currentSeedChain, DEFAULT_ROUND_CONFIG);
     await this.roundRepository.create(newRound);
 
-    // Advance to next seed for next round
     try {
       this.currentSeedChain = this.currentSeedChain.advance();
       await this.seedChainRepository.save(this.currentSeedChain);
@@ -128,13 +124,11 @@ export class RoundLifecycleManager implements IRoundStateProvider {
 
     this.currentRound = newRound;
 
-    // Publish events
     const events = this.currentRound.pullEvents();
     if (events.length > 0) {
       await this.eventPublisher.publishBatch(events);
     }
 
-    // Broadcast via WebSocket
     const roundStarted = events.find((e) => e.eventType === 'RoundStarted');
     if (roundStarted && this.currentRound) {
       this.gamesGateway.broadcastRoundStarted(
@@ -144,7 +138,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       );
     }
 
-    // Schedule end of betting phase
     this.scheduleBettingEnd();
 
     this.logger.log(`Round ${this.currentRound.id} started in BETTING phase`);
@@ -243,16 +236,13 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       }
     }
 
-    // Publish events
     const events = this.currentRound.pullEvents();
     if (events.length > 0) {
       await this.eventPublisher.publishBatch(events);
     }
 
-    // Broadcast via WebSocket
     this.gamesGateway.broadcastBettingEnded(this.currentRound.id);
 
-    // Start multiplier updates
     this.roundStartTime = this.currentRound.getStartedAt() || new Date();
     this.startMultiplierUpdates();
   }
@@ -280,16 +270,13 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     const elapsedSeconds = (Date.now() - this.roundStartTime.getTime()) / 1000;
     this.currentRound.updateMultiplier(elapsedSeconds);
 
-    // Persist to Redis for fast access (sub-ms reads for cashout)
     this.persistToRedis();
 
-    // Broadcast multiplier update
     this.gamesGateway.broadcastMultiplierUpdate(
       this.currentRound.id,
       this.currentRound.getCurrentMultiplier(),
     );
 
-    // Check if round crashed
     if (this.currentRound.getStatus() === RoundStatus.CRASHED) {
       this.handleRoundCrashed();
     }
@@ -326,7 +313,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
   private async handleRoundCrashed() {
     if (!this.currentRound) return;
 
-    // Stop updates
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
@@ -335,7 +321,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     // Delegate crash handling (DB persist, bet settlement, event publishing, WS broadcast)
     this.currentRound = await this.crashHandler.handleRoundCrashed(this.currentRound);
 
-    // Start new round after a delay
     setTimeout(() => {
       this.createNewRound();
     }, 5000); // 5 second delay before next round
@@ -352,7 +337,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
 
     const status = this.currentRound.getStatus();
 
-    // Log current state
     this.logger.debug(
       `Round ${this.currentRound.id}: ${status}, ` +
         `Multiplier: ${this.currentRound.getCurrentMultiplier().toFixed(2)}x, ` +
