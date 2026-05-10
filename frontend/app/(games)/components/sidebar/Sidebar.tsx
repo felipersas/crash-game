@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Gamepad2, History, Wallet } from "lucide-react";
+import { Gamepad2, History, Wallet, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/hooks/useAuth";
 
 const navItems = [
   { href: "/games", label: "Play", icon: Gamepad2 },
@@ -15,6 +16,7 @@ const navItems = [
 
 export default function Sidebar({ className = "" }: { className?: string }) {
   const pathname = usePathname();
+  const { isAuthenticated, logout } = useAuth();
 
   return (
     <aside
@@ -47,10 +49,19 @@ export default function Sidebar({ className = "" }: { className?: string }) {
       </nav>
 
       <Separator />
-      <div className="px-4 py-3">
-        <p className="text-[10px] font-terminal text-text-muted uppercase tracking-widest text-center">
-          Provably Fair
-        </p>
+      <div className="px-3 py-3">
+        {isAuthenticated && (
+          <button
+            onClick={() => logout()}
+            className={cn(
+              buttonVariants({ variant: "ghost" }),
+              "w-full justify-start gap-3 font-terminal uppercase tracking-wider text-sm h-10 text-text-muted hover:text-red-400",
+            )}
+          >
+            <LogOut className="w-5 h-5" />
+            Logout
+          </button>
+        )}
       </div>
     </aside>
   );

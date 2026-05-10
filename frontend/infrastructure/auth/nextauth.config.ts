@@ -22,6 +22,7 @@ export const authOptions: NextAuthOptions = {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
+        token.idToken = account.id_token;
       }
 
       // playerId = Keycloak sub claim (same UUID backend uses as playerId)
@@ -39,6 +40,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       session.accessToken = token.accessToken as string;
       session.playerId = token.playerId as string;
+      session.idToken = token.idToken as string;
       return session;
     },
   },
