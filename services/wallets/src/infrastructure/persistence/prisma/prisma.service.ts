@@ -46,7 +46,6 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // Convenience methods
   get wallet() {
     return this.prisma.wallet;
   }
