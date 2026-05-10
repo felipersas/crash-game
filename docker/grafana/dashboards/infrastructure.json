@@ -108,7 +108,7 @@
       },
       "targets": [
         {
-          "expr": "rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))",
+          "expr": "rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m])) or vector(0)",
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
         }
@@ -126,7 +126,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (cmd) (topk_min(5, rate(redis_commands_total[5m])))",
+          "expr": "topk(5, sum by (cmd) (rate(redis_commands_total[5m])))",
           "legendFormat": "{{cmd}}",
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
@@ -168,7 +168,7 @@
       },
       "targets": [
         {
-          "expr": "redis_instance_info{cmd=\"server\"} * 0 + time() - redis_start_time_seconds",
+          "expr": "time() - redis_start_time_seconds",
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
         }
