@@ -56,13 +56,13 @@ export function MyBetsClient() {
       )}
 
       <div className="panel-cyber rounded-lg overflow-hidden">
-        <div className="grid grid-cols-6 gap-2 px-4 py-3 bg-surface/50 border-b border-border text-xs font-terminal text-text-muted uppercase tracking-wider">
+        <div className="grid grid-cols-[1fr_auto_auto_auto] md:grid-cols-6 gap-2 px-4 py-3 bg-surface/50 border-b border-border text-xs font-terminal text-text-muted uppercase tracking-wider">
           <span>Round</span>
           <span>Amount</span>
-          <span>Cashout</span>
-          <span>Profit</span>
+          <span className="hidden md:block">Cashout</span>
+          <span className="hidden md:block">Profit</span>
           <span>Status</span>
-          <span className="text-right">Date</span>
+          <span className="hidden md:block text-right">Date</span>
         </div>
 
         {isLoading ? (
@@ -76,19 +76,19 @@ export function MyBetsClient() {
           </div>
         ) : (
           bets.map((bet) => (
-            <div key={bet.id} className="grid grid-cols-6 gap-2 px-4 py-3 border-b border-border/50 hover:bg-surface/30 transition-colors items-center">
+            <div key={bet.id} className="grid grid-cols-[1fr_auto_auto_auto] md:grid-cols-6 gap-2 px-4 py-3 border-b border-border/50 hover:bg-surface/30 transition-colors items-center">
               <span className="font-terminal text-sm text-text-muted truncate" title={bet.roundId}>
                 {bet.roundId.slice(0, 8)}...
               </span>
               <span className="font-terminal text-sm text-text-primary">{formatMoney(bet.amountCents)}</span>
-              <span className="font-terminal text-sm text-text-primary">
+              <span className="hidden md:block font-terminal text-sm text-text-primary">
                 {bet.cashOutMultiplier ? formatMultiplier(bet.cashOutMultiplier) : "-"}
               </span>
-              <span className={`font-terminal text-sm ${(bet.profitCents ?? 0) >= 0 ? "text-primary" : "text-error"}`}>
+              <span className={`hidden md:block font-terminal text-sm ${(bet.profitCents ?? 0) >= 0 ? "text-primary" : "text-error"}`}>
                 {bet.profitCents != null ? formatMoney(bet.profitCents) : "-"}
               </span>
               <span>{statusBadge(bet.status)}</span>
-              <span className="font-terminal text-xs text-text-muted text-right" title={bet.placedAt ? new Date(bet.placedAt).toLocaleString() : "-"}>
+              <span className="hidden md:block font-terminal text-xs text-text-muted text-right" title={bet.placedAt ? new Date(bet.placedAt).toLocaleString() : "-"}>
                 {bet.placedAt ? new Date(bet.placedAt).toLocaleDateString() : "-"}
               </span>
             </div>

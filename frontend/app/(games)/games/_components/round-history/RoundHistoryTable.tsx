@@ -54,12 +54,12 @@ export default function RoundHistoryTable({
   return (
     <>
       {/* Table Header */}
-      <div className="grid grid-cols-6 gap-2 px-4 py-3 bg-surface/50 border-b border-border text-xs font-terminal text-text-muted uppercase tracking-wider">
+      <div className="grid grid-cols-[1fr_auto_auto] md:grid-cols-6 gap-2 px-4 py-3 bg-surface/50 border-b border-border text-xs font-terminal text-text-muted uppercase tracking-wider">
         <span>ID</span>
-        <span>Crash Point</span>
-        <span>Date</span>
-        <span>Bets</span>
-        <span>Volume</span>
+        <span className="hidden md:block">Date</span>
+        <span className="hidden md:block">Bets</span>
+        <span className="hidden md:block">Volume</span>
+        <span>Crash</span>
         <span className="text-right">Verify</span>
       </div>
 
@@ -67,24 +67,24 @@ export default function RoundHistoryTable({
       {rounds.map((round) => (
         <div
           key={round.roundId}
-          className="grid grid-cols-6 gap-2 px-4 py-3 border-b border-border/50 hover:bg-surface/30 transition-colors items-center"
+          className="grid grid-cols-[1fr_auto_auto] md:grid-cols-6 gap-2 px-4 py-3 border-b border-border/50 hover:bg-surface/30 transition-colors items-center"
         >
           <span className="font-terminal text-sm text-text-muted truncate" title={round.roundId}>
             {round.roundId.slice(0, 8)}...
+          </span>
+          <span className="hidden md:block font-terminal text-xs text-text-muted" title={round.crashedAt ? new Date(round.crashedAt).toLocaleString() : '-'}>
+            {round.crashedAt ? new Date(round.crashedAt).toLocaleDateString() : '-'}
+          </span>
+          <span className="hidden md:block font-terminal text-sm text-text-primary">
+            {round.totalBets}
+          </span>
+          <span className="hidden md:block font-terminal text-sm text-text-primary">
+            {round.totalWageredCents ? formatMoney(round.totalWageredCents) : '-'}
           </span>
           <span className={`font-terminal text-sm font-bold ${getCrashColor(round.crashPoint)}`}>
             <span className={`inline-block px-2 py-0.5 rounded ${getCrashBg(round.crashPoint)}`}>
               {formatMultiplier(round.crashPoint || 0)}
             </span>
-          </span>
-          <span className="font-terminal text-xs text-text-muted" title={round.crashedAt ? new Date(round.crashedAt).toLocaleString() : '-'}>
-            {round.crashedAt ? new Date(round.crashedAt).toLocaleDateString() : '-'}
-          </span>
-          <span className="font-terminal text-sm text-text-primary">
-            {round.totalBets}
-          </span>
-          <span className="font-terminal text-sm text-text-primary">
-            {round.totalWageredCents ? formatMoney(round.totalWageredCents) : '-'}
           </span>
           <span className="text-right">
             <button
