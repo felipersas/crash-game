@@ -18,7 +18,6 @@ interface GameState {
   currentSeedHash: string | null;
   myActiveBet: Bet | null;
   currentBets: Bet[];
-  // Computed values
   getBettingTimeRemaining: () => number; // seconds remaining
   getBettingProgress: () => number; // 0-1 progress for bar
 
@@ -128,7 +127,6 @@ export const useGameStore = create<GameState>()(
           ),
         })),
 
-      // Computed getters
       getBettingTimeRemaining: () => {
         const state = get();
         if (
