@@ -19,51 +19,48 @@ services:
       - name: games-rounds-current
         paths: [/games/rounds/current]
         strip_path: false
-        plugins:
-          - name: jwt
-            config:
-              key_claim_name: kid
-              anonymous: skip-auth
       - name: games-rounds-history
         paths: [/games/rounds/history]
         strip_path: false
-        plugins:
-          - name: jwt
-            config:
-              key_claim_name: kid
-              anonymous: skip-auth
       - name: games-rounds-verify
         paths: [/games/rounds]
         strip_path: false
-        plugins:
-          - name: jwt
-            config:
-              key_claim_name: kid
-              anonymous: skip-auth
       - name: games-bets-me
         paths: [/games/bets/me]
         strip_path: false
         plugins:
-          - name: jwt
+          - name: oidc
             config:
-              key_claim_name: kid
-              anonymous: skip-auth
+              client_id: crash-game-client
+              discovery: http://keycloak:8080/realms/crash-game/.well-known/openid-configuration
+              bearer_only: "yes"
+              realm: crash-game
+              scope: openid
+              ssl_verify: "no"
       - name: games-bet
         paths: [/games/bet]
         strip_path: false
         plugins:
-          - name: jwt
+          - name: oidc
             config:
-              key_claim_name: kid
-              anonymous: skip-auth
+              client_id: crash-game-client
+              discovery: http://keycloak:8080/realms/crash-game/.well-known/openid-configuration
+              bearer_only: "yes"
+              realm: crash-game
+              scope: openid
+              ssl_verify: "no"
       - name: games-bet-cashout
         paths: [/games/bet/cashout]
         strip_path: false
         plugins:
-          - name: jwt
+          - name: oidc
             config:
-              key_claim_name: kid
-              anonymous: skip-auth
+              client_id: crash-game-client
+              discovery: http://keycloak:8080/realms/crash-game/.well-known/openid-configuration
+              bearer_only: "yes"
+              realm: crash-game
+              scope: openid
+              ssl_verify: "no"
       - name: games-websocket
         paths: [/games]
         strip_path: true
@@ -110,46 +107,24 @@ services:
         paths: [/wallets/me]
         strip_path: false
         plugins:
-          - name: jwt
+          - name: oidc
             config:
-              key_claim_name: kid
-              anonymous: skip-auth
+              client_id: crash-game-client
+              discovery: http://keycloak:8080/realms/crash-game/.well-known/openid-configuration
+              bearer_only: "yes"
+              realm: crash-game
+              scope: openid
+              ssl_verify: "no"
       - name: wallets-create
         paths: [/wallets]
         strip_path: false
         methods: [POST]
         plugins:
-          - name: jwt
+          - name: oidc
             config:
-              key_claim_name: kid
-              anonymous: skip-auth
-
-consumers:
-  - username: keycloak-crash-game
-    jwt_secrets:
-      - key: -dSZ6zev6KNM6PWZBTHdB03ydMu8LV-Q33yE7y_KX9A
-        algorithm: RS256
-        rsa_public_key: |-
-          -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtO1FBeMTRCxD56xvcVJf
-          cRKSc3X2PnfZBNEcBixC2ghjXYxbc/t/F7AXuYcsrDyZxxRmzy3aGYPYpnGEhh2h
-          EdNOXjs8HLUn4gGW6EiFwIy4kG3lZJK5jmX0iLMl8Me8SWZTfxTWmTvJaB3rfbBV
-          nc06Tci209urD1nPp31vKU9FiGxu9KeulghEjquvrPQhiqEsiisni5Po+7GQzarU
-          B8kdVykDJ1e5dNplFNgV7E4ebZVDDAxor1UWRJSMKkCRn4fd3Neq9jstDNNUQaam
-          Iod1CKxH653C8lb1nAF2QBBty2xMqqNOs7lr9toUCRyitVOrBKHrfQo5XnPrZK5y
-          kwIDAQAB
-          -----END PUBLIC KEY-----
-  - username: skip-auth
-    jwt_secrets:
-      - key: m-U9iZ4MfvXDo3DZwPwCRuNRygY8sdyOOf1zRje_TwU
-        algorithm: RS256
-        rsa_public_key: |-
-          -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4aQfhMoZR8/fC5pyI0lO
-          lEsLjZGHW6+qExaAvcdTiJaUVc+QcoRJESex1VhW/YReEW61WWMe2gNHH+nSDFBN
-          ablxfKIl3OiDGo/Iqsh7d5NOX4IV0RrEZZyUhvyH16eJTZhI4ho4vNbKHQJKm5Lh
-          TgL6gLUYfwq1/n6Zql6WzV3UnwDzXp7QTEQWCEdoakJOfqvMEWmCY0WT+Zm9zub9
-          BtF/I1oDEKxiWX/h6thRtLRX+gb4hItU75fMSvf6HpzZnF2hlrc7fKsGcBSkiVSv
-          YQwfl7/CwI4huDfk7DYBSqOwsj70lCySNR8dAQ+FXYZLMJ7kMdiRdSlbZcQSO9TH
-          gQIDAQAB
-          -----END PUBLIC KEY-----
+              client_id: crash-game-client
+              discovery: http://keycloak:8080/realms/crash-game/.well-known/openid-configuration
+              bearer_only: "yes"
+              realm: crash-game
+              scope: openid
+              ssl_verify: "no"
