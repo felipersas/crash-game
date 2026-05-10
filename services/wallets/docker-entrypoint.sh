@@ -5,5 +5,8 @@ set -e
 echo "Running Prisma migrations..."
 bunx prisma migrate deploy
 
+echo "Seeding wallets..."
+bun run prisma/seed.ts
+
 echo "Starting Wallets service..."
 exec "$@"
