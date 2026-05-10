@@ -16,6 +16,12 @@ export function Providers({ children }: { children: ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 5000,
+            gcTime: 300000,
+            retry: (failureCount, error) => {
+              const apiError = error as { status?: number };
+              if (apiError.status && apiError.status >= 400 && apiError.status < 500) return false;
+              return failureCount < 2;
+            },
             refetchOnWindowFocus: false,
           },
         },

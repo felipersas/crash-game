@@ -10,7 +10,8 @@ import { useGameWebSocket } from "@/hooks/useGameWebSocket";
 import { useSession } from "next-auth/react";
 
 export default function GameContent() {
-  const { roundStatus, liveMultiplier } = useGameStore();
+  const roundStatus = useGameStore((s) => s.roundStatus);
+  const liveMultiplier = useGameStore((s) => s.liveMultiplier);
   const { data: session } = useSession();
 
   useGameWebSocket({

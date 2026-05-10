@@ -9,7 +9,7 @@ import type { Bet } from "@/types/game.types";
 const MAX_VISIBLE_BETS = 15;
 
 export default function BetsList() {
-  const { currentBets } = useGameStore();
+  const currentBets = useGameStore((s) => s.currentBets);
 
   // Filter out cancelled bets, show newest first, limit to MAX_VISIBLE_BETS
   const visibleBets = useMemo<Bet[]>(

@@ -14,7 +14,9 @@ import { BetButton } from "./BetButton";
 
 export default function BetControls() {
   const { placeBet, isPlacingBet, cashOut, isCashingOut } = useGame();
-  const { myActiveBet, roundStatus, liveMultiplier } = useGameStore();
+  const myActiveBet = useGameStore((s) => s.myActiveBet);
+  const roundStatus = useGameStore((s) => s.roundStatus);
+  const liveMultiplier = useGameStore((s) => s.liveMultiplier);
   const { playWin, playCrash } = useGameSounds();
   const { data: session, status: authStatus } = useSession();
 

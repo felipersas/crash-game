@@ -32,8 +32,10 @@ import { getErrorMessage } from "@/shared/constants/error-codes";
 export function useGame() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
-  const { setMyActiveBet, updateBetStatus, myActiveBet, roundStatus } =
-    useGameStore();
+  const setMyActiveBet = useGameStore((s) => s.setMyActiveBet);
+  const updateBetStatus = useGameStore((s) => s.updateBetStatus);
+  const myActiveBet = useGameStore((s) => s.myActiveBet);
+  const roundStatus = useGameStore((s) => s.roundStatus);
 
   // Current round query with smart polling
   const currentRoundQuery = useQuery<Round>({
