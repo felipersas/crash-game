@@ -10,6 +10,7 @@ import { BetInput } from "./BetInput";
 import { AutoCashoutInput } from "./AutoCashoutInput";
 import { BetStatusDisplay, CashOutButton } from "./BetStatusDisplay";
 import { useBetToast } from "./useBetToast";
+import { useGameSounds } from "@/hooks/useGameSounds";
 
 export default function BetControls() {
   const { placeBet, isPlacingBet, cashOut, isCashingOut } = useGame();
@@ -19,6 +20,7 @@ export default function BetControls() {
   const { data: session, status: authStatus } = useSession();
 
   useBetToast();
+  const { playBet } = useGameSounds();
 
   const isAuthenticated = authStatus === "authenticated";
   const [amount, setAmount] = useState("10.00");
@@ -36,6 +38,7 @@ export default function BetControls() {
   const handlePlaceBet = () => {
     const cents = Math.round(parseFloat(amount) * 100);
     if (isNaN(cents) || cents <= 0) return;
+    playBet();
     placeBet(cents);
   };
 
