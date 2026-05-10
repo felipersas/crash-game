@@ -6,6 +6,7 @@ declare module 'next-auth' {
     accessToken?: string;
     playerId?: string;
     idToken?: string;
+    error?: string;
     user: {
       playerId?: string;
       username?: string;
@@ -26,5 +27,6 @@ declare module 'next-auth/jwt' {
     refreshToken?: string;
     expiresAt?: number;
     idToken?: string;
+    error?: string;
   }
 }
