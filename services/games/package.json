@@ -10,6 +10,9 @@
     "test:e2e": "bun test tests/e2e",
     "test:find-seeds": "bun run tests/helpers/find-deterministic-seeds.ts",
     "start:prod": "NODE_ENV=production bun dist/main.js",
+    "lint": "eslint \"{src,tests}/**/*.ts\" --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },
@@ -42,6 +45,8 @@
     "socket.io": "^4.6.0"
   },
   "devDependencies": {
+    "@crash/eslint-config": "workspace:*",
+    "@crash/prettier-config": "workspace:*",
     "@nestjs/testing": "^11.1.17",
     "@testcontainers/postgresql": "^11.14.0",
     "@testcontainers/rabbitmq": "^11.14.0",
@@ -50,6 +55,8 @@
     "@types/ioredis": "^5.0.0",
     "@types/passport-jwt": "^4.0.1",
     "bun-types": "latest",
+    "eslint": "^9.28.0",
+    "prettier": "^3.5.3",
     "prisma": "^6.3.0",
     "testcontainers": "^11.14.0",
     "typescript": "^5.8.3"
