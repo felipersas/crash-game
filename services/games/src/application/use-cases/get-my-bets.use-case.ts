@@ -5,8 +5,6 @@ import type { IUseCase } from '../interfaces/use-case';
 import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
 import { computePagination, buildPaginationMeta, type PaginationMeta } from '../shared/pagination.util';
 
-export { type PaginationMeta };
-
 export interface GetMyBetsInput {
   playerId: string;
   page?: number;
@@ -72,12 +70,7 @@ export class GetMyBetsUseCase implements IUseCase<GetMyBetsInput, GetMyBetsOutpu
       };
     });
 
-    const allBets = await this.betRepository.findByPlayer(input.playerId);
-    const summary = this.computeSummary(allBets.map(b => ({
-      amountCents: Number(b.getAmount().toCents()),
-      payoutCents: b.getCashOutAmount()?.toCents() ? Number(b.getCashOutAmount()!.toCents()) : null,
-      status: b.getStatus(),
-    })));
+    const summary = await this.betRepository.getSummaryByPlayer(input.playerId);
 
     return {
       data,
@@ -96,23 +89,4 @@ export class GetMyBetsUseCase implements IUseCase<GetMyBetsInput, GetMyBetsOutpu
     return 0;
   }
 
-  private computeSummary(bets: { amountCents: number; payoutCents: number | null; status: BetStatus }[]): BetsSummary {
-    let totalWageredCents = 0;
-    let wins = 0;
-    let losses = 0;
-    let profitCents = 0;
-
-    for (const bet of bets) {
-      totalWageredCents += bet.amountCents;
-      if (bet.status === BetStatus.CASHED_OUT && bet.payoutCents !== null) {
-        wins++;
-        profitCents += bet.payoutCents - bet.amountCents;
-      } else if (bet.status === BetStatus.LOST) {
-        losses++;
-        profitCents -= bet.amountCents;
-      }
-    }
-
-    return { totalWageredCents, wins, losses, profitCents };
-  }
 }

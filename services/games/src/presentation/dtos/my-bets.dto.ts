@@ -1,7 +1,5 @@
-import { PaginationQueryDto, PaginationMetaDto } from './pagination.dto';
 import { centsToDecimal } from './money.util';
-
-export { PaginationQueryDto as GetMyBetsQueryDto, PaginationMetaDto };
+import type { PaginationMetaDto } from './pagination.dto';
 
 export class MyBetOutputDto {
   id!: string;

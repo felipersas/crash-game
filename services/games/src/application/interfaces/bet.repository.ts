@@ -54,4 +54,15 @@ export interface IBetRepository {
    * Count total bets for a player.
    */
   countByPlayer(playerId: string): Promise<number>;
+
+  /**
+   * Compute aggregated summary for a player's bets.
+   * Avoids loading all bets into memory.
+   */
+  getSummaryByPlayer(playerId: string): Promise<{
+    totalWageredCents: number;
+    wins: number;
+    losses: number;
+    profitCents: number;
+  }>;
 }
