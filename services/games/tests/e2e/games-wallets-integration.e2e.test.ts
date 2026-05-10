@@ -84,7 +84,8 @@ describe('Games ↔ Wallets Integration (E2E)', () => {
     const message = await channel!.get('test-integration-events', { noAck: true });
 
     if (message) {
-      const event = JSON.parse(message.content.toString());
+      const raw = JSON.parse(message.content.toString());
+      const event = raw.pattern ? raw.data : raw;
       console.log('Received event:', event.eventType);
 
       expect(event).toHaveProperty('eventType');
