@@ -8,10 +8,10 @@ import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.r
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
 import { RedisService } from '@/infrastructure/redis/redis.service';
 import type { RoundState } from '@/infrastructure/redis/redis.service';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/infrastructure/di/tokens';
+import { ROUND_REPOSITORY, EVENT_PUBLISHER, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/infrastructure/di/tokens';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
-import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
+import { RoundCrashHandler } from './round-crash-handler';
 
 /**
  * Round Lifecycle Manager - Infrastructure Layer
@@ -20,7 +20,7 @@ import { OptimisticLockError } from '@/domain/errors/domain.errors';
  * 1. Creates new rounds when needed
  * 2. Transitions from BETTING to ACTIVE phase
  * 3. Updates multiplier during ACTIVE phase
- * 4. Detects crash and ends round
+ * 4. Detects crash and delegates to RoundCrashHandler
  * 5. Broadcasts events via WebSocket
  */
 
@@ -31,14 +31,15 @@ export class RoundLifecycleManager implements IRoundStateProvider {
   private currentSeedChain: SeedChain | null = null;
   private roundStartTime: Date | null = null;
   private updateInterval: NodeJS.Timeout | null = null;
+  private bettingEndTimeout: NodeJS.Timeout | null = null;
 
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
-    @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(SEED_CHAIN_REPOSITORY) private readonly seedChainRepository: ISeedChainRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
     private readonly redisService: RedisService,
+    private readonly crashHandler: RoundCrashHandler,
   ) {}
 
   /**
@@ -185,12 +186,9 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       return;
     }
 
-    const timeout = setTimeout(() => {
+    this.bettingEndTimeout = setTimeout(() => {
       this.endBettingPhase();
     }, delay);
-
-    // Store timeout for cleanup if needed
-    (this as any).bettingEndTimeout = timeout;
   }
 
   /**
@@ -319,19 +317,10 @@ export class RoundLifecycleManager implements IRoundStateProvider {
   }
 
   /**
-   * Handle round crashed.
-   *
-   * IMPORTANT: Reloads Round from DB before saving to handle race conditions
-   * where cashouts occurred via API (which updates the Round independently).
-   * This ensures we have the latest version with all cashouts applied.
+   * Handle round crashed — delegates to RoundCrashHandler.
    */
   private async handleRoundCrashed() {
     if (!this.currentRound) return;
-
-    const roundId = this.currentRound.id;
-    const crashPoint = this.currentRound.getCrashPoint();
-
-    this.logger.log(`Round ${roundId} crashed at ${crashPoint}x`);
 
     // Stop updates
     if (this.updateInterval) {
@@ -339,61 +328,8 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       this.updateInterval = null;
     }
 
-    // Reload Round from DB to get latest version (may have cashouts from API)
-    const latestRound = await this.roundRepository.findById(roundId);
-    if (!latestRound) {
-      this.logger.error(`Round ${roundId} not found in DB during crash handling`);
-      await this.redisService.deleteRound(roundId);
-      this.createNewRound();
-      return;
-    }
-
-    // The crash was already determined in-memory, but we need to apply it
-    // to the DB version which has all the cashouts
-    // Trigger crash by updating multiplier to crash point
-    if (crashPoint) {
-      const startedAt = latestRound.getStartedAt();
-      if (startedAt) {
-        const elapsedSinceStart = (Date.now() - startedAt.getTime()) / 1000;
-        latestRound.updateMultiplier(elapsedSinceStart);
-      }
-    }
-
-    try {
-      await this.roundRepository.save(latestRound);
-    } catch (error: unknown) {
-      if (error instanceof Error && 'code' in error && error.code === 'P2025') {
-        this.logger.warn(`Round ${roundId} version conflict during crash, continuing with in-memory events`);
-        // Continue - crash was determined correctly in-memory
-      } else {
-        this.logger.error(`Failed to save crashed round: ${error}`);
-      }
-    }
-
-    // Persist bet status changes (LOST/CANCELLED) to DB
-    await this.settleBets(latestRound);
-
-    // Clear from Redis (round is over)
-    await this.redisService.deleteRound(roundId);
-
-    // Publish events from DB version (has authoritative state)
-    const events = latestRound.pullEvents();
-    if (events.length > 0) {
-      await this.eventPublisher.publishBatch(events);
-    }
-
-    // Broadcast crash
-    const crashEvent = events.find(e => e.eventType === 'RoundCrashed');
-    if (crashEvent && 'seed' in crashEvent) {
-      this.gamesGateway.broadcastCrash(
-        latestRound.id,
-        latestRound.getCrashPoint()!,
-        crashEvent.seed,
-      );
-    }
-
-    // Update our reference and start new round
-    this.currentRound = latestRound;
+    // Delegate crash handling (DB persist, bet settlement, event publishing, WS broadcast)
+    this.currentRound = await this.crashHandler.handleRoundCrashed(this.currentRound);
 
     // Start new round after a delay
     setTimeout(() => {
@@ -402,10 +338,7 @@ export class RoundLifecycleManager implements IRoundStateProvider {
   }
 
   /**
-   * Start the ticker that runs every second to check round state.
-   */
-  /**
-   * Tick method called every second.
+   * Tick method called every second for monitoring.
    */
   @Cron('* * * * * *', {
     name: 'round-ticker',
@@ -424,30 +357,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
   }
 
   /**
-   * Persist bet status changes after crash.
-   * Round.crash() mutates bets in-memory (ACTIVE→LOST, PENDING→CANCELLED)
-   * but bets are persisted independently via BetRepository.
-   */
-  private async settleBets(round: Round): Promise<void> {
-    const bets = round.getBets();
-    const unsettled = bets.filter(b => b.isLost() || b.isCancelled());
-
-    for (const bet of unsettled) {
-      try {
-        await this.betRepository.update(bet);
-      } catch (error) {
-        this.logger.error(
-          `Failed to settle bet ${bet.id} (status: ${bet.isLost() ? 'LOST' : 'CANCELLED'}): ${error}`,
-        );
-      }
-    }
-
-    if (unsettled.length > 0) {
-      this.logger.log(`Settled ${unsettled.length} bets for round ${round.id}`);
-    }
-  }
-
-  /**
    * Get the current round.
    */
   getCurrentRound(): Round | null {
@@ -462,9 +371,8 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       clearInterval(this.updateInterval);
     }
 
-    const bettingEndTimeout = (this as any).bettingEndTimeout;
-    if (bettingEndTimeout) {
-      clearTimeout(bettingEndTimeout);
+    if (this.bettingEndTimeout) {
+      clearTimeout(this.bettingEndTimeout);
     }
   }
 }

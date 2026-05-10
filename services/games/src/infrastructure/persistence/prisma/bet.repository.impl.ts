@@ -3,6 +3,19 @@ import { PrismaService } from "./prisma.service";
 import { Bet, BetStatus } from "@/domain/entities/bet.entity";
 import type { IBetRepository } from "@/application/interfaces/bet.repository";
 
+/** Prisma row type matching schema.prisma Bet model */
+type BetRow = {
+  id: string;
+  roundId: string;
+  playerId: string;
+  amountCents: bigint;
+  status: string;
+  cashOutMultiplier: number | null;
+  cashOutAmount: bigint | null;
+  cashedOutAt: Date | null;
+  createdAt: Date;
+};
+
 /**
  * Prisma-based implementation of Bet Repository.
  *
@@ -18,6 +31,7 @@ export class PrismaBetRepository implements IBetRepository {
     await this.prisma.bet.create({
       data: {
         ...data,
+        // Domain enum → Prisma enum (same string values)
         status: data.status as any,
       },
     });
@@ -140,7 +154,18 @@ export class PrismaBetRepository implements IBetRepository {
     };
   }
 
-  private toDomain(record: any): Bet {
+  async findStalePendingBets(olderThan: Date): Promise<Bet[]> {
+    const records = await this.prisma.bet.findMany({
+      where: {
+        status: BetStatus.PENDING,
+        createdAt: { lt: olderThan },
+      },
+    });
+
+    return records.map((record) => this.toDomain(record));
+  }
+
+  private toDomain(record: BetRow): Bet {
     return Bet.restore(
       record.id,
       record.roundId,

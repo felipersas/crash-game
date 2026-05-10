@@ -28,7 +28,7 @@ export interface ServerToClientEvents {
 @Injectable()
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: ['http://localhost:3000', 'http://localhost:5173'],
   },
 })
 export class GamesGateway

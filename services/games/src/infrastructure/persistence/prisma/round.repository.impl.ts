@@ -5,6 +5,35 @@ import { Bet, BetStatus } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
 
+/** Prisma row types matching schema.prisma models */
+type RoundRow = {
+  id: string;
+  seed: string;
+  seedHash: string;
+  nextSeed: string | null;
+  status: string;
+  crashPoint: number | null;
+  bettingEndTime: Date | null;
+  startedAt: Date | null;
+  crashedAt: Date | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+  bets: BetRow[];
+};
+
+type BetRow = {
+  id: string;
+  roundId: string;
+  playerId: string;
+  amountCents: bigint;
+  status: string;
+  cashOutMultiplier: number | null;
+  cashOutAmount: bigint | null;
+  cashedOutAt: Date | null;
+  createdAt: Date;
+};
+
 @Injectable()
 export class PrismaRoundRepository implements IRoundRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -69,7 +98,7 @@ export class PrismaRoundRepository implements IRoundRepository {
       include: { bets: true },
     });
 
-    return records.map((record: any) => this.toDomain(record));
+    return records.map((record) => this.toDomain(record));
   }
 
   async findHistoryCount(): Promise<number> {
@@ -78,8 +107,8 @@ export class PrismaRoundRepository implements IRoundRepository {
     });
   }
 
-  private toDomain(record: any): Round {
-    const bets = record.bets?.map((b: any) => this.betToDomain(b)) || [];
+  private toDomain(record: RoundRow): Round {
+    const bets = record.bets?.map((b) => this.betToDomain(b)) || [];
 
     return Round.restore(
       record.id,
@@ -97,7 +126,7 @@ export class PrismaRoundRepository implements IRoundRepository {
     );
   }
 
-  private betToDomain(record: any): Bet {
+  private betToDomain(record: BetRow): Bet {
     return Bet.restore(
       record.id,
       record.roundId,
