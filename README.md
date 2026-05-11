@@ -275,7 +275,7 @@ O processamento de Inbox/Outbox usa cron jobs. BullMQ permitiria processamento c
 
 ### Auto Cashout
 
-O jogador define um multiplicador alvo para saque automático. A UI já existe (`AutoCashoutInput` no frontend) — falta conectar ao backend verificando o target a cada tick (100ms) no `RoundLifecycleManager`.
+O jogador define um multiplicador alvo para saque automático. Poderia usar Redis + BullMQ para workers fazendo cashout
 
 ### Leaderboard
 
