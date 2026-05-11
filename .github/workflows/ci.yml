@@ -19,7 +19,16 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - run: bun install --backend=hardlink
+      - run: bun install
+
+      - name: Ensure workspace symlinks
+        run: |
+          mkdir -p node_modules/@crash
+          ln -sf ../../packages/domain node_modules/@crash/domain
+          ln -sf ../../packages/messaging node_modules/@crash/messaging
+          ln -sf ../../packages/observability node_modules/@crash/observability
+          ln -sf ../../packages/eslint-config node_modules/@crash/eslint-config
+          ln -sf ../../packages/prettier-config node_modules/@crash/prettier-config
 
       - run: |
           cd packages/domain && bun run build
@@ -39,7 +48,16 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - run: bun install --backend=hardlink
+      - run: bun install
+
+      - name: Ensure workspace symlinks
+        run: |
+          mkdir -p node_modules/@crash
+          ln -sf ../../packages/domain node_modules/@crash/domain
+          ln -sf ../../packages/messaging node_modules/@crash/messaging
+          ln -sf ../../packages/observability node_modules/@crash/observability
+          ln -sf ../../packages/eslint-config node_modules/@crash/eslint-config
+          ln -sf ../../packages/prettier-config node_modules/@crash/prettier-config
 
       - run: |
           cd packages/domain && bun run build
@@ -77,7 +95,16 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - run: bun install --backend=hardlink
+      - run: bun install
+
+      - name: Ensure workspace symlinks
+        run: |
+          mkdir -p node_modules/@crash
+          ln -sf ../../packages/domain node_modules/@crash/domain
+          ln -sf ../../packages/messaging node_modules/@crash/messaging
+          ln -sf ../../packages/observability node_modules/@crash/observability
+          ln -sf ../../packages/eslint-config node_modules/@crash/eslint-config
+          ln -sf ../../packages/prettier-config node_modules/@crash/prettier-config
 
       - run: |
           cd packages/domain && bun run build
