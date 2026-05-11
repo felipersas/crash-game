@@ -37,8 +37,13 @@ jobs:
 
       - run: cd services/games && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
 
-      - name: Verify linking
-        run: ls node_modules/@crash/domain/dist/index.js
+      - name: Debug linking
+        run: |
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          ls -la node_modules/@crash/ || true
+          readlink node_modules/@crash/domain || true
+          ls packages/domain/dist/ || true
+          ls node_modules/@crash/domain/dist/ || true
 
       - name: Run unit tests
         run: cd services/games && bun test tests/unit
@@ -69,8 +74,13 @@ jobs:
 
       - run: cd services/wallets && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
 
-      - name: Verify linking
-        run: ls node_modules/@crash/domain/dist/index.js
+      - name: Debug linking
+        run: |
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          ls -la node_modules/@crash/ || true
+          readlink node_modules/@crash/domain || true
+          ls packages/domain/dist/ || true
+          ls node_modules/@crash/domain/dist/ || true
 
       - name: Run unit tests
         run: cd services/wallets && bun test tests/unit
