@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd /Users/felipersas/Documents/JungleGaming/fullstack-challenge && bun test services/wallets/tests/unit 2>&1\",\"description\":\"Run unit tests again after fixes\"}",
-  "error": "Exit code 1\nzoxide: detected a possible configuration issue.\nPlease ensure that zoxide is initialized right at the end of your shell configuration file (usually ~/.zshrc).\n\nIf the issue persists, consider filing an issue at:\nhttps://github.com/ajeetdsouza/zoxide/issues\n\nDisable this message by setting _ZO_DOCTOR=0.\n\nbun test v1.3.3 (274e01c7)\n\nservices/wallets/tests/unit/money.value-object.test.ts:\n362 |     test('should handle rounding in multiplication correctly', () => {\n363 |       const mon...",
-  "timestamp": "2026-05-07T20:51:47.068Z",
-  "retry_count": 2
+  "tool_input_preview": "{\"command\":\"cd /Users/felipersas/Documents/JungleGaming/fullstack-challenge/services/games && rtk tsc --noEmit 2>&1\",\"description\":\"Check TS errors after prisma generate\"}",
+  "error": "Exit code 2\nzoxide: detected a possible configuration issue.\nPlease ensure that zoxide is initialized right at the end of your shell configuration file (usually ~/.zshrc).\n\nIf the issue persists, consider filing an issue at:\nhttps://github.com/ajeetdsouza/zoxide/issues\n\nDisable this message by setting _ZO_DOCTOR=0.\n\ntsconfig.json(32,5): error TS5101: Option 'baseUrl' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '\"ignoreDeprecations\": \"6.0\"' to silence this er...",
+  "timestamp": "2026-05-11T19:37:43.658Z",
+  "retry_count": 1
 }

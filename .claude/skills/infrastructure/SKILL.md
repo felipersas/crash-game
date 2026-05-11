@@ -1,16 +1,15 @@
 ---
 name: infrastructure
-description: Infrastructure setup — Docker Compose, Kong API Gateway, Keycloak IdP, PostgreSQL, Redis, RabbitMQ
+description: Infrastructure setup — Docker Compose, Kong API Gateway, Keycloak IdP, PostgreSQL, RabbitMQ
 triggers:
   - "docker compose"
   - "kong config"
   - "keycloak"
   - "rabbitmq"
-  - "redis"
   - "postgres"
   - "infrastructure"
   - "api gateway"
-tags: [infrastructure, docker, kong, keycloak, rabbitmq, redis, crash-game]
+tags: [infrastructure, docker, kong, keycloak, rabbitmq, crash-game]
 ---
 
 # Infrastructure
@@ -29,7 +28,6 @@ docker-compose.yml
 ├── postgres-wallets  # PostgreSQL 18, DB: wallets, port 5433
 ├── rabbitmq          # RabbitMQ 3, ports 5672/15672 (admin/admin)
 ├── keycloak          # Keycloak, port 8080 (admin/admin), realm: crash-game
-├── redis             # Redis 7, port 6379
 ├── kong              # API Gateway, ports 8000 (proxy) / 8001 (admin)
 ├── games-service     # NestJS, port 4001
 └── wallets-service   # NestJS, port 4002
@@ -83,13 +81,6 @@ services:
 - Wallets service consumes: `BetPlaced`, `PlayerCashedOut`
 - Games service consumes: `WalletDebited`, `WalletDebitFailed`
 - **At-least-once delivery** with inbox/outbox pattern for idempotency
-
-## Redis
-
-- Used by `RedisService` in games service
-- Stores current round state (persisted every 100ms during active phase)
-- Used for idempotency cache (`IDEMPOTENCY_CACHE` token)
-- `RoundState` interface: id, status, crashPoint, currentMultiplier, timestamps, version
 
 ## PostgreSQL
 

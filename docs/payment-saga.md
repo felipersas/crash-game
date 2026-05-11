@@ -218,14 +218,13 @@ async handle(event: WalletDebitFailedEvent): Promise<void> {
   │─────────────────►│                  │                  │
   │                  │                  │                  │
   │                  │ 1. CashOutUseCase                   │
-  │                  │    check idempotency (Redis SET NX) │
+  │                  │    check bet status (PostgreSQL) │
   │                  │    load round (in-memory preferred) │
   │                  │    round.cashOut(playerId)          │
   │                  │    payout = bet × multiplier        │
   │                  │    bet.status = CASHED_OUT          │
   │                  │    betRepository.update(bet)        │
   │                  │    roundRepository.save(round)      │
-  │                  │    cache result in Redis            │
   │                  │                  │                  │
   │  200 OK          │── PlayerCashedOutEvent ──►          │
   │  {payoutCents,   │                  │── PlayerCashedOutEvent ►│
@@ -252,10 +251,10 @@ async handle(event: WalletDebitFailedEvent): Promise<void> {
 
 ```typescript
 async execute(input: CashOutInput): Promise<CashOutOutput> {
-  // 1. IDEMPOTENCIA via Redis
-  const cached = await this.idempotencyCache.checkCashoutIdempotency(input.idempotencyKey);
-  if (cached && cached.playerId === input.playerId) {
-    return cached; // Retorna resultado anterior — não reprocessa
+  // 1. IDEMPOTENCIA via PostgreSQL (Bet status)
+  // Cashout duplicado: se bet.status === CASHED_OUT, retorna resultado anterior
+  const existingBet = await this.betRepository.findByPlayerAndRound(playerId, roundId);
+        if (existingBet?.getStatus() === BetStatus.CASHED_OUT) { return existingBet; }
   }
 
   // 2. Carrega round — prefere in-memory (multiplicador mais preciso)
@@ -278,26 +277,18 @@ async execute(input: CashOutInput): Promise<CashOutOutput> {
   await this.betRepository.update(cashedOutBet);
   await this.roundRepository.save(round);
 
-  // 6. Cache resultado (Redis SET NX — atomico)
-  await this.idempotencyCache.setCashoutIdempotency(idempotencyKey, {
-    betId, roundId, playerId,
-    cashOutMultiplier: round.getCurrentMultiplier(),
-    payoutCents: Number(payout.toCents()),
-    cashedOutAt: new Date().toISOString(),
-  });
-
-  // 7. Publica evento → Wallets credita
+  // 6. Publica evento → Wallets credita
   await this.eventPublisher.publishBatch(round.pullEvents());
 
-  // 8. WS broadcast: playerCashedOut
+  // 7. WS broadcast: playerCashedOut
 }
 ```
 
-**Decisão arquitetural - Idempotencia dupla**:
-1. **Redis SET NX** — Garante que o mesmo `idempotencyKey` (UUID v4 do frontend) nunca processa duas vezes no Games service
+**Decisão arquitetural - Idempotencia via PostgreSQL**:
+1. **Bet status check** — Se o bet já está `CASHED_OUT`, retorna o resultado anterior sem reprocessar
 2. **Inbox Pattern** no Wallets — Garante que o evento de credito não processa duas vezes no Wallets service
 
-Duas camadas porque cada serviço é dono de sua própria idempotência. O Games garante "não cashout duplicado" e o Wallets garante "não crédito duplicado".
+Duas camadas porque cada serviço é dono de sua própria idempotência. O Games garante "não cashout duplicado" via status do Bet e o Wallets garante "não crédito duplicado" via Inbox.
 
 **Decisão arquitetural - winAmount inclui aposta original**: O `PlayerCashedOutEvent.winAmount` é o payout TOTAL (aposta + lucro), não apenas o lucro. A wallet credita o valor total. Motivo: o debito já aconteceu no Bet Debit Saga. O credito é o payout completo, resultando em:
 - Wallet: -debit(betAmount) + credit(betAmount * multiplier) = net profit = betAmount * (multiplier - 1)
@@ -559,7 +550,7 @@ T=10.002s  Salva crash no DB
 | **Inbox** | Games + Wallets consumers | Exactly-once processing com at-least-once delivery |
 | **Outbox** | Games + Wallets publishers | Eventos nunca se perdem após commit de DB |
 | **Cancel-and-Replace** | Games PlaceBet | Retry após falha na wallet sem esperar novo round |
-| **Idempotency Cache** | Games CashOut (Redis) | Cashout duplicado não reprocessa |
+| **Bet Status Idempotency** | Games CashOut (PostgreSQL) | Cashout duplicado não reprocessa |
 | **Optimistic Locking** | Ambos (version field) | Concorrência sem distributed locks |
 | **Compensating Transaction** | WalletDebitFailed → CancelBet | Rollback automático do bet quando wallet falha |
 | **Timeout Handler** | Games (30s cron) | Limpeza de bets PENDING órfãos |
@@ -579,7 +570,6 @@ T=10.002s  Salva crash no DB
 | `wallet-debited.handler.ts` | Infrastructure | Consome WalletDebitedEvent |
 | `wallet-debit-failed.handler.ts` | Infrastructure | Consome WalletDebitFailedEvent |
 | `bet-timeout.handler.ts` | Infrastructure | Cancela bets PENDING expiradas |
-| `redis.service.ts` | Infrastructure | Idempotencia de cashout |
 
 ### Wallets Service
 

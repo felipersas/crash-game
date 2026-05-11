@@ -16,7 +16,6 @@ O sistema é composto por **dois microsserviços** (Games e Wallets) que se comu
 | Backend | NestJS | 10+ | Framework modular com DI |
 | Linguagem | TypeScript | strict | Type safety em todas as camadas |
 | DB Principal | PostgreSQL | 18 | Persistência relacional |
-| Cache | Redis | 7.4 | Cache de estado ativo + idempotência |
 | Mensageria | RabbitMQ | 4.2 | Comunicação assíncrona entre serviços |
 | API Gateway | Kong | 3.9 (DB-less) | Roteamento, autenticação JWT, rate limiting |
 | Identity | Keycloak | 26.5 | OAuth2/OIDC com PKCE |
@@ -60,8 +59,8 @@ O sistema é composto por **dois microsserviços** (Games e Wallets) que se comu
 │   localhost:4001      │         │   localhost:4002      │
 │                       │         │                       │
 │  DB: games (PG)       │         │  DB: wallets (PG)     │
-│  Cache: Redis         │         │  Inbox + Outbox       │
-│  Inbox + Outbox       │         │  (padrões de         │
+│  Inbox + Outbox       │         │  Inbox + Outbox       │
+│  (padrões de         │         │  (padrões de         │
 │  WebSocket Gateway    │         │   resiliência)        │
 └───────────┬───────────┘         └───────────┬───────────┘
             │                                  │
@@ -100,7 +99,7 @@ fullstack-challenge/
 │   │   ├── src/
 │   │   │   ├── domain/       # Entidades, VOs, eventos, erros
 │   │   │   ├── application/  # Use cases, interfaces (ports)
-│   │   │   ├── infrastructure/ # DB, Redis, RabbitMQ, WebSocket, Scheduling
+│   │   │   ├── infrastructure/ # DB, RabbitMQ, WebSocket, Scheduling
 │   │   │   └── presentation/  # Controllers, DTOs, Decorators
 │   │   ├── data/             # seed-chain.json (criptografado)
 │   │   └── prisma/           # Schema + migrations (DB "games")
@@ -177,7 +176,6 @@ Implementa as interfaces definidas na Application. Conta com detalhes tecnicos.
 |-----------|---------|------------|
 | **Persistence** | `PrismaRoundRepository` | Prisma ORM + PostgreSQL |
 | **Messaging** | `RabbitMQEventPublisher` | @nestjs/microservices + RabbitMQ |
-| **Cache** | `RedisService` | ioredis |
 | **WebSocket** | `GamesGateway` | @nestjs/websockets + Socket.IO |
 | **Scheduling** | `RoundLifecycleManager`, `BetTimeoutHandler` | @nestjs/schedule |
 | **Crypto** | `AESCipher` | Web Crypto API (AES-256-GCM) |

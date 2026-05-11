@@ -18,7 +18,7 @@ cd fullstack-challenge
 bun run docker:up
 ```
 
-Pronto. O comando sobe toda a stack: PostgreSQL, Redis, RabbitMQ, Keycloak (com realm pré-configurado), Kong, Games Service, Wallets Service, Frontend, Prometheus, Grafana e Redis Exporter. As dependências são instaladas dentro dos containers 
+Pronto. O comando sobe toda a stack: PostgreSQL, RabbitMQ, Keycloak (com realm pré-configurado), Kong, Games Service, Wallets Service, Frontend, Prometheus, Grafana. As dependências são instaladas dentro dos containers 
 
 O seeding da carteira é automático: o usuário de teste já inicia com $1.000,00 de saldo.
 
@@ -55,7 +55,6 @@ graph TB
     GS["Games Service<br/>NestJS"]
     WS["Wallets Service<br/>NestJS"]
     PG[("PostgreSQL<br/>database-per-service")]
-    REDIS["Redis<br/>cache + idempotência"]
     RMQ["RabbitMQ<br/>fanout exchanges"]
     PROM["Prometheus + Grafana"]
 
@@ -64,7 +63,6 @@ graph TB
     KONG -->|"/games/*"| GS
     KONG -->|"/wallets/*"| WS
     GS --> PG
-    GS --> REDIS
     WS --> PG
     GS <-->|"eventos assíncronos"| RMQ
     WS <-->|"eventos assíncronos"| RMQ
@@ -79,7 +77,6 @@ graph TB
 | Runtime | Bun |
 | Backend | NestJS + TypeScript strict |
 | Banco de dados | PostgreSQL 18 (database-per-service) |
-| Cache | Redis 7.4 |
 | Mensageria | RabbitMQ 4.2 |
 | API Gateway | Kong 3.9 (DB-less, declarativo) |
 | Identity | Keycloak 26.5 (realm: `crash-game`) |
@@ -92,7 +89,7 @@ graph TB
 
 ### Princípios
 
-- **DDD com 4 camadas**: domain (zero deps) → application (use cases + ports) → infrastructure (Prisma, RabbitMQ, Redis, WebSocket) → presentation (controllers, DTOs)
+- **DDD com 4 camadas**: domain (zero deps) → application (use cases + ports) → infrastructure (Prisma, RabbitMQ, WebSocket) → presentation (controllers, DTOs)
 - **Database-per-service**: Games e Wallets nunca acessam o banco um do outro
 - **Comunicação assíncrona**: Toda comunicação financeira via RabbitMQ (fanout exchanges). Serviços nunca se chamam por REST
 - **Monorepo**: Packages compartilhados (`@crash/domain`, `@crash/messaging`, `@crash/observability`)
@@ -142,13 +139,13 @@ Cada Saga usa transações compensatórias. A bet começa `PENDING` (débito ass
 
 Se a aposta está `PENDING` ou `CANCELLED`, o jogador pode apostar novamente no mesmo round — a bet anterior é substituída. Resolve o cenário: wallet rejeita (saldo insuficiente) → jogador deposita → tenta de novo sem esperar próximo round.
 
-### Idempotência de cashout com Redis
+### Idempotência de cashout via PostgreSQL
 
-Frontend gera UUID v4 por tentativa. `CashOutUseCase` verifica com `SET NX` (atômico). Duplo clique ou retry de rede não reprocessa.
+`CashOutUseCase` verifica o status do Bet — se já está `CASHED_OUT`, retorna o resultado anterior. Duplo clique ou retry de rede não reprocessa. Idempotência nativa via banco de dados, sem dependência externa.
 
-### Tripla camada de estado
+### Dupla camada de estado
 
-O round atual vive em: (1) in-memory (acesso instantâneo ao multiplicador), (2) Redis (leitura sub-ms para cashout), (3) PostgreSQL (fonte de verdade). O multiplicador muda a cada 100ms — DB não suporta esse throughput de escrita.
+O round atual vive em: (1) in-memory (acesso instantâneo ao multiplicador), (2) PostgreSQL (fonte de verdade). O multiplicador muda a cada 100ms e é lido da memória para cashout.
 
 ### Provably Fair (Hash Chain)
 
@@ -219,7 +216,7 @@ Crédito e débito não são expostos via REST — ocorrem exclusivamente via Ra
 
 ### E2E
 
-**Games + Wallets** (via Testcontainers): Fluxo completo apostar → multiplicador → cashout/crash → saldo atualizado. Integração entre serviços via RabbitMQ. Containers isolados com `docker-compose.test.yml` (PostgreSQL, Redis, RabbitMQ, Games, Wallets).
+**Games + Wallets** (via Testcontainers): Fluxo completo apostar → multiplicador → cashout/crash → saldo atualizado. Integração entre serviços via RabbitMQ. Containers isolados com `docker-compose.test.yml` (PostgreSQL, RabbitMQ, Games, Wallets).
 
 **Frontend** (via Playwright): Simulação multiplayer com 3 jogadores autenticados, apostas simultâneas, cashout e verificação de round history.
 
@@ -309,5 +306,4 @@ Documentação técnica em `docs/`:
 | `architecture-overview.md` | Stack, topologia, DDD, shared packages |
 | `outbox-inbox-architecture.md` | Outbox/Inbox transacional — Games Service |
 | `payment-saga.md` | Fluxos de pagamento, Saga Pattern |
-| `round-engine-redis.md` | Lifecycle dos rounds, máquina de estados, Redis |
 | `provably-fair-algorithm.md` | Hash chain, crash point, verificação |

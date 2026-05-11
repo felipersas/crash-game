@@ -26,7 +26,7 @@ Guide all changes to the games service following established DDD architecture an
 services/games/src/
 ├── domain/           # Entities (Round, Bet), VOs (CrashPoint, Multiplier, SeedChain), Events, Errors
 ├── application/      # Use cases (one per operation), Repository interfaces, Shared utils
-├── infrastructure/   # Prisma repos, RabbitMQ pub/sub, Redis, WebSocket gateway, Scheduling, DI tokens
+├── infrastructure/   # Prisma repos, RabbitMQ pub/sub, WebSocket gateway, Scheduling, DI tokens
 └── presentation/     # Controllers, DTOs, Decorators (@UserContext)
 ```
 
