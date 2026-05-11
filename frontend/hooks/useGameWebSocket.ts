@@ -12,6 +12,7 @@ import {
   GamesWebSocket,
 } from "../websocket/games-websocket";
 import { getCurrentRound } from "@/infrastructure/api/games-api";
+import { useGameSounds } from "@/hooks/useGameSounds";
 import {
   RoundStatus,
   BetStatus,
@@ -41,6 +42,7 @@ export function useGameWebSocket(
 ): UseGameWebSocketReturn {
   const { token, playerId, enabled = true } = options;
   const wsRef = useRef<GamesWebSocket | null>(null);
+  const { playCrash } = useGameSounds();
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<
     "connecting" | "connected" | "disconnected" | "error"
@@ -191,6 +193,11 @@ export function useGameWebSocket(
         // Only update if for current round
         if (data.roundId === currentRoundIdRef.current) {
           setStoreCrash(data.crashPoint);
+          // Play crash sound immediately if player has an active losing bet
+          const state = useGameStore.getState();
+          if (state.myActiveBet && state.myActiveBet.status !== "CASHED_OUT") {
+            playCrash();
+          }
         }
       },
       onBetPlaced: (data) => {
