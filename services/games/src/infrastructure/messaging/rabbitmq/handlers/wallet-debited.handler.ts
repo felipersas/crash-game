@@ -3,10 +3,15 @@
  *
  * Handles WalletDebitedEvent from the Wallets service by confirming
  * the bet (PENDING → ACTIVE) in the Games service.
+ *
+ * Uses Inbox pattern for idempotency - prevents double confirming
+ * if duplicate events are received from RabbitMQ.
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfirmBetUseCase } from '@/application/use-cases/confirm-bet.use-case';
+import { INBOX_REPOSITORY } from '@/application/di.tokens';
+import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import type { WalletDebitedEvent } from '../../types/wallet.events';
 
 /**
@@ -15,39 +20,85 @@ import type { WalletDebitedEvent } from '../../types/wallet.events';
  * When the Wallets service successfully debits a bet amount, this handler
  * confirms the bet in the Games service, transitioning it from PENDING to ACTIVE.
  *
- * This is part of the saga pattern:
- * 1. Games creates the bet in PENDING state
- * 2. Wallets debits the amount
- * 3. Wallets emits WalletDebitedEvent (this handler)
- * 4. Games confirms the bet → ACTIVE
+ * Uses Inbox pattern for idempotency:
+ * 1. Try create inbox event (fails if duplicate)
+ * 2. If duplicate → check status (PROCESSED skip, FAILED retry)
+ * 3. Process: confirm bet via use case
+ * 4. Mark inbox as PROCESSED/FAILED
  */
 @Injectable()
 export class WalletDebitedEventHandler {
   private readonly logger = new Logger(WalletDebitedEventHandler.name);
 
-  constructor(private readonly confirmBetUseCase: ConfirmBetUseCase) {}
+  constructor(
+    private readonly confirmBetUseCase: ConfirmBetUseCase,
+    @Inject(INBOX_REPOSITORY) private readonly inboxRepository: IInboxRepository,
+  ) {}
 
   /**
-   * Handle the WalletDebitedEvent.
+   * Handle the WalletDebitedEvent with idempotency.
    *
    * @param event The event from Wallets service
-   * @throws Error if round or bet not found (will be logged by consumer)
    */
   async handle(event: WalletDebitedEvent): Promise<void> {
-    try {
-      this.logger.debug(
-        `Processing WalletDebitedEvent: player=${event.playerId}, amount=${event.amount}, betId=${event.betId}`,
-      );
+    const idempotencyKey = `wallet-debit-${event.betId}`;
 
+    this.logger.debug(
+      `Processing WalletDebitedEvent: player=${event.playerId}, amount=${event.amount}, betId=${event.betId}`,
+    );
+
+    // 1. Try to create inbox event (fails if duplicate - unique constraint)
+    const inboxEvent = await this.inboxRepository.tryCreate({
+      idempotencyKey,
+      eventType: 'WalletDebited',
+      payload: event,
+    });
+
+    // 2. If duplicate, check status and handle accordingly
+    let eventId: string;
+    if (!inboxEvent) {
+      const existing = await this.inboxRepository.findByIdempotencyKey(idempotencyKey);
+
+      if (existing?.status === 'PROCESSED') {
+        this.logger.log(
+          `Duplicate WalletDebitedEvent detected (already processed): ${idempotencyKey}. Skipping.`,
+        );
+        return;
+      }
+
+      if (existing?.status === 'FAILED') {
+        this.logger.warn(
+          `Duplicate WalletDebitedEvent detected (previously failed): ${idempotencyKey}. Retrying.`,
+        );
+        eventId = existing.id;
+      } else {
+        this.logger.log(
+          `Duplicate WalletDebitedEvent detected (pending): ${idempotencyKey}. Skipping.`,
+        );
+        return;
+      }
+    } else {
+      eventId = inboxEvent.id;
+    }
+
+    try {
+      // 3. Process: confirm the bet
       await this.confirmBetUseCase.execute({
         roundId: event.roundId,
         betId: event.betId,
         playerId: event.playerId,
       });
 
+      // 4. Mark inbox as PROCESSED
+      await this.inboxRepository.markAsProcessed(eventId, new Date());
+
       this.logger.log(`Bet ${event.betId} confirmed for player ${event.playerId}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Mark as FAILED for retry
+      await this.inboxRepository.markAsFailed(eventId, errorMessage, 0);
+
       this.logger.error(`Failed to confirm bet ${event.betId}: ${errorMessage}`);
       throw error; // Re-throw for consumer to handle (nack)
     }

@@ -2,16 +2,16 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
-import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import {
   ROUND_REPOSITORY,
   BET_REPOSITORY,
-  EVENT_PUBLISHER,
   GAMES_GATEWAY,
-} from '@/infrastructure/di/tokens';
+} from '@/application/di.tokens';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
 import { RedisService } from '@/infrastructure/redis/redis.service';
+import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
+import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 /**
  * Round Crash Handler - Infrastructure Layer
@@ -30,10 +30,11 @@ export class RoundCrashHandler {
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
     private readonly redisService: RedisService,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
+    private readonly prisma: PrismaService,
+    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   /**
@@ -112,10 +113,18 @@ export class RoundCrashHandler {
 
     await this.redisService.deleteRound(roundId);
 
-    // Publish events from DB version (has authoritative state)
+    // Publish events from DB version (has authoritative state) via outbox
     const events = latestRound.pullEvents();
     if (events.length > 0) {
-      await this.eventPublisher.publishBatch(events);
+      let outboxIds: string[] = [];
+      await this.prisma.$transaction(async (tx) => {
+        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, latestRound.id, events);
+      });
+
+      // Best-effort immediate publish for low latency
+      if (outboxIds.length > 0) {
+        await this.outboxWriter.tryImmediatePublish(events, outboxIds);
+      }
     }
 
     const crashEvent = events.find((e) => e.eventType === 'RoundCrashed');

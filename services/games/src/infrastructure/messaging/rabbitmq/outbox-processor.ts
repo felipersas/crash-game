@@ -1,9 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import type { IEventPublisher } from '@crash/messaging';
-import { EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
-import { Inject } from '@nestjs/common';
+import { RABBITMQ_PUBLISHER } from '@/application/di.tokens';
 
 @Injectable()
 export class OutboxProcessor {
@@ -13,7 +12,7 @@ export class OutboxProcessor {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    @Inject(RABBITMQ_PUBLISHER) private readonly eventPublisher: IEventPublisher,
   ) {}
 
   @Cron(CronExpression.EVERY_SECOND)
