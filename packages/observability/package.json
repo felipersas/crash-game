@@ -3,13 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "type": "commonjs",
+  "main": "./src/index.ts",
   "exports": {
-    ".": "./dist/index.js"
-  },
-  "typesVersions": {
-    "*": {
-      ".": ["./dist/index.d.ts"]
-    }
+    ".": "./src/index.ts"
   },
   "dependencies": {
     "@willsoto/nestjs-prometheus": "^6.0.0",

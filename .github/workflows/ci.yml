@@ -23,19 +23,6 @@ jobs:
 
       - run: bun install
 
-      - name: Link workspace packages
-        run: |
-          mkdir -p node_modules/@crash
-          # Bun handles TS natively — point to source instead of dist
-          for pkg in domain messaging observability; do
-            mkdir -p "node_modules/@crash/$pkg"
-            cat > "node_modules/@crash/$pkg/package.json" <<PKGJSON
-          {"name":"@crash/$pkg","type":"commonjs","main":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts","exports":{".":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts"}}
-          PKGJSON
-          done
-          ln -s "$GITHUB_WORKSPACE/packages/eslint-config" "node_modules/@crash/eslint-config"
-          ln -s "$GITHUB_WORKSPACE/packages/prettier-config" "node_modules/@crash/prettier-config"
-
       - run: cd services/games && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
 
       - name: Run unit tests
@@ -53,18 +40,6 @@ jobs:
 
       - run: bun install
 
-      - name: Link workspace packages
-        run: |
-          mkdir -p node_modules/@crash
-          for pkg in domain messaging observability; do
-            mkdir -p "node_modules/@crash/$pkg"
-            cat > "node_modules/@crash/$pkg/package.json" <<PKGJSON
-          {"name":"@crash/$pkg","type":"commonjs","main":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts","exports":{".":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts"}}
-          PKGJSON
-          done
-          ln -s "$GITHUB_WORKSPACE/packages/eslint-config" "node_modules/@crash/eslint-config"
-          ln -s "$GITHUB_WORKSPACE/packages/prettier-config" "node_modules/@crash/prettier-config"
-
       - run: cd services/wallets && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
 
       - name: Run unit tests
@@ -81,12 +56,6 @@ jobs:
           bun-version: "1.3.3"
 
       - run: bun install
-
-      - name: Link workspace packages
-        run: |
-          mkdir -p node_modules/@crash
-          ln -s "$GITHUB_WORKSPACE/packages/eslint-config" node_modules/@crash/eslint-config
-          ln -s "$GITHUB_WORKSPACE/packages/prettier-config" node_modules/@crash/prettier-config
 
       - name: Check games formatting
         run: bun run --cwd services/games format:check
@@ -107,18 +76,6 @@ jobs:
           bun-version: "1.3.3"
 
       - run: bun install
-
-      - name: Link workspace packages
-        run: |
-          mkdir -p node_modules/@crash
-          for pkg in domain messaging observability; do
-            mkdir -p "node_modules/@crash/$pkg"
-            cat > "node_modules/@crash/$pkg/package.json" <<PKGJSON
-          {"name":"@crash/$pkg","type":"commonjs","main":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts","exports":{".":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts"}}
-          PKGJSON
-          done
-          ln -s "$GITHUB_WORKSPACE/packages/eslint-config" "node_modules/@crash/eslint-config"
-          ln -s "$GITHUB_WORKSPACE/packages/prettier-config" "node_modules/@crash/prettier-config"
 
       - name: Run Games E2E tests
         run: cd services/games && bun test tests/e2e
