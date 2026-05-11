@@ -10,10 +10,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  BUN_VERSION: "latest"
-  NODE_VERSION: "22"
-
 jobs:
   unit-tests-games:
     name: Unit Tests - Games
@@ -22,21 +18,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - run: npm install
+      - run: bun install --backend=hardlink
 
       - run: |
-          cd packages/domain && npx tsc
-          cd ../messaging && npx tsc
-          cd ../observability && npx tsc
+          cd packages/domain && bun run build
+          cd ../messaging && bun run build
+          cd ../observability && bun run build
 
-      - run: cd services/games && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
+      - run: cd services/games && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
 
       - name: Run unit tests
         run: bun test services/games/tests/unit
@@ -48,21 +38,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - run: npm install
+      - run: bun install --backend=hardlink
 
       - run: |
-          cd packages/domain && npx tsc
-          cd ../messaging && npx tsc
-          cd ../observability && npx tsc
+          cd packages/domain && bun run build
+          cd ../messaging && bun run build
+          cd ../observability && bun run build
 
-      - run: cd services/wallets && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
+      - run: cd services/wallets && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
 
       - name: Run unit tests
         run: bun test services/wallets/tests/unit
@@ -74,14 +58,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - run: npm install
+      - run: bun install --backend=hardlink
 
       - name: Check games formatting
         run: bun run --cwd services/games format:check
@@ -98,19 +76,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - run: npm install
+      - run: bun install --backend=hardlink
 
       - run: |
-          cd packages/domain && npx tsc
-          cd ../messaging && npx tsc
-          cd ../observability && npx tsc
+          cd packages/domain && bun run build
+          cd ../messaging && bun run build
+          cd ../observability && bun run build
 
       - name: Run Games E2E tests
         run: bun test services/games/tests/e2e
