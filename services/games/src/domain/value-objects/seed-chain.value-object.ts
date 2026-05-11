@@ -46,10 +46,10 @@ export class SeedChain {
    * @param size - Number of seeds to generate (default: 1000)
    * @returns A new SeedChain with randomly generated seeds
    */
-  static async generate(size: number = 1000): Promise<SeedChain> {
-    // Check for deterministic seed in test mode
-    if (process.env.DETERMINISTIC_SEED) {
-      return SeedChain.generateDeterministic(process.env.DETERMINISTIC_SEED, size);
+  static async generate(size: number = 1000, deterministicSeed?: string): Promise<SeedChain> {
+    // Use deterministic seed if provided (for testing)
+    if (deterministicSeed) {
+      return SeedChain.generateDeterministic(deterministicSeed, size);
     }
 
     const seeds: string[] = [];

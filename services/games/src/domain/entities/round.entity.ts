@@ -100,9 +100,9 @@ export class Round {
   /**
    * Factory method to create a new round.
    */
-  static async create(config: RoundConfig = DEFAULT_ROUND_CONFIG): Promise<Round> {
+  static async create(config: RoundConfig = DEFAULT_ROUND_CONFIG, deterministicSeed?: string): Promise<Round> {
     const roundId = crypto.randomUUID();
-    const seedChain = await SeedChain.generate();
+    const seedChain = await SeedChain.generate(1000, deterministicSeed);
     const round = new Round(roundId, seedChain, config);
 
     round.setBettingEndTime(new Date(Date.now() + config.bettingDurationMs));
@@ -428,7 +428,7 @@ export class Round {
   toPersistence() {
     return {
       id: this.id,
-      seed: this.status === RoundStatus.CRASHED ? this.seedChain.getSeed() : null,
+      seed: this.seedChain.getSeed(),
       seedHash: this.seedChain.getCurrentSeedHash(),
       nextSeed: null,
       status: this.status,
