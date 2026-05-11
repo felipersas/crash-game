@@ -1,13 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Round, type RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
-import { BetStatus } from '@/domain/entities/bet.entity';
+import type { Bet } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import type { IUseCase } from '@/application/interfaces/use-case';
 import { Money } from '@crash/domain';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
-import { BetNotFoundError, DuplicateBetError } from '@/domain/errors/domain.errors';
 import {
   ROUND_REPOSITORY,
   BET_REPOSITORY,
@@ -46,81 +45,94 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
   ) {}
 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {
-    let round = await this.roundRepository.findCurrentRound();
+    const round = await this.getOrCreateRound();
+    return this.placeBetOnRound(round, input);
+  }
 
-    if (!round) {
-      round = await Round.create(DEFAULT_ROUND_CONFIG);
+  private async getOrCreateRound(): Promise<Round> {
+    const existing = await this.roundRepository.findCurrentRound();
+    if (existing) return existing;
 
-      const events = round.pullEvents();
-      let outboxIds: string[] = [];
-      await this.prisma.$transaction(async (tx) => {
-        await this.roundRepository.create(round!, tx);
-        if (events.length > 0) {
-          outboxIds = await this.outboxWriter.writeWithinTransaction(tx, round!.id, events);
-        }
-      });
+    const round = await Round.create(DEFAULT_ROUND_CONFIG);
+    await this.persistWithOutbox(round, async (tx) => {
+      await this.roundRepository.create(round, tx);
+    });
 
-      // Best-effort immediate publish for low latency
-      if (events.length > 0 && outboxIds.length > 0) {
-        await this.outboxWriter.tryImmediatePublish(events, outboxIds);
-      }
-    }
+    return round;
+  }
 
+  private async placeBetOnRound(round: Round, input: PlaceBetInput): Promise<PlaceBetOutput> {
     const amount = Money.fromCents(input.amountCents);
+    const { bet, replacedBet } = round.placeOrReplaceBet(
+      input.playerId,
+      input.playerName,
+      amount,
+    );
 
-    const existingBet = await this.betRepository.findByPlayerAndRound(input.playerId, round.id);
-    if (existingBet) {
-      const status = existingBet.getStatus();
-      // Allow replacement for PENDING (wallet not confirmed) and CANCELLED (wallet rejected/timeout)
-      if (status === BetStatus.PENDING || status === BetStatus.CANCELLED) {
-        if (status === BetStatus.PENDING) {
-          existingBet.cancel('Replaced by new bet attempt');
-          await this.betRepository.update(existingBet);
-          this.metrics.incrBet('cancelled', Number(existingBet.getAmount().toCents()));
-        }
-        round.removeBet(input.playerId);
+    this.handleReplacement(round, replacedBet, input);
 
-        try {
-          this.broadcaster.broadcastBetCancelled(
-            round.id,
-            existingBet.id,
-            input.playerId,
-            existingBet.playerName,
-            existingBet.getAmount().toCents(),
-            'Replaced by new bet attempt',
-          );
-        } catch (error) {
-          this.logger.error('Failed to broadcast bet cancelled event (replaced)', error);
-        }
-      } else {
-        throw new DuplicateBetError();
+    await this.persistWithOutbox(round, async (tx) => {
+      if (replacedBet) {
+        await this.betRepository.update(replacedBet, tx);
       }
-    }
-
-    round.placeBet(input.playerId, input.playerName, amount);
-
-    const bet = round.getBetByPlayer(input.playerId);
-    if (!bet) {
-      throw new BetNotFoundError();
-    }
+      await this.betRepository.create(bet, tx);
+    });
 
     this.metrics.incrBet('placed', Number(input.amountCents));
 
+    this.broadcastBetPlaced(round, bet, input);
+
+    return {
+      roundId: round.id,
+      betId: bet.id,
+      amountCents: input.amountCents,
+      status: round.getStatus(),
+    };
+  }
+
+  private handleReplacement(
+    round: Round,
+    replacedBet: Bet | null,
+    input: PlaceBetInput,
+  ): void {
+    if (!replacedBet) return;
+
+    this.metrics.incrBet('cancelled', Number(replacedBet.getAmount().toCents()));
+
+    try {
+      this.broadcaster.broadcastBetCancelled(
+        round.id,
+        replacedBet.id,
+        input.playerId,
+        replacedBet.playerName,
+        replacedBet.getAmount().toCents(),
+        'Replaced by new bet attempt',
+      );
+    } catch (error) {
+      this.logger.error('Failed to broadcast bet cancelled event (replaced)', error);
+    }
+  }
+
+  private async persistWithOutbox(
+    round: Round,
+    persistFn: (tx: any) => Promise<void>,
+  ): Promise<void> {
     const events = round.pullEvents();
     let outboxIds: string[] = [];
+
     await this.prisma.$transaction(async (tx) => {
-      await this.betRepository.create(bet, tx);
-      await this.roundRepository.save(round!, tx);
+      await persistFn(tx);
       if (events.length > 0) {
-        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, round!.id, events);
+        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, round.id, events);
       }
     });
 
-    // Best-effort immediate publish for low latency
     if (events.length > 0 && outboxIds.length > 0) {
       await this.outboxWriter.tryImmediatePublish(events, outboxIds);
     }
+  }
 
+  private broadcastBetPlaced(round: Round, bet: Bet, input: PlaceBetInput): void {
     try {
       this.broadcaster.broadcastBetPlaced(
         round.id,
@@ -132,12 +144,5 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
     } catch (error) {
       this.logger.error('Failed to broadcast bet placed event', error);
     }
-
-    return {
-      roundId: round.id,
-      betId: bet.id,
-      amountCents: input.amountCents,
-      status: round.getStatus(),
-    };
   }
 }
