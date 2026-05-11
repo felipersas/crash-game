@@ -135,8 +135,8 @@ Cada Saga usa transações compensatórias. A bet começa `PENDING` (débito ass
 
 ### Inbox + Outbox patterns
 
-- **Inbox** (Wallets): Garante exactly-once processing via unique constraint em `idempotencyKey`. RabbitMQ redelivers são ignoradas.
-- **Outbox** (Wallets): Eventos de resposta salvos na mesma transação do DB. Processor (cron 5s) publica os pendentes. Se RabbitMQ cai, eventos aguardam recovery.
+- **Inbox** (Games + Wallets): Garante exactly-once processing via unique constraint em `idempotencyKey`. RabbitMQ redelivers são ignoradas.
+- **Outbox** (Games + Wallets): Eventos salvos na mesma transação do DB. Processor (cron 5s) publica os pendentes. Se RabbitMQ cai, eventos aguardam recovery.
 
 ### Cancel-and-Replace
 
@@ -211,15 +211,15 @@ Crédito e débito não são expostos via REST — ocorrem exclusivamente via Ra
 
 ## Testes
 
-### Unitários (26 arquivos)
+### Unitários (24 arquivos)
 
-**Games** (19): Round lifecycle, Bet logic, Value Objects (Multiplier, CrashPoint, SeedChain, Money), Use Cases (PlaceBet, CashOut, ConfirmBet, CancelBet, VerifyRound), AES cipher.
+**Games** (17): Round lifecycle, Bet logic, Value Objects (Multiplier, CrashPoint, SeedChain, Money), Use Cases (PlaceBet, CashOut, ConfirmBet, CancelBet, VerifyRound), AES cipher.
 
 **Wallets** (7): Wallet entity (debit/credit/saldo insuficiente), Money VO, Use Cases (Debit, Credit, Create, Get), PlayerWalletResolver.
 
 ### E2E
 
-**Games + Wallets** (via Vitest): Fluxo completo apostar → multiplicador → cashout/crash → saldo atualizado. Integração entre serviços via RabbitMQ.
+**Games + Wallets** (via Testcontainers): Fluxo completo apostar → multiplicador → cashout/crash → saldo atualizado. Integração entre serviços via RabbitMQ. Containers isolados com `docker-compose.test.yml` (PostgreSQL, Redis, RabbitMQ, Games, Wallets).
 
 **Frontend** (via Playwright): Simulação multiplayer com 3 jogadores autenticados, apostas simultâneas, cashout e verificação de round history.
 
@@ -246,7 +246,7 @@ GitHub Actions roda automaticamente em push para `main` (`.github/workflows/ci.y
 | Job | Descrição |
 |-----|-----------|
 | **Unit Tests - Games** | `bun test tests/unit` no serviço Games (219 testes) |
-| **Unit Tests - Wallets** | `bun test tests/unit` no serviço Wallets (116 testes) |
+| **Unit Tests - Wallets** | `bun test tests/unit` no serviço Wallets (111 testes) |
 | **Lint** | Prettier formatting check em ambos serviços |
 | **E2E Tests** | Testes de integração (depende dos 3 acima passarem) |
 
@@ -256,7 +256,7 @@ GitHub Actions roda automaticamente em push para `main` (`.github/workflows/ci.y
 
 | Bônus | Descrição |
 |-------|-----------|
-| **Inbox/Outbox transacional** | Exactly-once processing (Inbox) + entrega garantida (Outbox) no Wallets Service |
+| **Inbox/Outbox transacional** | Exactly-once processing (Inbox) + entrega garantida (Outbox) em ambos serviços (Games + Wallets) |
 | **Observabilidade** | Prometheus + Grafana com 3 dashboards (Service Health, Game Operations, Infrastructure). Package `@crash/observability` compartilhado |
 | **Seed determinística** | Env var `DETERMINISTIC_SEED` para crash points reproduzíveis em E2E |
 | **Efeitos sonoros** | Hook `useGameSounds` — áudio para aposta, cashout e crash |
@@ -307,6 +307,7 @@ Documentação técnica em `docs/`:
 | Arquivo | Conteúdo |
 |---------|----------|
 | `architecture-overview.md` | Stack, topologia, DDD, shared packages |
-| `payment-saga.md` | Fluxos de pagamento, Inbox/Outbox patterns |
+| `outbox-inbox-architecture.md` | Outbox/Inbox transacional — Games Service |
+| `payment-saga.md` | Fluxos de pagamento, Saga Pattern |
 | `round-engine-redis.md` | Lifecycle dos rounds, máquina de estados, Redis |
 | `provably-fair-algorithm.md` | Hash chain, crash point, verificação |
