@@ -19,6 +19,7 @@
   "dependencies": {
     "@crash/domain": "workspace:*",
     "@crash/messaging": "workspace:*",
+    "@crash/observability": "workspace:*",
     "@nestjs/common": "^11.1.17",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.1.17",

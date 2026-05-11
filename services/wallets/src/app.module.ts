@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { ObservabilityModule } from '@crash/observability';
 import { WalletsController } from '@/presentation/controllers/wallets.controller';
 import { PrismaModule } from '@/infrastructure/persistence/prisma/prisma.module';
 import { PrismaWalletRepository } from '@/infrastructure/persistence/prisma/wallet.repository.impl';
@@ -24,13 +26,14 @@ import {
   EVENT_PUBLISHER,
   PLAYER_WALLET_RESOLVER,
 } from '@/infrastructure/di/tokens';
-import { APP_FILTER } from '@nestjs/core';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
+import { MetricsInterceptor } from './infrastructure/interceptors/metrics.interceptor';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    ObservabilityModule,
     ScheduleModule.forRoot(),
     ClientsModule.register([
       {
@@ -50,6 +53,11 @@ import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.fil
     {
       provide: APP_FILTER,
       useClass: AllExceptionsFilter,
+    },
+    // Metrics Interceptor (global - records HTTP request metrics)
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
     },
     // Repositories
     { provide: WALLET_REPOSITORY, useClass: PrismaWalletRepository },

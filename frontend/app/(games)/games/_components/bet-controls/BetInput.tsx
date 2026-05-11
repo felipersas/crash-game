@@ -1,8 +1,10 @@
 "use client";
 
+import { useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { BetButton } from "./BetButton";
 import { GAME_CONSTANTS } from "@/shared/constants/game.constants";
+import { formatMoney } from "@/shared/utils/money";
 
 interface BetInputProps {
   amount: string;
@@ -11,6 +13,23 @@ interface BetInputProps {
 }
 
 export function BetInput({ amount, onAmountChange, disabled }: BetInputProps) {
+  const cents = Math.round(parseFloat(amount || "0") * 100);
+  const displayValue = formatMoney(cents);
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const rawDigits = e.target.value.replace(/\D/g, "");
+      if (rawDigits === "") {
+        onAmountChange("0.00");
+        return;
+      }
+      const centsValue = parseInt(rawDigits, 10);
+      if (centsValue > GAME_CONSTANTS.MAX_BET_CENTS) return;
+      onAmountChange((centsValue / 100).toFixed(2));
+    },
+    [onAmountChange],
+  );
+
   return (
     <div className="space-y-2">
       <label className="text-xs font-terminal text-text-muted uppercase tracking-wider">
@@ -18,18 +37,13 @@ export function BetInput({ amount, onAmountChange, disabled }: BetInputProps) {
       </label>
       <div className="relative">
         <Input
-          value={amount}
-          onChange={(e) => onAmountChange(e.target.value)}
-          type="number"
-          step="0.01"
-          min="1"
-          max="1000"
-          className="input-cyber pr-12 text-lg font-bold"
+          value={displayValue}
+          onChange={handleChange}
+          type="text"
+          inputMode="numeric"
+          className="h-10 bg-surface/80 border-border text-text-primary text-lg font-bold focus-visible:border-primary focus-visible:ring-primary/30"
           disabled={disabled}
         />
-        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted font-terminal text-sm">
-          USD
-        </span>
       </div>
 
       {!disabled && (

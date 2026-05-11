@@ -7,6 +7,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { Money } from '@crash/domain';
+import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
 import type { IEventPublisher } from '@crash/messaging';
@@ -30,6 +31,7 @@ export class DebitWalletUseCase {
   constructor(
     @Inject(WALLET_REPOSITORY) private readonly walletRepository: IWalletRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
   ) {}
 
   async execute(input: DebitWalletInput): Promise<DebitWalletOutput> {
@@ -42,6 +44,8 @@ export class DebitWalletUseCase {
     wallet.debit(amount, input.reason);
 
     await this.walletRepository.save(wallet);
+
+    this.metrics.incrWalletOp('debit', Number(input.amount));
 
     const events = wallet.pullEvents();
     if (events.length > 0) {

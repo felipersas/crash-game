@@ -9,6 +9,7 @@
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
 import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
 import { INBOX_REPOSITORY, PLAYER_WALLET_RESOLVER } from '@/infrastructure/di/tokens';
@@ -36,6 +37,7 @@ export class PlayerCashedOutEventHandler {
     private readonly creditWalletUseCase: CreditWalletUseCase,
     @Inject(PLAYER_WALLET_RESOLVER) private readonly playerWalletResolver: PlayerWalletResolver,
     @Inject(INBOX_REPOSITORY) private readonly inboxRepository: IInboxRepository,
+    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
   ) {}
 
   /**
@@ -45,6 +47,8 @@ export class PlayerCashedOutEventHandler {
    */
   async handle(event: PlayerCashedOutEvent): Promise<void> {
     const idempotencyKey = `cashout-${event.betId}`;
+
+    this.metrics.incrRabbitConsumed('wallets.games.events', 'PlayerCashedOut');
 
     this.logger.debug(
       `Processing PlayerCashedOutEvent: player=${event.playerId}, winAmount=${event.winAmount}, betId=${event.betId}`,

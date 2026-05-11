@@ -59,6 +59,7 @@ export class PrismaBetRepository implements IBetRepository {
   async findByPlayerAndRound(playerId: string, roundId: string): Promise<Bet | null> {
     const record = await this.prisma.bet.findFirst({
       where: { playerId, roundId },
+      orderBy: { createdAt: 'desc' },
     });
 
     if (!record) return null;

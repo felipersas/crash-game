@@ -7,9 +7,9 @@ import { useGame } from "@/hooks/useGame";
 import { useGameStore } from "@/store/game-store";
 import { RoundStatus } from "@/types/game.types";
 import { BetInput } from "./BetInput";
-import { AutoCashoutInput } from "./AutoCashoutInput";
 import { BetStatusDisplay, CashOutButton } from "./BetStatusDisplay";
 import { useBetToast } from "./useBetToast";
+import { useGameSounds } from "@/hooks/useGameSounds";
 
 export default function BetControls() {
   const { placeBet, isPlacingBet, cashOut, isCashingOut } = useGame();
@@ -19,10 +19,10 @@ export default function BetControls() {
   const { data: session, status: authStatus } = useSession();
 
   useBetToast();
+  const { playBet } = useGameSounds();
 
   const isAuthenticated = authStatus === "authenticated";
   const [amount, setAmount] = useState("10.00");
-  const [autoCashOut, setAutoCashOut] = useState("2.00");
 
   const isBettingPhase = roundStatus === RoundStatus.BETTING;
   const isActivePhase = roundStatus === RoundStatus.ACTIVE;
@@ -36,6 +36,7 @@ export default function BetControls() {
   const handlePlaceBet = () => {
     const cents = Math.round(parseFloat(amount) * 100);
     if (isNaN(cents) || cents <= 0) return;
+    playBet();
     placeBet(cents);
   };
 
@@ -71,9 +72,6 @@ export default function BetControls() {
       )}
 
       <BetInput amount={amount} onAmountChange={setAmount} disabled={!canBet} />
-
-      <AutoCashoutInput value={autoCashOut} onChange={setAutoCashOut} disabled={!canBet} />
-
       {canBet && (
         <button
           onClick={handlePlaceBet}

@@ -3,6 +3,7 @@ import { type Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
+import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import {
   ROUND_REPOSITORY,
   BET_REPOSITORY,
@@ -32,6 +33,7 @@ export class RoundCrashHandler {
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
     private readonly redisService: RedisService,
+    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
   ) {}
 
   /**
@@ -45,6 +47,10 @@ export class RoundCrashHandler {
     const crashPoint = inMemoryRound.getCrashPoint();
 
     this.logger.log(`Round ${roundId} crashed at ${crashPoint}x`);
+
+    if (crashPoint) {
+      this.metrics.observeCrashPoint(crashPoint);
+    }
 
     const latestRound = await this.roundRepository.findById(roundId);
     if (!latestRound) {
@@ -76,6 +82,33 @@ export class RoundCrashHandler {
     }
 
     await this.settleBets(latestRound);
+
+    // Record round duration and settle metrics
+    const startedAt = latestRound.getStartedAt();
+    if (startedAt) {
+      const durationSeconds = (Date.now() - startedAt.getTime()) / 1000;
+      this.metrics.observeRoundDuration(durationSeconds);
+    }
+
+    // Record lost/cancelled bet metrics and compute RTP
+    const allBets = latestRound.getBets();
+    let totalBetAmount = 0;
+    let totalWinAmount = 0;
+    for (const bet of allBets) {
+      const amount = Number(bet.getAmount().toCents());
+      totalBetAmount += amount;
+      if (bet.isCashedOut()) {
+        const payout = bet.getCashOutAmount();
+        if (payout) {
+          totalWinAmount += Number(payout.toCents());
+        }
+      } else if (bet.isLost() || bet.isCancelled()) {
+        this.metrics.incrBet(bet.isLost() ? 'lost' : 'cancelled', amount);
+      }
+    }
+    if (totalBetAmount > 0) {
+      this.metrics.setRtp((totalWinAmount / totalBetAmount) * 100);
+    }
 
     await this.redisService.deleteRound(roundId);
 

@@ -39,7 +39,7 @@ export const authOptions: NextAuthOptions = {
   providers: [KeycloakProvider],
 
   callbacks: {
-    async jwt({ token, account, profile }) {
+    async jwt({ token, account, profile, user }) {
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
@@ -49,6 +49,10 @@ export const authOptions: NextAuthOptions = {
 
       if (profile) {
         token.playerId = profile.sub;
+      }
+
+      if (user?.name) {
+        token.username = user.name;
       }
 
       if (!token.expiresAt) return token;
@@ -69,6 +73,8 @@ export const authOptions: NextAuthOptions = {
       session.playerId = token.playerId as string;
       session.idToken = token.idToken as string;
       session.error = token.error as string | undefined;
+      session.user.username = token.username as string | undefined;
+      session.user.playerId = token.playerId as string | undefined;
       return session;
     },
   },

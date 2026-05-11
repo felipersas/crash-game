@@ -1,7 +1,7 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useMemo } from "react";
+import { useGameStore } from "@/store/game-store";
 
 export type Phase = "betting" | "active" | "crashed";
-type DataPoint = [number, number]; // [elapsedMs, multiplier]
 
 export interface CurveData {
   path: string;
@@ -9,8 +9,6 @@ export interface CurveData {
   endX: number;
   endY: number;
 }
-
-const MAX_POINTS = 500;
 
 function buildCatmullRomPath(coords: Array<{ x: number; y: number }>): string {
   const f = (n: number) => n.toFixed(1);
@@ -38,20 +36,30 @@ function buildCatmullRomPath(coords: Array<{ x: number; y: number }>): string {
   return d;
 }
 
-function computeCurve(points: DataPoint[]): CurveData | null {
-  if (points.length < 2) return null;
+function computeCurve(multiplier: number, elapsedMs: number): CurveData | null {
+  if (elapsedMs < 50 || multiplier <= 1.001) return null;
 
   const pad = { left: 4, right: 2, top: 4, bottom: 2 };
   const plotW = 100 - pad.left - pad.right;
   const plotH = 100 - pad.top - pad.bottom;
 
-  const maxTime = Math.max(points[points.length - 1][0], 500);
-  const maxMult = Math.max(points[points.length - 1][1] * 1.15, 2);
+  const maxTime = Math.max(elapsedMs, 500);
+  const maxMult = Math.max(multiplier * 1.15, 2);
 
   const toX = (t: number) => pad.left + (t / maxTime) * plotW;
   const toY = (m: number) => pad.top + plotH - ((m - 1) / (maxMult - 1)) * plotH;
 
-  const coords = points.map(([t, m]) => ({ x: toX(t), y: toY(m) }));
+  // Generate deterministic exponential curve: y = e^(k*t)
+  const k = Math.log(multiplier) / elapsedMs;
+  const numPoints = Math.min(60, Math.max(8, Math.floor(elapsedMs / 200)));
+  const coords: Array<{ x: number; y: number }> = [];
+
+  for (let i = 0; i <= numPoints; i++) {
+    const t = (i / numPoints) * elapsedMs;
+    const m = Math.exp(k * t);
+    coords.push({ x: toX(t), y: toY(m) });
+  }
+
   const path = buildCatmullRomPath(coords);
 
   const endX = coords[coords.length - 1].x;
@@ -64,32 +72,15 @@ function computeCurve(points: DataPoint[]): CurveData | null {
 }
 
 export function useCurvePoints(multiplier: number, phase: Phase): CurveData | null {
-  const pointsRef = useRef<DataPoint[]>([]);
-  const startTimeRef = useRef(0);
-  const prevPhaseRef = useRef<Phase>(phase);
-
-  useEffect(() => {
-    const prev = prevPhaseRef.current;
-
-    if (phase === "active" && prev !== "active") {
-      pointsRef.current = [[0, multiplier]];
-      startTimeRef.current = performance.now();
-    } else if (phase === "active") {
-      const elapsed = performance.now() - startTimeRef.current;
-      pointsRef.current.push([elapsed, multiplier]);
-
-      if (pointsRef.current.length > MAX_POINTS) {
-        pointsRef.current = pointsRef.current.filter((_, i) => i % 2 === 0);
-      }
-    } else if (phase === "betting" && prev !== "betting") {
-      pointsRef.current = [];
-    }
-
-    prevPhaseRef.current = phase;
-  }, [multiplier, phase]);
+  const roundStartedAt = useGameStore((s) => s.roundStartedAt);
 
   return useMemo(() => {
     if (phase === "betting") return null;
-    return computeCurve(pointsRef.current);
-  }, [multiplier, phase]);
+
+    const elapsedMs = roundStartedAt
+      ? Date.now() - new Date(roundStartedAt).getTime()
+      : 0;
+
+    return computeCurve(multiplier, elapsedMs);
+  }, [multiplier, phase, roundStartedAt]);
 }

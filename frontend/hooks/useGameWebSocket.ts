@@ -12,6 +12,7 @@ import {
   GamesWebSocket,
 } from "../websocket/games-websocket";
 import { getCurrentRound } from "@/infrastructure/api/games-api";
+import { useGameSounds } from "@/hooks/useGameSounds";
 import {
   RoundStatus,
   BetStatus,
@@ -41,6 +42,7 @@ export function useGameWebSocket(
 ): UseGameWebSocketReturn {
   const { token, playerId, enabled = true } = options;
   const wsRef = useRef<GamesWebSocket | null>(null);
+  const { playCrash } = useGameSounds();
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<
     "connecting" | "connected" | "disconnected" | "error"
@@ -53,6 +55,7 @@ export function useGameWebSocket(
   );
   const setStoreConnected = useGameStore((state) => state.setConnected);
   const setStoreRoundStarted = useGameStore((state) => state.setRoundStarted);
+  const setStoreRejoinActiveRound = useGameStore((state) => state.rejoinActiveRound);
   const setStoreBettingEnded = useGameStore((state) => state.setBettingEnded);
   const setStoreMultiplier = useGameStore((state) => state.setMultiplier);
   const setStoreCrash = useGameStore((state) => state.setCrash);
@@ -86,20 +89,20 @@ export function useGameWebSocket(
             setStoreCurrentBets(round.bets || []);
             break;
           case RoundStatus.ACTIVE:
-            setStoreRoundStarted(
+            setStoreRejoinActiveRound(
               round.roundId,
               round.seedHash || "",
-              new Date(),
+              round.startedAt ? new Date(round.startedAt) : new Date(),
+              round.currentMultiplier ?? 1.0,
+              round.bets || [],
             );
-            setStoreBettingEnded();
-            setStoreMultiplier(round.currentMultiplier ?? 1.0);
-            setStoreCurrentBets(round.bets || []);
             break;
           case RoundStatus.CRASHED:
             setStoreRoundStarted(
               round.roundId,
               round.seedHash || "",
               new Date(),
+              round.startedAt ? new Date(round.startedAt) : null,
             );
             setStoreCrash(round.crashPoint ?? 1.0);
             setStoreCurrentBets(round.bets || []);
@@ -123,6 +126,7 @@ export function useGameWebSocket(
     },
     [
       setStoreRoundStarted,
+      setStoreRejoinActiveRound,
       setStoreBettingEnded,
       setStoreMultiplier,
       setStoreCrash,
@@ -189,6 +193,11 @@ export function useGameWebSocket(
         // Only update if for current round
         if (data.roundId === currentRoundIdRef.current) {
           setStoreCrash(data.crashPoint);
+          // Play crash sound immediately if player has an active losing bet
+          const state = useGameStore.getState();
+          if (state.myActiveBet && state.myActiveBet.status !== "CASHED_OUT") {
+            playCrash();
+          }
         }
       },
       onBetPlaced: (data) => {

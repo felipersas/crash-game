@@ -23,7 +23,7 @@ function getCrashChipColor(cp: number | null): string {
   if (!cp) return "bg-surface-bright/30 text-text-muted";
   if (cp < 1.5) return "bg-error/20 text-error";
   if (cp < 3) return "bg-warning/20 text-warning";
-  return "bg-primary/20 text-primary";
+  return "bg-primary/20 text-primary glow-chip-high";
 }
 
 function getColorZone(multiplier: number, crashed: boolean): ColorZone {
@@ -45,6 +45,17 @@ const CURVE_STROKE: Record<ColorZone, string> = {
   profit: "hsl(72, 98%, 48%)",
   warning: "hsl(45, 100%, 55%)",
   neutral: "hsl(0, 0%, 100%)",
+};
+
+const GLOW_SHADOW: Record<ColorZone, string> = {
+  error:
+    "0 0 10px hsl(0 100% 60% / 0.7), 0 0 40px hsl(0 100% 60% / 0.3)",
+  profit:
+    "0 0 10px hsl(72 98% 48% / 0.6), 0 0 30px hsl(72 98% 48% / 0.3), 0 0 60px hsl(72 98% 48% / 0.1)",
+  warning:
+    "0 0 10px hsl(45 100% 55% / 0.6), 0 0 30px hsl(45 100% 55% / 0.3), 0 0 60px hsl(45 100% 55% / 0.1)",
+  neutral:
+    "0 0 10px rgba(255,255,255,0.6), 0 0 30px rgba(255,255,255,0.3), 0 0 60px rgba(255,255,255,0.1)",
 };
 
 function getStatusLabel(phase: Props["phase"], multiplier: number): string {
@@ -171,7 +182,7 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
 
   return (
     <motion.div
-      className={`panel-cyber rounded-lg overflow-hidden relative h-full flex flex-col ${shouldShake ? "animate-glitch" : ""}`}
+      className={`panel-cyber rounded-lg overflow-hidden relative h-full flex flex-col ${shouldShake ? "animate-glitch" : ""} ${phase === "active" ? "glow-panel-active" : ""}`}
       animate={shouldShake ? { x: [-5, 5, -5, 5, 0] } : {}}
       transition={{ duration: 0.3 }}
     >
@@ -216,8 +227,7 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
         <div className="relative z-10 text-center">
           <motion.div
             className={`font-black font-terminal tracking-tighter ${TEXT_CLASS[zone]} ${isBetting ? "text-3xl md:text-4xl" : "text-7xl md:text-8xl"}`}
-            animate={!isCrashed && !isBetting ? { scale: [1, 1.02, 1] } : {}}
-            transition={{ duration: 0.5, repeat: Infinity }}
+            style={(isCrashed || phase === "active") ? { textShadow: GLOW_SHADOW[zone] } : undefined}
           >
             {getStatusLabel(phase, multiplier)}
           </motion.div>
@@ -233,20 +243,22 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
       </div>
 
       {/* Progress Bar */}
-      <div className="h-2 bg-surface-bright/20 relative overflow-hidden">
-        <motion.div
-          className={`h-full ${isCrashed ? "bg-error" : "bg-primary"}`}
-          initial={{ width: 0 }}
-          animate={{ width: `${getProgressBarWidth(multiplier, phase)}%` }}
-          transition={{ duration: 0.1 }}
-        >
+      {phase !== "active" && (
+        <div className="h-2 bg-surface-bright/20 relative overflow-hidden">
           <motion.div
-            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-            animate={{ x: ["-100%", "100%"] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-          />
-        </motion.div>
-      </div>
+            className={`h-full ${isCrashed ? "bg-error" : "bg-primary"}`}
+            initial={{ width: 0 }}
+            animate={{ width: `${getProgressBarWidth(multiplier, phase)}%` }}
+            transition={{ duration: 0.1 }}
+          >
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+              animate={{ x: ["-100%", "100%"] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+            />
+          </motion.div>
+        </div>
+      )}
 
       {/* Status Line */}
       <div className="h-8 bg-surface border-t border-border flex items-center justify-between px-4">

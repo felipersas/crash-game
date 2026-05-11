@@ -12,16 +12,12 @@ export function useBetToast() {
   const myActiveBet = useGameStore((s) => s.myActiveBet);
   const roundStatus = useGameStore((s) => s.roundStatus);
   const liveMultiplier = useGameStore((s) => s.liveMultiplier);
-  const { playWin, playCrash } = useGameSounds();
+  const { playWin } = useGameSounds();
 
   const prevRoundStatus = useRef(roundStatus);
   const prevMyActiveBet = useRef(myActiveBet);
   const hasShownWinToast = useRef(false);
   const hasShownLossToast = useRef(false);
-
-  useEffect(() => {
-    handleToasts(myActiveBet, roundStatus, liveMultiplier);
-  }, [roundStatus, myActiveBet, liveMultiplier]);
 
   function handleToasts(
     bet: Bet | null,
@@ -36,7 +32,10 @@ export function useBetToast() {
       const winAmount = bet.payoutCents
         ? formatMoney(bet.payoutCents)
         : formatMoney(
-            calculatePayout(bet.amountCents, bet.cashOutMultiplier || multiplier),
+            calculatePayout(
+              bet.amountCents,
+              bet.cashOutMultiplier || multiplier,
+            ),
           );
 
       toast.success("Cashed Out!", {
@@ -59,7 +58,6 @@ export function useBetToast() {
         description: `You lost ${formatMoney(bet.amountCents)} at ${multiplier.toFixed(2)}x`,
         duration: 4000,
       });
-      playCrash();
       hasShownLossToast.current = true;
       hasShownWinToast.current = false;
     }
@@ -75,4 +73,8 @@ export function useBetToast() {
     prevRoundStatus.current = status;
     prevMyActiveBet.current = bet;
   }
+
+  useEffect(() => {
+    handleToasts(myActiveBet, roundStatus, liveMultiplier);
+  }, [roundStatus, myActiveBet, liveMultiplier]);
 }
