@@ -7,7 +7,6 @@ import {
   InvalidMoneyAmountError,
   NegativeMoneyError,
   WalletNotFoundError,
-  WalletAlreadyExistsError,
   OptimisticLockError,
 } from '@/domain/errors/domain.errors';
 
@@ -19,7 +18,6 @@ const ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [InvalidMoneyAmountError.name]: HttpStatus.BAD_REQUEST, // 400
   [NegativeMoneyError.name]: HttpStatus.BAD_REQUEST, // 400
   [WalletNotFoundError.name]: HttpStatus.NOT_FOUND, // 404
-  [WalletAlreadyExistsError.name]: HttpStatus.CONFLICT, // 409
   [OptimisticLockError.name]: HttpStatus.CONFLICT, // 409
 };
 

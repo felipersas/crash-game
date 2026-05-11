@@ -63,30 +63,9 @@ export class PrismaInboxRepository implements IInboxRepository {
     });
   }
 
-  async incrementRetry(id: string): Promise<void> {
-    await this.prisma.inboxEvent.update({
-      where: { id },
-      data: {
-        retryCount: { increment: 1 },
-      },
-    });
-  }
-
   async findByIdempotencyKey(idempotencyKey: string): Promise<InboxEvent | null> {
     const event = await this.prisma.inboxEvent.findUnique({
       where: { idempotencyKey },
-    });
-
-    if (!event) {
-      return null;
-    }
-
-    return this.toDomain(event);
-  }
-
-  async findById(id: string): Promise<InboxEvent | null> {
-    const event = await this.prisma.inboxEvent.findUnique({
-      where: { id },
     });
 
     if (!event) {

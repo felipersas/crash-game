@@ -56,22 +56,11 @@ export class PrismaWalletRepository implements IWalletRepository {
       });
     } catch (error: unknown) {
       // Prisma P2025 = record not found (version WHERE matched zero rows)
-      if (
-        error instanceof Error &&
-        'code' in error &&
-        (error as any).code === 'P2025'
-      ) {
+      if (error instanceof Error && 'code' in error && (error as any).code === 'P2025') {
         throw new OptimisticLockError(data.id, data.version, data.version - 1);
       }
       throw error;
     }
-  }
-
-  async existsByPlayerId(playerId: string): Promise<boolean> {
-    const count = await this.prisma.wallet.count({
-      where: { playerId },
-    });
-    return count > 0;
   }
 
   /**

@@ -9,7 +9,6 @@ import { PrismaModule } from '@/infrastructure/persistence/prisma/prisma.module'
 import { PrismaWalletRepository } from '@/infrastructure/persistence/prisma/wallet.repository.impl';
 import { PrismaInboxRepository } from '@/infrastructure/persistence/prisma/inbox.repository.impl';
 import { RabbitMQEventPublisher } from '@/infrastructure/messaging/rabbitmq/event-publisher.impl';
-import { TransactionalEventPublisher } from '@/infrastructure/messaging/transactional-event-publisher';
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 import { OutboxProcessor } from '@/infrastructure/messaging/rabbitmq/outbox-processor';
 import { InboxProcessor } from '@/infrastructure/messaging/rabbitmq/inbox-processor';
@@ -25,7 +24,6 @@ import { PlayerWalletResolver } from '@/application/services/player-wallet-resol
 import {
   WALLET_REPOSITORY,
   INBOX_REPOSITORY,
-  EVENT_PUBLISHER,
   RABBITMQ_PUBLISHER,
   PLAYER_WALLET_RESOLVER,
 } from '@/application/di.tokens';
@@ -65,11 +63,7 @@ import { MetricsInterceptor } from './infrastructure/interceptors/metrics.interc
     // Repositories
     { provide: WALLET_REPOSITORY, useClass: PrismaWalletRepository },
     { provide: INBOX_REPOSITORY, useClass: PrismaInboxRepository },
-    // Messaging — EVENT_PUBLISHER writes to outbox, RABBITMQ_PUBLISHER publishes to RabbitMQ
-    {
-      provide: EVENT_PUBLISHER,
-      useClass: TransactionalEventPublisher,
-    },
+    // Messaging
     {
       provide: RABBITMQ_PUBLISHER,
       useClass: RabbitMQEventPublisher,

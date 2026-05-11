@@ -73,10 +73,7 @@ export class OutboxWriter {
    * On failure, logs a warning and leaves the row as PENDING for the polling fallback.
    * Never throws — the OutboxProcessor will handle retries.
    */
-  async tryImmediatePublish(
-    events: WalletDomainEvent[],
-    outboxIds: string[],
-  ): Promise<void> {
+  async tryImmediatePublish(events: WalletDomainEvent[], outboxIds: string[]): Promise<void> {
     for (let i = 0; i < events.length; i++) {
       const event = events[i];
       const outboxId = outboxIds[i];
@@ -98,9 +95,7 @@ export class OutboxWriter {
           },
         });
 
-        this.logger.debug(
-          `Immediately published outbox event: ${event.eventType} (${outboxId})`,
-        );
+        this.logger.debug(`Immediately published outbox event: ${event.eventType} (${outboxId})`);
       } catch (error: unknown) {
         this.logger.warn(
           `Immediate publish failed for ${event.eventType} (${outboxId}), falling back to polling: ${

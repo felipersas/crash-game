@@ -16,10 +16,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
 import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
-import {
-  PLAYER_WALLET_RESOLVER,
-  INBOX_REPOSITORY,
-} from '@/application/di.tokens';
+import { PLAYER_WALLET_RESOLVER, INBOX_REPOSITORY } from '@/application/di.tokens';
 import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import {
   createWalletDebitedEvent,
@@ -137,11 +134,9 @@ export class BetPlacedEventHandler {
 
       let outboxIds: string[] = [];
       await this.prisma.$transaction(async (tx) => {
-        outboxIds = await this.outboxWriter.writeWithinTransaction(
-          tx,
-          event.roundId,
-          [confirmationEvent],
-        );
+        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, event.roundId, [
+          confirmationEvent,
+        ]);
       });
 
       // Best-effort immediate publish for low latency
@@ -172,11 +167,9 @@ export class BetPlacedEventHandler {
 
         let outboxIds: string[] = [];
         await this.prisma.$transaction(async (tx) => {
-          outboxIds = await this.outboxWriter.writeWithinTransaction(
-            tx,
-            event.roundId,
-            [failureEvent],
-          );
+          outboxIds = await this.outboxWriter.writeWithinTransaction(tx, event.roundId, [
+            failureEvent,
+          ]);
         });
 
         // Best-effort immediate publish for low latency
