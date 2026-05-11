@@ -3,7 +3,7 @@ import { Round, type RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities
 import { BetStatus } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
-import type { IEventPublisher } from '@crash/messaging';
+import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import type { IUseCase } from '@/application/interfaces/use-case';
 import { Money } from '@crash/domain';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
@@ -13,8 +13,10 @@ import {
   BET_REPOSITORY,
   EVENT_PUBLISHER,
   GAME_BROADCASTER,
-} from '@/infrastructure/di/tokens';
+} from '@/application/di.tokens';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
+import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
+import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 export interface PlaceBetInput {
   playerId: string;
@@ -36,9 +38,11 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
+    private readonly prisma: PrismaService,
+    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {
@@ -46,11 +50,19 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
 
     if (!round) {
       round = await Round.create(DEFAULT_ROUND_CONFIG);
-      await this.roundRepository.create(round);
 
       const events = round.pullEvents();
-      if (events.length > 0) {
-        await this.eventPublisher.publishBatch(events);
+      let outboxIds: string[] = [];
+      await this.prisma.$transaction(async (tx) => {
+        await this.roundRepository.create(round!, tx);
+        if (events.length > 0) {
+          outboxIds = await this.outboxWriter.writeWithinTransaction(tx, round!.id, events);
+        }
+      });
+
+      // Best-effort immediate publish for low latency
+      if (events.length > 0 && outboxIds.length > 0) {
+        await this.outboxWriter.tryImmediatePublish(events, outboxIds);
       }
     }
 
@@ -92,15 +104,21 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
       throw new BetNotFoundError();
     }
 
-    await this.betRepository.create(bet);
-
     this.metrics.incrBet('placed', Number(input.amountCents));
 
-    await this.roundRepository.save(round);
-
     const events = round.pullEvents();
-    if (events.length > 0) {
-      await this.eventPublisher.publishBatch(events);
+    let outboxIds: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      await this.betRepository.create(bet, tx);
+      await this.roundRepository.save(round!, tx);
+      if (events.length > 0) {
+        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, round!.id, events);
+      }
+    });
+
+    // Best-effort immediate publish for low latency
+    if (events.length > 0 && outboxIds.length > 0) {
+      await this.outboxWriter.tryImmediatePublish(events, outboxIds);
     }
 
     try {

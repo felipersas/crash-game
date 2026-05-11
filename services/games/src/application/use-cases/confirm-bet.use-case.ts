@@ -1,12 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
-import type { IEventPublisher } from '@crash/messaging';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
-import { BET_REPOSITORY, EVENT_PUBLISHER, GAME_BROADCASTER } from '@/infrastructure/di/tokens';
+import { BET_REPOSITORY, GAME_BROADCASTER } from '@/application/di.tokens';
 import { BetNotFoundError } from '@/domain/errors/domain.errors';
 import { createBetConfirmedEvent } from '@/domain/events/round.events';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
+import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
+import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 export interface ConfirmBetInput {
   roundId: string;
@@ -25,7 +26,7 @@ export interface ConfirmBetOutput {
  *
  * Confirms a bet after successful wallet debit.
  * Transitions the bet from PENDING to ACTIVE state.
- * Emits BetConfirmedEvent for WebSocket notification to clients.
+ * Writes BetConfirmedEvent to outbox for reliable delivery.
  *
  * Now uses BetRepository directly for better concurrency.
  */
@@ -35,9 +36,10 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
 
   constructor(
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
+    private readonly prisma: PrismaService,
+    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(input: ConfirmBetInput): Promise<ConfirmBetOutput> {
@@ -48,9 +50,6 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
     }
 
     bet.confirm();
-    await this.betRepository.update(bet);
-
-    this.metrics.incrBet('confirmed', Number(bet.getAmount().toCents()));
 
     const event = createBetConfirmedEvent(
       input.roundId,
@@ -59,7 +58,18 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
       bet.getAmount().toCents(),
       1,
     );
-    await this.eventPublisher.publishBatch([event]);
+
+    const outboxIds = await this.prisma.$transaction(async (tx) => {
+      await this.betRepository.update(bet, tx);
+      return this.outboxWriter.writeWithinTransaction(tx, input.roundId, [event]);
+    });
+
+    // Best-effort immediate publish for low latency
+    if (outboxIds.length > 0) {
+      await this.outboxWriter.tryImmediatePublish([event], outboxIds);
+    }
+
+    this.metrics.incrBet('confirmed', Number(bet.getAmount().toCents()));
 
     try {
       this.broadcaster.broadcastBetConfirmed(

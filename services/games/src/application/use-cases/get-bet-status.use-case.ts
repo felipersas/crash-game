@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
-import { BET_REPOSITORY } from '@/infrastructure/di/tokens';
+import { BET_REPOSITORY } from '@/application/di.tokens';
 import { BetNotFoundError } from '@/domain/errors/domain.errors';
 import { type BetStatus } from '@/domain/entities/bet.entity';
 

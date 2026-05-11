@@ -3,7 +3,7 @@ import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import { CrashPoint } from '@/domain/value-objects/crash-point.value-object';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
-import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
+import { ROUND_REPOSITORY } from '@/application/di.tokens';
 import { RoundStatus } from '@/domain/entities/round.entity';
 import { RoundNotFoundError, SeedNotAvailableError, VerificationFailedError } from '@/domain/errors/domain.errors';
 

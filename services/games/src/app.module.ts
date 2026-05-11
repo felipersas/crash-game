@@ -10,10 +10,14 @@ import { PrismaService } from './infrastructure/persistence/prisma/prisma.servic
 import { PrismaRoundRepository } from './infrastructure/persistence/prisma/round.repository.impl';
 import { PrismaBetRepository } from './infrastructure/persistence/prisma/bet.repository.impl';
 import { RabbitMQEventPublisher } from './infrastructure/messaging/rabbitmq/event-publisher.impl';
+import { TransactionalEventPublisher } from './infrastructure/messaging/transactional-event-publisher';
+import { OutboxWriter } from './infrastructure/messaging/outbox-writer';
 import { WalletEventsController } from './infrastructure/messaging/rabbitmq/wallet-events.controller';
 import { WalletDebitedEventHandler } from './infrastructure/messaging/rabbitmq/handlers/wallet-debited.handler';
 import { WalletDebitFailedEventHandler } from './infrastructure/messaging/rabbitmq/handlers/wallet-debit-failed.handler';
 import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-processor';
+import { InboxProcessor } from './infrastructure/messaging/rabbitmq/inbox-processor';
+import { PrismaInboxRepository } from './infrastructure/persistence/prisma/inbox.repository.impl';
 import { RoundLifecycleManager } from './infrastructure/scheduling/round-lifecycle-manager';
 import { RoundCrashHandler } from './infrastructure/scheduling/round-crash-handler';
 import { RedisService } from './infrastructure/redis/redis.service';
@@ -32,12 +36,14 @@ import {
   ROUND_REPOSITORY,
   BET_REPOSITORY,
   EVENT_PUBLISHER,
+  RABBITMQ_PUBLISHER,
   SEED_CHAIN_REPOSITORY,
   GAMES_GATEWAY,
   GAME_BROADCASTER,
   IDEMPOTENCY_CACHE,
   ROUND_STATE_PROVIDER,
-} from './infrastructure/di/tokens';
+  INBOX_REPOSITORY,
+} from './application/di.tokens';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-chain.repository.impl';
@@ -76,6 +82,7 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
     },
     // Infrastructure
     PrismaService,
+    OutboxWriter,
     {
       provide: GAMES_GATEWAY,
       useClass: GamesGateway,
@@ -96,14 +103,23 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
       provide: SEED_CHAIN_REPOSITORY,
       useClass: FileSeedChainRepository,
     },
-    // Messaging
+    // Messaging — EVENT_PUBLISHER writes to outbox, RABBITMQ_PUBLISHER publishes to RabbitMQ
     {
       provide: EVENT_PUBLISHER,
+      useClass: TransactionalEventPublisher,
+    },
+    {
+      provide: RABBITMQ_PUBLISHER,
       useClass: RabbitMQEventPublisher,
     },
     WalletDebitedEventHandler,
     WalletDebitFailedEventHandler,
     OutboxProcessor,
+    InboxProcessor,
+    {
+      provide: INBOX_REPOSITORY,
+      useClass: PrismaInboxRepository,
+    },
     RedisService,
     {
       provide: IDEMPOTENCY_CACHE,
