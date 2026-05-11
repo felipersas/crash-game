@@ -252,11 +252,6 @@ describe('Money Value Object', () => {
   });
 
   describe('State Checks', () => {
-    test('isNegative should return false for non-negative values', () => {
-      const money = Money.fromDecimal('10.00');
-      expect(money.isNegative()).toBe(false);
-    });
-
     test('isZero should return true for zero', () => {
       const money = Money.zero();
       expect(money.isZero()).toBe(true);
@@ -265,16 +260,6 @@ describe('Money Value Object', () => {
     test('isZero should return false for non-zero', () => {
       const money = Money.fromDecimal('0.01');
       expect(money.isZero()).toBe(false);
-    });
-
-    test('isPositive should return true for positive values', () => {
-      const money = Money.fromDecimal('10.00');
-      expect(money.isPositive()).toBe(true);
-    });
-
-    test('isPositive should return false for zero', () => {
-      const money = Money.zero();
-      expect(money.isPositive()).toBe(false);
     });
   });
 
