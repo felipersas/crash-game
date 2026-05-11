@@ -18,21 +18,6 @@ export class PlayerWalletResolver {
   constructor(@Inject(WALLET_REPOSITORY) private readonly walletRepository: IWalletRepository) {}
 
   /**
-   * Resolve playerId to walletId.
-   *
-   * @param playerId The player ID to resolve
-   * @returns The wallet ID
-   * @throws WalletNotFoundError if wallet not found for the given playerId
-   */
-  async resolveWalletId(playerId: string): Promise<string> {
-    const wallet = await this.walletRepository.findByPlayerId(playerId);
-    if (!wallet) {
-      throw new WalletNotFoundError();
-    }
-    return wallet.id;
-  }
-
-  /**
    * Get wallet by playerId.
    *
    * @param playerId The player ID

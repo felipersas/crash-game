@@ -44,12 +44,6 @@ export class NegativeMoneyError extends DomainError {
   }
 }
 
-export class WalletAlreadyExistsError extends DomainError {
-  constructor() {
-    super('Wallet already exists', 'WALLET_ALREADY_EXISTS');
-  }
-}
-
 export class WalletNotFoundError extends DomainError {
   constructor() {
     super('Wallet not found', 'WALLET_NOT_FOUND');

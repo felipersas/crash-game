@@ -20,19 +20,9 @@ export interface IInboxRepository {
   markAsFailed(id: string, errorMessage: string, retryCount: number): Promise<void>;
 
   /**
-   * Increment retry count for an event.
-   */
-  incrementRetry(id: string): Promise<void>;
-
-  /**
    * Find an inbox event by idempotency key.
    */
   findByIdempotencyKey(idempotencyKey: string): Promise<InboxEvent | null>;
-
-  /**
-   * Find an inbox event by ID.
-   */
-  findById(id: string): Promise<InboxEvent | null>;
 
   /**
    * Delete processed events older than specified days.

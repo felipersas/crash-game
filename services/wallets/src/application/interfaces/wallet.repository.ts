@@ -32,9 +32,4 @@ export interface IWalletRepository {
    * Optional tx for atomic operations within a transaction.
    */
   create(wallet: Wallet, tx?: PrismaTransaction): Promise<void>;
-
-  /**
-   * Check if a wallet exists for the given player ID.
-   */
-  existsByPlayerId(playerId: string): Promise<boolean>;
 }
