@@ -159,38 +159,55 @@
     },
     {
       "title": "Bet Amount Distribution",
-      "type": "barchart",
+      "type": "timeseries",
       "gridPos": { "h": 9, "w": 24, "x": 0, "y": 24 },
-      "options": {
-        "xTickLabelRotation": 45,
-        "xTickLabelSpacing": 100,
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] },
-        "groupWidth": 0.7,
-        "barWidth": 0.6,
-        "stacking": "none",
-        "tooltip": { "mode": "single" }
-      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "color": { "mode": "palette-classic" },
-          "decimals": 0
+          "unit": "cents",
+          "custom": { "fillOpacity": 10 }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "le" },
-            "properties": [
-              { "id": "displayName", "value": "Bucket" }
-            ]
+            "matcher": { "id": "byName", "options": "P50" },
+            "properties": [{ "id": "color", "value": "green" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "P90" },
+            "properties": [{ "id": "color", "value": "yellow" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "P95" },
+            "properties": [{ "id": "color", "value": "orange" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "P99" },
+            "properties": [{ "id": "color", "value": "red" }]
           }
         ]
       },
       "targets": [
         {
-          "expr": "sum by (le) (increase(crash_game_bet_amount_cents_bucket[5m]))",
-          "legendFormat": "{{le}} cents",
-          "instant": true,
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(crash_game_bet_amount_cents_bucket[5m])))",
+          "legendFormat": "P50",
           "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        },
+        {
+          "expr": "histogram_quantile(0.9, sum by (le) (rate(crash_game_bet_amount_cents_bucket[5m])))",
+          "legendFormat": "P90",
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(crash_game_bet_amount_cents_bucket[5m])))",
+          "legendFormat": "P95",
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(crash_game_bet_amount_cents_bucket[5m])))",
+          "legendFormat": "P99",
+          "refId": "D",
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
         }
       ]
