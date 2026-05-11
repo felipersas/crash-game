@@ -222,7 +222,26 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  # ---------------------------------------------------------------------------
+  # Grafana (Dashboards)
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:11.6.1
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   postgres_data:
   rabbitmq_data:
   prometheus_data:
+  grafana_data:
