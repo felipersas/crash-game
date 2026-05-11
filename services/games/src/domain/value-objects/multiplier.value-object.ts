@@ -73,9 +73,7 @@ export class Multiplier {
    * Calculate potential winnings for a bet amount.
    */
   calculateWinning(betCents: bigint): bigint {
-    // Use integer arithmetic to avoid floating point errors
-    // winning = floor(bet * multiplier - bet)
-    // winning = floor(bet * (multiplier - 1))
+    // Integer arithmetic: profit = floor(bet * (multiplier - 1))
     const profitMultiplier = Math.floor((this.value - 1) * 100);
     return (betCents * BigInt(profitMultiplier)) / 100n;
   }
@@ -84,7 +82,6 @@ export class Multiplier {
    * Calculate total payout (bet + winning).
    */
   calculatePayout(betCents: bigint): bigint {
-    // payout = bet + winning
     return betCents + this.calculateWinning(betCents);
   }
 

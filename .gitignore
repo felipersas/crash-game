@@ -32,4 +32,10 @@ yarn-error.log*
 # Test coverage
 coverage/
 
+# Playwright MCP
+.playwright-mcp/
+
+# Next.js
+.next/
+
 .omc/
