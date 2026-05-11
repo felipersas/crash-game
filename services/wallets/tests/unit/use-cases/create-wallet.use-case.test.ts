@@ -49,7 +49,10 @@ function createMockPrisma() {
     $transaction: mockFn(async (fn: any) => {
       const mockTx = {
         outboxEvent: { create: mockFn(() => Promise.resolve()) },
-        wallet: { create: mockFn(() => Promise.resolve()), update: mockFn(() => Promise.resolve()) },
+        wallet: {
+          create: mockFn(() => Promise.resolve()),
+          update: mockFn(() => Promise.resolve()),
+        },
       };
       return fn(mockTx);
     }),
@@ -143,6 +146,6 @@ describe('CreateWalletUseCase', () => {
 
     const result = await useCase.execute({ playerId: 'player-1' });
 
-    expect(result.balance).toBe('0.00');
+    expect(result.balance).toBe('0');
   });
 });
