@@ -30,12 +30,9 @@ jobs:
 
       - name: Link workspace packages
         run: |
+          mkdir -p node_modules/@crash
           for pkg in domain messaging observability eslint-config prettier-config; do
-            mkdir -p "node_modules/@crash/$pkg"
-            ln -s "$GITHUB_WORKSPACE/packages/$pkg/package.json" "node_modules/@crash/$pkg/package.json"
-            if [ -d "packages/$pkg/dist" ]; then
-              ln -s "$GITHUB_WORKSPACE/packages/$pkg/dist" "node_modules/@crash/$pkg/dist"
-            fi
+            ln -s "$GITHUB_WORKSPACE/packages/$pkg" "node_modules/@crash/$pkg"
           done
 
       - run: cd services/games && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
@@ -65,12 +62,9 @@ jobs:
 
       - name: Link workspace packages
         run: |
+          mkdir -p node_modules/@crash
           for pkg in domain messaging observability eslint-config prettier-config; do
-            mkdir -p "node_modules/@crash/$pkg"
-            ln -s "$GITHUB_WORKSPACE/packages/$pkg/package.json" "node_modules/@crash/$pkg/package.json"
-            if [ -d "packages/$pkg/dist" ]; then
-              ln -s "$GITHUB_WORKSPACE/packages/$pkg/dist" "node_modules/@crash/$pkg/dist"
-            fi
+            ln -s "$GITHUB_WORKSPACE/packages/$pkg" "node_modules/@crash/$pkg"
           done
 
       - run: cd services/wallets && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
@@ -126,12 +120,9 @@ jobs:
 
       - name: Link workspace packages
         run: |
+          mkdir -p node_modules/@crash
           for pkg in domain messaging observability eslint-config prettier-config; do
-            mkdir -p "node_modules/@crash/$pkg"
-            ln -s "$GITHUB_WORKSPACE/packages/$pkg/package.json" "node_modules/@crash/$pkg/package.json"
-            if [ -d "packages/$pkg/dist" ]; then
-              ln -s "$GITHUB_WORKSPACE/packages/$pkg/dist" "node_modules/@crash/$pkg/dist"
-            fi
+            ln -s "$GITHUB_WORKSPACE/packages/$pkg" "node_modules/@crash/$pkg"
           done
 
       - name: Run Games E2E tests
