@@ -17,11 +17,13 @@ function mockFn<T extends (...args: any[]) => any>(
 }
 
 const PLAYER_ID = 'player-1';
+const PLAYER_NAME = 'Player One';
 
 function makeBet(overrides: {
   id?: string;
   roundId?: string;
   playerId?: string;
+  playerName?: string;
   amountCents?: bigint;
   status: BetStatus;
   cashOutMultiplier?: number | null;
@@ -33,6 +35,7 @@ function makeBet(overrides: {
     overrides.id ?? crypto.randomUUID(),
     overrides.roundId ?? crypto.randomUUID(),
     overrides.playerId ?? PLAYER_ID,
+    overrides.playerName ?? PLAYER_NAME,
     overrides.amountCents ?? 1000n,
     overrides.status,
     overrides.cashOutMultiplier ?? null,

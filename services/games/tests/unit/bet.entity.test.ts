@@ -17,11 +17,12 @@ import { Multiplier } from '../../src/domain/value-objects/multiplier.value-obje
 describe('Bet Entity', () => {
   const roundId = 'round-123';
   const playerId = 'player-456';
+  const playerName = 'Player 456';
 
   describe('Creation', () => {
     test('should create bet with valid parameters', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
 
       expect(bet.id).toBeDefined();
       expect(bet.roundId).toBe(roundId);
@@ -35,8 +36,8 @@ describe('Bet Entity', () => {
 
     test('should generate unique bet IDs', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet1 = Bet.create(roundId, playerId, amount);
-      const bet2 = Bet.create(roundId, playerId, amount);
+      const bet1 = Bet.create(roundId, playerId, playerName, amount);
+      const bet2 = Bet.create(roundId, playerId, playerName, amount);
 
       expect(bet1.id).not.toBe(bet2.id);
     });
@@ -45,7 +46,7 @@ describe('Bet Entity', () => {
   describe('Restoration from Persistence', () => {
     test('should restore bet from persistence data', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm(); // Must confirm before cash out
       bet.cashOut(Multiplier.fromValue(2.5));
 
@@ -54,6 +55,7 @@ describe('Bet Entity', () => {
         persistenceData.id,
         persistenceData.roundId,
         persistenceData.playerId,
+        persistenceData.playerName,
         persistenceData.amountCents,
         persistenceData.status,
         persistenceData.cashOutMultiplier,
@@ -71,7 +73,8 @@ describe('Bet Entity', () => {
 
     test('should restore lost bet', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
+      bet.confirm();
       bet.markAsLost();
 
       const persistenceData = bet.toPersistence();
@@ -79,6 +82,7 @@ describe('Bet Entity', () => {
         persistenceData.id,
         persistenceData.roundId,
         persistenceData.playerId,
+        persistenceData.playerName,
         persistenceData.amountCents,
         persistenceData.status,
         persistenceData.cashOutMultiplier,
@@ -93,7 +97,7 @@ describe('Bet Entity', () => {
   describe('Cash Out', () => {
     test('should cash out active bet and calculate payout correctly', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm(); // First confirm the bet
       const multiplier = Multiplier.fromValue(2.5);
 
@@ -108,7 +112,7 @@ describe('Bet Entity', () => {
 
     test('should cash out at 1.00x', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm();
       const multiplier = Multiplier.fromValue(1.0);
 
@@ -119,7 +123,7 @@ describe('Bet Entity', () => {
 
     test('should cash out at high multiplier', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm();
       const multiplier = Multiplier.fromValue(100);
 
@@ -130,7 +134,7 @@ describe('Bet Entity', () => {
 
     test('should reject cash out for pending bet', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
 
       expect(() => bet.cashOut(Multiplier.fromValue(2.5))).toThrow(
         'Cannot cash out a bet in PENDING state',
@@ -139,7 +143,7 @@ describe('Bet Entity', () => {
 
     test('should reject cash out for already cashed out bet', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm();
       const multiplier = Multiplier.fromValue(2.5);
 
@@ -152,7 +156,7 @@ describe('Bet Entity', () => {
 
     test('should reject cash out for lost bet', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm();
       bet.markAsLost();
 
@@ -165,7 +169,7 @@ describe('Bet Entity', () => {
   describe('Mark as Lost', () => {
     test('should mark active bet as lost', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm();
 
       bet.markAsLost();
@@ -176,7 +180,7 @@ describe('Bet Entity', () => {
 
     test('should mark pending bet as lost (implicit cancellation)', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
 
       bet.markAsLost();
 
@@ -185,7 +189,7 @@ describe('Bet Entity', () => {
 
     test('should reject marking cashed out bet as lost', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm();
       bet.cashOut(Multiplier.fromValue(2.5));
 
@@ -194,7 +198,7 @@ describe('Bet Entity', () => {
 
     test('should reject marking already lost bet', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm();
       bet.markAsLost();
 
@@ -205,7 +209,7 @@ describe('Bet Entity', () => {
   describe('State Checks', () => {
     test('should correctly identify pending bet', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
 
       expect(bet.isPending()).toBe(true);
       expect(bet.isActive()).toBe(false);
@@ -215,7 +219,7 @@ describe('Bet Entity', () => {
 
     test('should correctly identify confirmed (active) bet', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm();
 
       expect(bet.isPending()).toBe(false);
@@ -226,7 +230,7 @@ describe('Bet Entity', () => {
 
     test('should correctly identify cashed out bet', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm();
       bet.cashOut(Multiplier.fromValue(2.5));
 
@@ -238,7 +242,7 @@ describe('Bet Entity', () => {
 
     test('should correctly identify lost bet', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm();
       bet.markAsLost();
 
@@ -250,7 +254,7 @@ describe('Bet Entity', () => {
 
     test('should correctly identify cancelled bet', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.cancel('Insufficient funds');
 
       expect(bet.isPending()).toBe(false);
@@ -262,13 +266,14 @@ describe('Bet Entity', () => {
   describe('Persistence', () => {
     test('should convert active bet to persistence format', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
 
       const data = bet.toPersistence();
 
       expect(data.id).toBe(bet.id);
       expect(data.roundId).toBe(roundId);
       expect(data.playerId).toBe(playerId);
+      expect(data.playerName).toBe(playerName);
       expect(data.amountCents).toBe(1000n);
       expect(data.status).toBe(BetStatus.PENDING);
       expect(data.cashOutMultiplier).toBeNull();
@@ -278,7 +283,7 @@ describe('Bet Entity', () => {
 
     test('should convert cashed out bet to persistence format', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
       bet.confirm(); // Must confirm before cash out
       bet.cashOut(Multiplier.fromValue(2.5));
 
@@ -292,7 +297,8 @@ describe('Bet Entity', () => {
 
     test('should convert lost bet to persistence format', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
+      bet.confirm();
       bet.markAsLost();
 
       const data = bet.toPersistence();
@@ -306,14 +312,14 @@ describe('Bet Entity', () => {
   describe('Getters', () => {
     test('should return correct bet amount', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
 
       expect(bet.getAmount().toCents()).toBe(1000n);
     });
 
     test('should return correct status', () => {
       const amount = Money.fromDecimal('10.00');
-      const bet = Bet.create(roundId, playerId, amount);
+      const bet = Bet.create(roundId, playerId, playerName, amount);
 
       expect(bet.getStatus()).toBe(BetStatus.PENDING);
     });

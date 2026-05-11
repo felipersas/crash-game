@@ -59,15 +59,24 @@ function createMockEventPublisher(overrides: Record<string, any> = {}) {
   };
 }
 
+function createMockMetrics(overrides: Record<string, any> = {}) {
+  return {
+    incrWalletOp: mockFn(() => {}),
+    ...overrides,
+  };
+}
+
 describe('DebitWalletUseCase', () => {
   let mockWalletRepo: ReturnType<typeof createMockWalletRepository>;
   let mockEventPublisher: ReturnType<typeof createMockEventPublisher>;
+  let mockMetrics: ReturnType<typeof createMockMetrics>;
   let useCase: DebitWalletUseCase;
 
   beforeEach(() => {
     mockWalletRepo = createMockWalletRepository();
     mockEventPublisher = createMockEventPublisher();
-    useCase = new DebitWalletUseCase(mockWalletRepo as any, mockEventPublisher as any);
+    mockMetrics = createMockMetrics();
+    useCase = new DebitWalletUseCase(mockWalletRepo as any, mockEventPublisher as any, mockMetrics as any);
   });
 
   test('should debit amount from wallet with sufficient balance', async () => {

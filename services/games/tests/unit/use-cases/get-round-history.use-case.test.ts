@@ -19,11 +19,11 @@ function mockFn<T extends (...args: any[]) => any>(
 }
 
 // Create a real crashed round for history testing
-async function createCrashedRound(bets: { playerId: string; amount: string }[]): Promise<Round> {
+async function createCrashedRound(bets: { playerId: string; playerName: string; amount: string }[]): Promise<Round> {
   const round = await Round.create();
 
   for (const b of bets) {
-    round.placeBet(b.playerId, Money.fromDecimal(b.amount));
+    round.placeBet(b.playerId, b.playerName, Money.fromDecimal(b.amount));
     round.getBetByPlayer(b.playerId)!.confirm();
   }
 
@@ -47,8 +47,8 @@ describe('GetRoundHistoryUseCase', () => {
   });
 
   test('Should return paginated round history', async () => {
-    const round1 = await createCrashedRound([{ playerId: 'p1', amount: '10.00' }]);
-    const round2 = await createCrashedRound([{ playerId: 'p2', amount: '20.00' }]);
+    const round1 = await createCrashedRound([{ playerId: 'p1', playerName: 'Player 1', amount: '10.00' }]);
+    const round2 = await createCrashedRound([{ playerId: 'p2', playerName: 'Player 2', amount: '20.00' }]);
 
     mockRoundRepo.findHistory.mockResolvedValue([round1, round2]);
     mockRoundRepo.findHistoryCount.mockResolvedValue(25);
@@ -63,8 +63,8 @@ describe('GetRoundHistoryUseCase', () => {
 
   test('Should map rounds to summary with bet totals', async () => {
     const round = await createCrashedRound([
-      { playerId: 'p1', amount: '10.00' },
-      { playerId: 'p2', amount: '20.00' },
+      { playerId: 'p1', playerName: 'Player 1', amount: '10.00' },
+      { playerId: 'p2', playerName: 'Player 2', amount: '20.00' },
     ]);
 
     mockRoundRepo.findHistory.mockResolvedValue([round]);

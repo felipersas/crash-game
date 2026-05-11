@@ -30,6 +30,7 @@ function mockFn<T extends (...args: any[]) => any>(
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
 const PLAYER_ID = 'player-1';
+const PLAYER_NAME = 'Player One';
 
 describe('CashOutUseCase', () => {
   let useCase: CashOutUseCase;
@@ -39,6 +40,7 @@ describe('CashOutUseCase', () => {
   let mockLifecycleManager: any;
   let mockRedis: any;
   let mockGateway: any;
+  let mockMetrics: any;
 
   // Use deterministic seed to guarantee a high crash point so updateMultiplier doesn't crash early
   async function createActiveRoundWithBet(): Promise<{ round: Round; bet: Bet }> {
@@ -47,7 +49,7 @@ describe('CashOutUseCase', () => {
     try {
       const round = await Round.create();
       const amount = Money.fromDecimal('10.00');
-      round.placeBet(PLAYER_ID, amount);
+      round.placeBet(PLAYER_ID, PLAYER_NAME, amount);
 
       const bet = round.getBetByPlayer(PLAYER_ID)!;
       bet.confirm();
@@ -91,6 +93,11 @@ describe('CashOutUseCase', () => {
       broadcastPlayerCashedOut: mockFn(() => {}),
     };
 
+    mockMetrics = {
+      incrBet: mockFn(() => {}),
+      incrPayout: mockFn(() => {}),
+    };
+
     useCase = new CashOutUseCase(
       mockRoundRepo,
       mockBetRepo,
@@ -98,6 +105,7 @@ describe('CashOutUseCase', () => {
       mockLifecycleManager,
       mockRedis,
       mockGateway,
+      mockMetrics,
     );
   });
 

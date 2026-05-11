@@ -37,7 +37,7 @@ describe('VerifyRoundUseCase', () => {
 
     try {
       const round = await Round.create();
-      round.placeBet('player-1', Money.fromDecimal('10.00'));
+      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
       round.getBetByPlayer('player-1')!.confirm();
       await round.startRound();
       // Force crash

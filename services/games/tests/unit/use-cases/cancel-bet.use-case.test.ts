@@ -66,14 +66,23 @@ function createMockGamesGateway(overrides = {}) {
   };
 }
 
+function createMockMetrics() {
+  return {
+    incrBet: mockFn(() => {}),
+    incrPayout: mockFn(() => {}),
+  };
+}
+
 describe('CancelBetUseCase', () => {
   let betRepository: ReturnType<typeof createMockBetRepository>;
   let eventPublisher: ReturnType<typeof createMockEventPublisher>;
   let gamesGateway: ReturnType<typeof createMockGamesGateway>;
+  let metrics: ReturnType<typeof createMockMetrics>;
   let useCase: CancelBetUseCase;
 
   const roundId = 'round-789';
   const playerId = 'player-101';
+  const playerName = 'Player 101';
   const amount = Money.fromDecimal('25.00');
   const cancelReason = 'Insufficient funds';
 
@@ -81,15 +90,17 @@ describe('CancelBetUseCase', () => {
     betRepository = createMockBetRepository();
     eventPublisher = createMockEventPublisher();
     gamesGateway = createMockGamesGateway();
+    metrics = createMockMetrics();
     useCase = new CancelBetUseCase(
       betRepository as any,
       eventPublisher as any,
       gamesGateway as any,
+      metrics as any,
     );
   });
 
   test('should cancel pending bet with reason', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
     const result = await useCase.execute({
@@ -117,7 +128,7 @@ describe('CancelBetUseCase', () => {
   });
 
   test('should save cancelled bet', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
     await useCase.execute({ roundId, betId: bet.id, playerId, reason: cancelReason });
@@ -126,7 +137,7 @@ describe('CancelBetUseCase', () => {
   });
 
   test('should emit BetCancelledEvent', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
     await useCase.execute({ roundId, betId: bet.id, playerId, reason: cancelReason });
@@ -135,7 +146,7 @@ describe('CancelBetUseCase', () => {
   });
 
   test('should broadcast via WebSocket', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
     await useCase.execute({ roundId, betId: bet.id, playerId, reason: cancelReason });
@@ -144,7 +155,7 @@ describe('CancelBetUseCase', () => {
   });
 
   test('should handle WebSocket broadcast failure gracefully', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
     gamesGateway.broadcastBetCancelled = mockFn(() => {
       throw new Error('WS error');
@@ -163,7 +174,7 @@ describe('CancelBetUseCase', () => {
   });
 
   test('should pass correct data to WebSocket broadcast', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
     await useCase.execute({ roundId, betId: bet.id, playerId, reason: cancelReason });
@@ -171,10 +182,12 @@ describe('CancelBetUseCase', () => {
     expect(gamesGateway.broadcastBetCancelled.callCount).toBe(1);
     const args = gamesGateway.broadcastBetCancelled.lastArgs;
     expect(args).not.toBeNull();
+    // broadcastBetCancelled(roundId, betId, playerId, playerName, amountCents, reason)
     expect(args![0]).toBe(roundId);
     expect(args![1]).toBe(bet.id);
     expect(args![2]).toBe(playerId);
-    expect(args![3]).toBe(amount.toCents());
-    expect(args![4]).toBe(cancelReason);
+    expect(args![3]).toBe(playerName);
+    expect(args![4]).toBe(amount.toCents());
+    expect(args![5]).toBe(cancelReason);
   });
 });

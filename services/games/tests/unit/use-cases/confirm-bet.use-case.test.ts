@@ -66,29 +66,40 @@ function createMockGamesGateway(overrides = {}) {
   };
 }
 
+function createMockMetrics() {
+  return {
+    incrBet: mockFn(() => {}),
+    incrPayout: mockFn(() => {}),
+  };
+}
+
 describe('ConfirmBetUseCase', () => {
   let betRepository: ReturnType<typeof createMockBetRepository>;
   let eventPublisher: ReturnType<typeof createMockEventPublisher>;
   let gamesGateway: ReturnType<typeof createMockGamesGateway>;
+  let metrics: ReturnType<typeof createMockMetrics>;
   let useCase: ConfirmBetUseCase;
 
   const roundId = 'round-123';
   const playerId = 'player-456';
+  const playerName = 'Player 456';
   const amount = Money.fromDecimal('10.00');
 
   beforeEach(() => {
     betRepository = createMockBetRepository();
     eventPublisher = createMockEventPublisher();
     gamesGateway = createMockGamesGateway();
+    metrics = createMockMetrics();
     useCase = new ConfirmBetUseCase(
       betRepository as any,
       eventPublisher as any,
       gamesGateway as any,
+      metrics as any,
     );
   });
 
   test('should confirm pending bet (PENDING -> ACTIVE)', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
     const result = await useCase.execute({
@@ -113,7 +124,7 @@ describe('ConfirmBetUseCase', () => {
   });
 
   test('should save confirmed bet', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
     await useCase.execute({ roundId, betId: bet.id, playerId });
@@ -122,7 +133,7 @@ describe('ConfirmBetUseCase', () => {
   });
 
   test('should emit BetConfirmedEvent', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
     await useCase.execute({ roundId, betId: bet.id, playerId });
@@ -131,7 +142,7 @@ describe('ConfirmBetUseCase', () => {
   });
 
   test('should broadcast via WebSocket', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
     await useCase.execute({ roundId, betId: bet.id, playerId });
@@ -140,7 +151,7 @@ describe('ConfirmBetUseCase', () => {
   });
 
   test('should handle WebSocket broadcast failure gracefully', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
     gamesGateway.broadcastBetConfirmed = mockFn(() => {
       throw new Error('WS error');
@@ -155,7 +166,7 @@ describe('ConfirmBetUseCase', () => {
   });
 
   test('should pass correct data to WebSocket broadcast', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
     await useCase.execute({ roundId, betId: bet.id, playerId });
@@ -163,9 +174,11 @@ describe('ConfirmBetUseCase', () => {
     expect(gamesGateway.broadcastBetConfirmed.callCount).toBe(1);
     const args = gamesGateway.broadcastBetConfirmed.lastArgs;
     expect(args).not.toBeNull();
+    // broadcastBetConfirmed(roundId, betId, playerId, playerName, amountCents)
     expect(args![0]).toBe(roundId);
     expect(args![1]).toBe(bet.id);
     expect(args![2]).toBe(playerId);
-    expect(args![3]).toBe(amount.toCents());
+    expect(args![3]).toBe(playerName);
+    expect(args![4]).toBe(amount.toCents());
   });
 });
