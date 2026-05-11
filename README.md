@@ -18,7 +18,7 @@ cd fullstack-challenge
 bun run docker:up
 ```
 
-Pronto. O comando sobe toda a stack: PostgreSQL, Redis, RabbitMQ, Keycloak (com realm pré-configurado), Kong, Games Service, Wallets Service, Frontend, Prometheus, Grafana e Redis Exporter. As dependências são instaladas dentro dos containers — não é necessário `bun install` local.
+Pronto. O comando sobe toda a stack: PostgreSQL, Redis, RabbitMQ, Keycloak (com realm pré-configurado), Kong, Games Service, Wallets Service, Frontend, Prometheus, Grafana e Redis Exporter. As dependências são instaladas dentro dos containers 
 
 O seeding da carteira é automático: o usuário de teste já inicia com $1.000,00 de saldo.
 

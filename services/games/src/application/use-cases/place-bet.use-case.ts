@@ -63,11 +63,7 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
 
   private async placeBetOnRound(round: Round, input: PlaceBetInput): Promise<PlaceBetOutput> {
     const amount = Money.fromCents(input.amountCents);
-    const { bet, replacedBet } = round.placeOrReplaceBet(
-      input.playerId,
-      input.playerName,
-      amount,
-    );
+    const { bet, replacedBet } = round.placeOrReplaceBet(input.playerId, input.playerName, amount);
 
     this.handleReplacement(round, replacedBet, input);
 
@@ -90,11 +86,7 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
     };
   }
 
-  private handleReplacement(
-    round: Round,
-    replacedBet: Bet | null,
-    input: PlaceBetInput,
-  ): void {
+  private handleReplacement(round: Round, replacedBet: Bet | null, input: PlaceBetInput): void {
     if (!replacedBet) return;
 
     this.metrics.incrBet('cancelled', Number(replacedBet.getAmount().toCents()));
