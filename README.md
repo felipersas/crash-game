@@ -86,6 +86,7 @@ graph TB
 | Estado | TanStack Query + Zustand |
 | Observabilidade | Prometheus 3.3 + Grafana 11.6 |
 | Testes E2E browser | Playwright |
+| CI/CD | GitHub Actions |
 
 ### Princípios
 
@@ -236,6 +237,19 @@ cd frontend && bun run test:e2e            # Playwright (requer stack rodando)
 
 ---
 
+## CI/CD
+
+GitHub Actions roda automaticamente em push para `main` (`.github/workflows/ci.yml`):
+
+| Job | Descrição |
+|-----|-----------|
+| **Unit Tests - Games** | `bun test tests/unit` no serviço Games (219 testes) |
+| **Unit Tests - Wallets** | `bun test tests/unit` no serviço Wallets (116 testes) |
+| **Lint** | Prettier formatting check em ambos serviços |
+| **E2E Tests** | Testes de integração (depende dos 3 acima passarem) |
+
+---
+
 ## Pontos Bônus Implementados
 
 | Bônus | Descrição |
@@ -263,10 +277,6 @@ O processamento de Inbox/Outbox usa cron jobs. BullMQ permitiria processamento c
 ### Auto Cashout
 
 O jogador define um multiplicador alvo para saque automático. A UI já existe (`AutoCashoutInput` no frontend) — falta conectar ao backend verificando o target a cada tick (100ms) no `RoundLifecycleManager`.
-
-### CI/CD Pipeline
-
-GitHub Actions com lint, testes unitários, build e type-check em cada push/PR.
 
 ### Leaderboard
 
