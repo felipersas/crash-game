@@ -39,6 +39,11 @@ export interface IInboxRepository {
    * Returns count of deleted events.
    */
   deleteOlderThan(days: number): Promise<number>;
+
+  /**
+   * Find FAILED events eligible for retry (retryCount < maxRetries).
+   */
+  findFailed(maxRetries: number): Promise<InboxEvent[]>;
 }
 
 export interface InboxEventCreateInput {

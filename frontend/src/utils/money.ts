@@ -1,7 +1,7 @@
-import { GAME_CONSTANTS } from '@/constants/game';
+import { GAME_CONSTANTS } from "@/constants/game";
 
 export function centsToDecimal(cents: number | bigint): string {
-  const value = typeof cents === 'bigint' ? Number(cents) : cents;
+  const value = typeof cents === "bigint" ? Number(cents) : cents;
   return (value / 100).toFixed(2);
 }
 
@@ -10,10 +10,10 @@ export function decimalToCents(decimal: string): number {
 }
 
 export function formatMoney(cents: number | bigint): string {
-  const value = typeof cents === 'bigint' ? Number(cents) : cents;
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  const value = typeof cents === "bigint" ? Number(cents) : cents;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value / 100);
@@ -24,8 +24,7 @@ export function formatMultiplier(multiplier: number): string {
 }
 
 export function calculatePayout(betCents: number, multiplier: number): number {
-  const profit = Math.floor(betCents * (multiplier - 1));
-  return betCents + profit;
+  return Math.floor(Math.round(betCents * multiplier * 100) / 100);
 }
 
 export function formatPayout(betCents: number, multiplier: number): string {
@@ -35,7 +34,7 @@ export function formatPayout(betCents: number, multiplier: number): string {
 
 export function validateBetAmount(
   cents: number,
-  balanceCents: number
+  balanceCents: number,
 ): { valid: boolean; error?: string } {
   if (cents < GAME_CONSTANTS.MIN_BET_CENTS) {
     return {
@@ -50,7 +49,7 @@ export function validateBetAmount(
     };
   }
   if (cents > balanceCents) {
-    return { valid: false, error: 'Insufficient balance' };
+    return { valid: false, error: "Insufficient balance" };
   }
   return { valid: true };
 }

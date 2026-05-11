@@ -110,6 +110,19 @@ export class PrismaInboxRepository implements IInboxRepository {
     return result.count;
   }
 
+  async findFailed(maxRetries: number): Promise<InboxEvent[]> {
+    const records = await this.prisma.inboxEvent.findMany({
+      where: {
+        status: 'FAILED',
+        retryCount: { lt: maxRetries },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+    });
+
+    return records.map((r) => this.toDomain(r));
+  }
+
   private toDomain(record: {
     id: string;
     idempotencyKey: string;

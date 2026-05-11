@@ -169,6 +169,8 @@ export function useGameWebSocket(
       },
       onReconnecting: (attempt) => {
         setReconnectAttempt(attempt);
+        setConnectionStatus("connecting");
+        setStoreConnectionStatus("connecting");
       },
       // Game event callbacks - update Zustand store
       onRoundStarted: (data) => {

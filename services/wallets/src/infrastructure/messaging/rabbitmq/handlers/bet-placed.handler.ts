@@ -100,7 +100,6 @@ export class BetPlacedEventHandler {
           `Duplicate BetPlacedEvent detected (previously failed): ${idempotencyKey}. Retrying.`,
         );
         eventId = existing.id;
-        // Continue to retry the failed operation
       } else {
         this.logger.log(
           `Duplicate BetPlacedEvent detected (pending): ${idempotencyKey}. Skipping.`,
@@ -153,10 +152,11 @@ export class BetPlacedEventHandler {
         this.logger.error(
           `Failed to publish WalletDebitedEvent for bet ${event.betId}: ${publishErrorMessage}`,
         );
-        // Don't re-throw - we've marked as FAILED for retry
+
+        return;
       }
 
-      // 6. Mark inbox as PROCESSED (debit succeeded, even if publish failed)
+      // 6. Mark inbox as PROCESSED (debit AND publish both succeeded)
       await this.inboxRepository.markAsProcessed(eventId, new Date());
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);

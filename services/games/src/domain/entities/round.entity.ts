@@ -428,7 +428,7 @@ export class Round {
   toPersistence() {
     return {
       id: this.id,
-      seed: this.seedChain.getSeed(),
+      seed: this.status === RoundStatus.CRASHED ? this.seedChain.getSeed() : null,
       seedHash: this.seedChain.getCurrentSeedHash(),
       nextSeed: null,
       status: this.status,

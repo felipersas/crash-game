@@ -47,7 +47,7 @@ services:
               bearer_only: "yes"
               realm: crash-game
               scope: openid
-              ssl_verify: "no"
+              ssl_verify: "yes"
       - name: games-bet
         paths: [/games/bet]
         strip_path: false
@@ -59,7 +59,7 @@ services:
               bearer_only: "yes"
               realm: crash-game
               scope: openid
-              ssl_verify: "no"
+              ssl_verify: "yes"
       - name: games-bet-cashout
         paths: [/games/bet/cashout]
         strip_path: false
@@ -71,7 +71,7 @@ services:
               bearer_only: "yes"
               realm: crash-game
               scope: openid
-              ssl_verify: "no"
+              ssl_verify: "yes"
       - name: games-api-docs
         paths: [/games/api-docs]
         strip_path: false
@@ -159,7 +159,7 @@ services:
               bearer_only: "yes"
               realm: crash-game
               scope: openid
-              ssl_verify: "no"
+              ssl_verify: "yes"
       - name: wallets-create
         paths: [/wallets]
         strip_path: false
@@ -172,7 +172,7 @@ services:
               bearer_only: "yes"
               realm: crash-game
               scope: openid
-              ssl_verify: "no"
+              ssl_verify: "yes"
       - name: wallets-api-docs
         paths: [/wallets/api-docs]
         strip_path: false

@@ -53,7 +53,7 @@ export class CreateWalletUseCase {
     return {
       walletId: wallet.id,
       playerId: wallet.playerId,
-      balance: wallet.getBalance().toDecimal(),
+      balance: wallet.getBalance().toCents().toString(),
     };
   }
 }

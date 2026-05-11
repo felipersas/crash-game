@@ -107,7 +107,7 @@ export class PlayerCashedOutEventHandler {
         `Credited ${event.winAmount} cents to player ${event.playerId} for cash out at ${event.cashOutMultiplier}x`,
       );
     } catch (error: unknown) {
-      // Mark as FAILED for visibility
+      // Mark as FAILED for visibility and retry
       await this.inboxRepository.markAsFailed(
         eventId,
         error instanceof Error ? error.message : String(error),
@@ -118,8 +118,9 @@ export class PlayerCashedOutEventHandler {
         `Failed to credit wallet for cash out ${event.betId}: ${error instanceof Error ? error.message : String(error)}`,
       );
 
-      // Don't re-throw - saga pattern: we've handled the error
-      // Consumer will ACK the message
+      // Re-throw to trigger nack — prevents silently losing player winnings.
+      // The consumer will nack the message, enabling retry or DLQ processing.
+      throw error;
     }
   }
 }

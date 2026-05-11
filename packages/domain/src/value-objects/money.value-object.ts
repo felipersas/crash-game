@@ -139,13 +139,15 @@ export class Money {
 
   /**
    * Convert Money to decimal string format for display.
+   * Uses pure bigint arithmetic to avoid Number precision loss on large values.
    * @returns Decimal string (e.g., "10.99" for $10.99)
    */
   toDecimal(): string {
-    const cents = Number(this.amount);
-    const whole = Math.floor(cents / 100);
-    const fractional = cents % 100;
-    return `${whole}.${fractional.toString().padStart(2, '0')}`;
+    const absAmount = this.amount < 0n ? -this.amount : this.amount;
+    const whole = absAmount / 100n;
+    const fractional = absAmount % 100n;
+    const sign = this.amount < 0n ? '-' : '';
+    return `${sign}${whole}.${fractional.toString().padStart(2, '0')}`;
   }
 
   /**
@@ -157,10 +159,11 @@ export class Money {
 
   /**
    * JSON representation for serialization.
+   * Returns cents as string to avoid JSON.stringify TypeError with bigint.
    */
-  toJSON(): { cents: bigint; decimal: string } {
+  toJSON(): { cents: string; decimal: string } {
     return {
-      cents: this.amount,
+      cents: String(this.amount),
       decimal: this.toDecimal(),
     };
   }

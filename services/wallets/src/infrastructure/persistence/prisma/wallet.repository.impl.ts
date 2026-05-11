@@ -53,8 +53,12 @@ export class PrismaWalletRepository implements IWalletRepository {
         },
       });
     } catch (error: unknown) {
-      // Prisma throws error if no rows were updated (version mismatch)
-      if (error instanceof Error && 'code' in error) {
+      // Prisma P2025 = record not found (version WHERE matched zero rows)
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        (error as any).code === 'P2025'
+      ) {
         throw new OptimisticLockError(data.id, data.version, data.version - 1);
       }
       throw error;

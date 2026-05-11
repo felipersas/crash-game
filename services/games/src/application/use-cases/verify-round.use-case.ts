@@ -1,11 +1,11 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import { CrashPoint } from '@/domain/value-objects/crash-point.value-object';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
 import { RoundStatus } from '@/domain/entities/round.entity';
-import { RoundNotFoundError, VerificationFailedError } from '@/domain/errors/domain.errors';
+import { RoundNotFoundError, SeedNotAvailableError, VerificationFailedError } from '@/domain/errors/domain.errors';
 
 export interface VerifyRoundInput {
   roundId: string;
@@ -33,7 +33,7 @@ export class VerifyRoundUseCase implements IUseCase<VerifyRoundInput, VerifyRoun
     }
 
     if (round.getStatus() !== RoundStatus.CRASHED) {
-      throw new UnauthorizedException('Seed only available after round crashes');
+      throw new SeedNotAvailableError();
     }
 
     const seed = round.getSeed();

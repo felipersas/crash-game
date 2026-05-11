@@ -93,7 +93,7 @@ services:
     ports:
       - "8000:8000"
       - "8443:8443"
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /kong/kong.yml

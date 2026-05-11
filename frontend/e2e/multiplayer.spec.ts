@@ -88,7 +88,7 @@ test.describe('Multi-player Crash Game simulation', () => {
 
     // Phase 3: Wait for betting phase — input becomes enabled
     for (let i = 0; i < playerPages.length; i++) {
-      const amountInput = playerPages[i].locator('input[type="number"]').first();
+      const amountInput = playerPages[i].locator('input[inputmode="numeric"]').first();
       await expect(amountInput).toBeEnabled({ timeout: 60_000 });
     }
 
@@ -100,7 +100,7 @@ test.describe('Multi-player Crash Game simulation', () => {
         // Stagger bets slightly (0-1s)
         await page.waitForTimeout(Math.random() * 1000);
 
-        const amountInput = page.locator('input[type="number"]').first();
+        const amountInput = page.locator('input[inputmode="numeric"]').first();
         await amountInput.clear();
         await amountInput.fill(BET_AMOUNT);
 
