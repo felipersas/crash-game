@@ -85,7 +85,6 @@
         "amqplib": "^0.10.5",
         "class-transformer": "^0.5.1",
         "class-validator": "^0.14.0",
-        "ioredis": "^5.10.1",
         "jwks-rsa": "^4.0.1",
         "passport": "^0.7.0",
         "passport-jwt": "^4.0.1",
@@ -101,7 +100,6 @@
         "@testcontainers/rabbitmq": "^11.14.0",
         "@types/amqplib": "^0.10.7",
         "@types/express": "^5.0.6",
-        "@types/ioredis": "^5.0.0",
         "@types/passport-jwt": "^4.0.1",
         "bun-types": "latest",
         "eslint": "^9.28.0",
@@ -363,8 +361,6 @@
     "@types/express-serve-static-core": ["@types/express-serve-static-core@5.1.1", "", { "dependencies": { "@types/node": "*", "@types/qs": "*", "@types/range-parser": "*", "@types/send": "*" } }, "sha512-v4zIMr/cX7/d2BpAEX3KNKL/JrT1s43s96lLvvdTmza1oEvDudCqK9aF/djc/SWgy8Yh0h30TZx5VpzqFCxk5A=="],
 
     "@types/http-errors": ["@types/http-errors@2.0.5", "", {}, "sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg=="],
-
-    "@types/ioredis": ["@types/ioredis@5.0.0", "", { "dependencies": { "ioredis": "*" } }, "sha512-zJbJ3FVE17CNl5KXzdeSPtdltc4tMT3TzC6fxQS0sQngkbFZ6h+0uTafsRqu+eSLIugf6Yb0Ea0SUuRr42Nk9g=="],
 
     "@types/json-schema": ["@types/json-schema@7.0.15", "", {}, "sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA=="],
 
