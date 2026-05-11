@@ -202,9 +202,13 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       await this.roundRepository.save(this.currentRound);
     } catch (error) {
       if (error instanceof OptimisticLockError) {
+        this.logger.warn(
+          `Optimistic lock conflict for round ${this.currentRound.id}, reloading from database`,
+        );
 
         const reloaded = await this.roundRepository.findById(this.currentRound.id);
         if (!reloaded) {
+          this.logger.error(`Round ${this.currentRound.id} not found after conflict`);
           return;
         }
 
@@ -293,7 +297,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       lastUpdatedAt: Date.now(),
     };
 
-    // Fire and forget - Redis errors are logged in the service
     this.redisService.setCurrentRound(this.currentRound.id, roundState).catch((error) => {
       this.logger.warn(`Failed to persist to Redis: ${error}`);
     });
@@ -310,7 +313,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       this.updateInterval = null;
     }
 
-    // Delegate crash handling (DB persist, bet settlement, event publishing, WS broadcast)
     this.currentRound = await this.crashHandler.handleRoundCrashed(this.currentRound);
 
     setTimeout(() => {
