@@ -104,7 +104,13 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
     }
 
     try {
-      this.broadcaster.broadcastBetPlaced(round.id, bet.id, input.playerId, input.playerName, input.amountCents);
+      this.broadcaster.broadcastBetPlaced(
+        round.id,
+        bet.id,
+        input.playerId,
+        input.playerName,
+        input.amountCents,
+      );
     } catch (error) {
       this.logger.error('Failed to broadcast bet placed event', error);
     }

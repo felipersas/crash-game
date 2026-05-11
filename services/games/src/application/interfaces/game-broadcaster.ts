@@ -6,7 +6,13 @@
  */
 
 export interface IGameBroadcaster {
-  broadcastBetPlaced(roundId: string, betId: string, playerId: string, playerName: string, amountCents: bigint): void;
+  broadcastBetPlaced(
+    roundId: string,
+    betId: string,
+    playerId: string,
+    playerName: string,
+    amountCents: bigint,
+  ): void;
   broadcastBetConfirmed(
     roundId: string,
     betId: string,

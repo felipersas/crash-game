@@ -59,9 +59,7 @@ export class GamesGateway
 
   private readonly logger = new Logger(GamesGateway.name);
 
-  constructor(
-    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
-  ) {}
+  constructor(@Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService) {}
 
   afterInit(_server: Server) {
     this.logger.log('WebSocket Gateway initialized');
@@ -108,7 +106,13 @@ export class GamesGateway
     this.metrics.incrWsBroadcast('crash');
   }
 
-  broadcastBetPlaced(roundId: string, betId: string, playerId: string, playerName: string, amountCents: bigint) {
+  broadcastBetPlaced(
+    roundId: string,
+    betId: string,
+    playerId: string,
+    playerName: string,
+    amountCents: bigint,
+  ) {
     this.server.emit('betPlaced', {
       roundId,
       betId,
@@ -119,7 +123,13 @@ export class GamesGateway
     this.metrics.incrWsBroadcast('bet_placed');
   }
 
-  broadcastBetConfirmed(roundId: string, betId: string, playerId: string, playerName: string, amountCents: bigint) {
+  broadcastBetConfirmed(
+    roundId: string,
+    betId: string,
+    playerId: string,
+    playerName: string,
+    amountCents: bigint,
+  ) {
     this.server.emit('betConfirmed', {
       roundId,
       betId,
