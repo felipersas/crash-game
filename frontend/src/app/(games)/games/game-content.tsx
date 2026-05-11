@@ -10,11 +10,13 @@ import { useGameWebSocket } from "@/hooks/useGameWebSocket";
 import { useRoundHistory } from "@/hooks/useRoundHistory";
 import { useSession } from "next-auth/react";
 import { GameErrorBoundary } from "@/components/ErrorBoundary";
+import GamesLoading from "./loading";
 
 export function GameContent() {
   const roundStatus = useGameStore((s) => s.roundStatus);
   const liveMultiplier = useGameStore((s) => s.liveMultiplier);
-  const { data: session } = useSession();
+  const isHydrated = useGameStore((s) => s.isHydrated);
+  const { data: session, status } = useSession();
 
   useGameWebSocket({
     token: session?.accessToken,
@@ -23,6 +25,10 @@ export function GameContent() {
   });
 
   const { data: historyData } = useRoundHistory({ page: 1, limit: 10 });
+
+  if (status === "loading" || !isHydrated) {
+    return <GamesLoading />;
+  }
 
   const roundPhase =
     roundStatus === RoundStatus.BETTING

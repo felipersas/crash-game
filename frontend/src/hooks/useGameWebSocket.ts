@@ -54,6 +54,7 @@ export function useGameWebSocket(
     (state) => state.setConnectionStatus,
   );
   const setStoreConnected = useGameStore((state) => state.setConnected);
+  const setStoreHydrated = useGameStore((state) => state.setHydrated);
   const setStoreRoundStarted = useGameStore((state) => state.setRoundStarted);
   const setStoreRejoinActiveRound = useGameStore((state) => state.rejoinActiveRound);
   const setStoreBettingEnded = useGameStore((state) => state.setBettingEnded);
@@ -122,6 +123,8 @@ export function useGameWebSocket(
         }
       } catch (error) {
         console.error("Failed to sync current round:", error);
+      } finally {
+        setStoreHydrated();
       }
     },
     [

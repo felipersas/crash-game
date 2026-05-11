@@ -9,6 +9,7 @@ import type { ConnectionStatus } from "@/websocket/websocket.types";
 import { GAME_CONSTANTS } from "@/constants/game";
 
 interface GameState {
+  isHydrated: boolean;
   isConnected: boolean;
   connectionStatus: ConnectionStatus;
   currentRoundId: string | null;
@@ -22,6 +23,7 @@ interface GameState {
   getBettingTimeRemaining: () => number; // seconds remaining
   getBettingProgress: () => number; // 0-1 progress for bar
 
+  setHydrated: () => void;
   setConnectionStatus: (status: GameState["connectionStatus"]) => void;
   setConnected: (connected: boolean) => void;
   setRoundStarted: (
@@ -56,6 +58,7 @@ interface GameState {
 }
 
 const initialState = {
+  isHydrated: false,
   isConnected: false,
   connectionStatus: "disconnected" as const,
   currentRoundId: null,
@@ -73,6 +76,7 @@ export const useGameStore = create<GameState>()(
     (set, get) => ({
       ...initialState,
 
+      setHydrated: () => set({ isHydrated: true }),
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       setConnected: (connected) => set({ isConnected: connected }),
 
