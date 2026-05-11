@@ -23,27 +23,20 @@ jobs:
 
       - run: bun install
 
-      - run: |
-          cd packages/domain && bunx tsc && ls dist/
-          cd ../messaging && bunx tsc && ls dist/
-          cd ../observability && bunx tsc && ls dist/
-
       - name: Link workspace packages
         run: |
           mkdir -p node_modules/@crash
-          for pkg in domain messaging observability eslint-config prettier-config; do
-            ln -s "$GITHUB_WORKSPACE/packages/$pkg" "node_modules/@crash/$pkg"
+          # Bun handles TS natively — point to source instead of dist
+          for pkg in domain messaging observability; do
+            mkdir -p "node_modules/@crash/$pkg"
+            cat > "node_modules/@crash/$pkg/package.json" <<PKGJSON
+          {"name":"@crash/$pkg","type":"commonjs","main":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts","exports":{".":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts"}}
+          PKGJSON
           done
+          ln -s "$GITHUB_WORKSPACE/packages/eslint-config" "node_modules/@crash/eslint-config"
+          ln -s "$GITHUB_WORKSPACE/packages/prettier-config" "node_modules/@crash/prettier-config"
 
       - run: cd services/games && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
-
-      - name: Debug linking
-        run: |
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          ls -la node_modules/@crash/ || true
-          readlink node_modules/@crash/domain || true
-          ls packages/domain/dist/ || true
-          ls node_modules/@crash/domain/dist/ || true
 
       - name: Run unit tests
         run: cd services/games && bun test tests/unit
@@ -60,27 +53,19 @@ jobs:
 
       - run: bun install
 
-      - run: |
-          cd packages/domain && bunx tsc && ls dist/
-          cd ../messaging && bunx tsc && ls dist/
-          cd ../observability && bunx tsc && ls dist/
-
       - name: Link workspace packages
         run: |
           mkdir -p node_modules/@crash
-          for pkg in domain messaging observability eslint-config prettier-config; do
-            ln -s "$GITHUB_WORKSPACE/packages/$pkg" "node_modules/@crash/$pkg"
+          for pkg in domain messaging observability; do
+            mkdir -p "node_modules/@crash/$pkg"
+            cat > "node_modules/@crash/$pkg/package.json" <<PKGJSON
+          {"name":"@crash/$pkg","type":"commonjs","main":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts","exports":{".":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts"}}
+          PKGJSON
           done
+          ln -s "$GITHUB_WORKSPACE/packages/eslint-config" "node_modules/@crash/eslint-config"
+          ln -s "$GITHUB_WORKSPACE/packages/prettier-config" "node_modules/@crash/prettier-config"
 
       - run: cd services/wallets && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
-
-      - name: Debug linking
-        run: |
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          ls -la node_modules/@crash/ || true
-          readlink node_modules/@crash/domain || true
-          ls packages/domain/dist/ || true
-          ls node_modules/@crash/domain/dist/ || true
 
       - name: Run unit tests
         run: cd services/wallets && bun test tests/unit
@@ -123,17 +108,17 @@ jobs:
 
       - run: bun install
 
-      - run: |
-          cd packages/domain && bunx tsc && ls dist/
-          cd ../messaging && bunx tsc && ls dist/
-          cd ../observability && bunx tsc && ls dist/
-
       - name: Link workspace packages
         run: |
           mkdir -p node_modules/@crash
-          for pkg in domain messaging observability eslint-config prettier-config; do
-            ln -s "$GITHUB_WORKSPACE/packages/$pkg" "node_modules/@crash/$pkg"
+          for pkg in domain messaging observability; do
+            mkdir -p "node_modules/@crash/$pkg"
+            cat > "node_modules/@crash/$pkg/package.json" <<PKGJSON
+          {"name":"@crash/$pkg","type":"commonjs","main":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts","exports":{".":"$GITHUB_WORKSPACE/packages/$pkg/src/index.ts"}}
+          PKGJSON
           done
+          ln -s "$GITHUB_WORKSPACE/packages/eslint-config" "node_modules/@crash/eslint-config"
+          ln -s "$GITHUB_WORKSPACE/packages/prettier-config" "node_modules/@crash/prettier-config"
 
       - name: Run Games E2E tests
         run: cd services/games && bun test tests/e2e
