@@ -4,15 +4,18 @@ import { useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useGame } from "@/hooks/useGame";
+import { useWallet } from "@/hooks/useWallet";
 import { useGameStore } from "@/store/game-store";
 import { RoundStatus } from "@/types/game.types";
 import { BetInput } from "./BetInput";
 import { BetStatusDisplay, CashOutButton } from "./BetStatusDisplay";
 import { useBetToast } from "./useBetToast";
 import { useGameSounds } from "@/hooks/useGameSounds";
+import { toast } from "sonner";
 
 export default function BetControls() {
   const { placeBet, isPlacingBet, cashOut, isCashingOut } = useGame();
+  const { balance } = useWallet();
   const myActiveBet = useGameStore((s) => s.myActiveBet);
   const roundStatus = useGameStore((s) => s.roundStatus);
   const liveMultiplier = useGameStore((s) => s.liveMultiplier);
@@ -30,12 +33,18 @@ export default function BetControls() {
 
   const hasCashedOut = myActiveBet?.status === "CASHED_OUT";
   const canBet = isBettingPhase && !myActiveBet && isAuthenticated;
-  const canCashOut = isActivePhase && myActiveBet && !hasCashedOut;
-  const showCashOut = myActiveBet && !hasCashedOut && !isCrashed;
+  const isBetActive = myActiveBet?.status === "ACTIVE";
+  const canCashOut = isActivePhase && isBetActive;
+  const showCashOut = isBetActive && !isCrashed;
 
   const handlePlaceBet = () => {
     const cents = Math.round(parseFloat(amount) * 100);
     if (isNaN(cents) || cents <= 0) return;
+    const balanceCents = Math.round(parseFloat(balance) * 100);
+    if (cents > balanceCents) {
+      toast.error("Insufficient balance");
+      return;
+    }
     playBet();
     placeBet(cents);
   };

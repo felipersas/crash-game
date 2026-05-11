@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { useGameStore } from "@/store/game-store";
 
 export type Phase = "betting" | "active" | "crashed";
@@ -37,7 +37,7 @@ function buildCatmullRomPath(coords: Array<{ x: number; y: number }>): string {
 }
 
 function computeCurve(multiplier: number, elapsedMs: number): CurveData | null {
-  if (elapsedMs < 50 || multiplier <= 1.001) return null;
+  if (elapsedMs < 16 || multiplier <= 1.0001) return null;
 
   const pad = { left: 4, right: 2, top: 4, bottom: 2 };
   const plotW = 100 - pad.left - pad.right;
@@ -49,9 +49,10 @@ function computeCurve(multiplier: number, elapsedMs: number): CurveData | null {
   const toX = (t: number) => pad.left + (t / maxTime) * plotW;
   const toY = (m: number) => pad.top + plotH - ((m - 1) / (maxMult - 1)) * plotH;
 
-  // Generate deterministic exponential curve: y = e^(k*t)
+  // Exponential curve: y = e^(k*t)
   const k = Math.log(multiplier) / elapsedMs;
-  const numPoints = Math.min(60, Math.max(8, Math.floor(elapsedMs / 200)));
+  // Always at least 30 points for smooth Catmull-Rom
+  const numPoints = Math.max(30, Math.min(80, Math.floor(elapsedMs / 50)));
   const coords: Array<{ x: number; y: number }> = [];
 
   for (let i = 0; i <= numPoints; i++) {
@@ -71,10 +72,37 @@ function computeCurve(multiplier: number, elapsedMs: number): CurveData | null {
   return { path, areaPath, endX, endY };
 }
 
+/**
+ * Animates the crash curve at 60fps using requestAnimationFrame.
+ * Interpolates elapsed time between WebSocket multiplier updates
+ * so the curve grows smoothly instead of jumping.
+ */
 export function useCurvePoints(multiplier: number, phase: Phase): CurveData | null {
   const roundStartedAt = useGameStore((s) => s.roundStartedAt);
+  const [tick, setTick] = useState(0);
+  const rafRef = useRef<number>(0);
+
+  const animate = useCallback(() => {
+    setTick((t) => t + 1);
+    rafRef.current = requestAnimationFrame(animate);
+  }, []);
+
+  useEffect(() => {
+    if (phase === "active") {
+      rafRef.current = requestAnimationFrame(animate);
+      return () => cancelAnimationFrame(rafRef.current);
+    }
+    // For crashed phase, render one final frame and stop
+    if (phase === "crashed") {
+      cancelAnimationFrame(rafRef.current);
+      setTick((t) => t + 1);
+    }
+  }, [phase, animate]);
 
   return useMemo(() => {
+    // Suppress unused-variable warning — tick drives re-renders
+    void tick;
+
     if (phase === "betting") return null;
 
     const elapsedMs = roundStartedAt
@@ -82,5 +110,5 @@ export function useCurvePoints(multiplier: number, phase: Phase): CurveData | nu
       : 0;
 
     return computeCurve(multiplier, elapsedMs);
-  }, [multiplier, phase, roundStartedAt]);
+  }, [tick, multiplier, phase, roundStartedAt]);
 }
