@@ -28,9 +28,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
-      - run: npm ci
+      - run: npm install
 
       - run: |
           cd packages/domain && npx tsc
@@ -55,9 +54,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
-      - run: npm ci
+      - run: npm install
 
       - run: |
           cd packages/domain && npx tsc
@@ -82,9 +80,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
-      - run: npm ci
+      - run: npm install
 
       - name: Check games formatting
         run: bun run --cwd services/games format:check
@@ -107,9 +104,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
-      - run: npm ci
+      - run: npm install
 
       - run: |
           cd packages/domain && npx tsc
