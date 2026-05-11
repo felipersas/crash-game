@@ -110,24 +110,10 @@ export class Money {
   }
 
   /**
-   * Check if this Money is negative.
-   */
-  isNegative(): boolean {
-    return this.amount < 0n;
-  }
-
-  /**
    * Check if this Money is zero.
    */
   isZero(): boolean {
     return this.amount === 0n;
-  }
-
-  /**
-   * Check if this Money is positive.
-   */
-  isPositive(): boolean {
-    return this.amount > 0n;
   }
 
   /**
