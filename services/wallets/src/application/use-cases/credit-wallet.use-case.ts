@@ -10,8 +10,9 @@ import { Money } from '@crash/domain';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
-import { WALLET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
-import type { IEventPublisher } from '@crash/messaging';
+import { WALLET_REPOSITORY } from '@/application/di.tokens';
+import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
+import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 export interface CreditWalletInput {
   walletId: string;
@@ -30,8 +31,9 @@ export interface CreditWalletOutput {
 export class CreditWalletUseCase {
   constructor(
     @Inject(WALLET_REPOSITORY) private readonly walletRepository: IWalletRepository,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
+    private readonly prisma: PrismaService,
+    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(input: CreditWalletInput): Promise<CreditWalletOutput> {
@@ -43,14 +45,22 @@ export class CreditWalletUseCase {
     const amount = Money.fromCents(input.amount);
     wallet.credit(amount, input.reason);
 
-    await this.walletRepository.save(wallet);
+    const events = wallet.pullEvents();
+
+    let outboxIds: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      await this.walletRepository.save(wallet, tx);
+      if (events.length > 0) {
+        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, wallet.id, events);
+      }
+    });
+
+    // Best-effort immediate publish for low latency
+    if (events.length > 0 && outboxIds.length > 0) {
+      await this.outboxWriter.tryImmediatePublish(events, outboxIds);
+    }
 
     this.metrics.incrWalletOp('credit', Number(input.amount));
-
-    const events = wallet.pullEvents();
-    if (events.length > 0) {
-      await this.eventPublisher.publishBatch(events);
-    }
 
     return {
       walletId: wallet.id,

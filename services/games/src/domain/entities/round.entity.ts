@@ -100,9 +100,12 @@ export class Round {
   /**
    * Factory method to create a new round.
    */
-  static async create(config: RoundConfig = DEFAULT_ROUND_CONFIG): Promise<Round> {
+  static async create(
+    config: RoundConfig = DEFAULT_ROUND_CONFIG,
+    deterministicSeed?: string,
+  ): Promise<Round> {
     const roundId = crypto.randomUUID();
-    const seedChain = await SeedChain.generate();
+    const seedChain = await SeedChain.generate(1000, deterministicSeed);
     const round = new Round(roundId, seedChain, config);
 
     round.setBettingEndTime(new Date(Date.now() + config.bettingDurationMs));

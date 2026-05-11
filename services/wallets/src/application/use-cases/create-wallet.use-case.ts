@@ -8,8 +8,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Wallet } from '@/domain/entities/wallet.entity';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
-import { WALLET_REPOSITORY, EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
-import type { IEventPublisher } from '@crash/messaging';
+import { WALLET_REPOSITORY } from '@/application/di.tokens';
+import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
+import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 export interface CreateWalletInput {
   playerId: string;
@@ -28,7 +29,8 @@ export class CreateWalletUseCase {
     private readonly walletRepository: IWalletRepository & {
       create(wallet: Wallet): Promise<void>;
     },
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    private readonly prisma: PrismaService,
+    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(input: CreateWalletInput): Promise<CreateWalletOutput> {
@@ -38,12 +40,19 @@ export class CreateWalletUseCase {
     }
 
     const wallet = Wallet.create(input.playerId);
-
-    await this.walletRepository.create(wallet);
-
     const events = wallet.pullEvents();
-    if (events.length > 0) {
-      await this.eventPublisher.publishBatch(events);
+
+    let outboxIds: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      await this.walletRepository.create(wallet, tx);
+      if (events.length > 0) {
+        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, wallet.id, events);
+      }
+    });
+
+    // Best-effort immediate publish for low latency
+    if (events.length > 0 && outboxIds.length > 0) {
+      await this.outboxWriter.tryImmediatePublish(events, outboxIds);
     }
 
     return this.toOutput(wallet);
@@ -53,7 +62,7 @@ export class CreateWalletUseCase {
     return {
       walletId: wallet.id,
       playerId: wallet.playerId,
-      balance: wallet.getBalance().toDecimal(),
+      balance: wallet.getBalance().toCents().toString(),
     };
   }
 }

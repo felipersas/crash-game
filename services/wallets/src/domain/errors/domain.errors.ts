@@ -44,12 +44,6 @@ export class NegativeMoneyError extends DomainError {
   }
 }
 
-export class WalletAlreadyExistsError extends DomainError {
-  constructor() {
-    super('Wallet already exists', 'WALLET_ALREADY_EXISTS');
-  }
-}
-
 export class WalletNotFoundError extends DomainError {
   constructor() {
     super('Wallet not found', 'WALLET_NOT_FOUND');
@@ -57,7 +51,14 @@ export class WalletNotFoundError extends DomainError {
 }
 
 export class OptimisticLockError extends DomainError {
-  constructor() {
-    super('Concurrent update conflict, please try again', 'OPTIMISTIC_LOCK');
+  constructor(
+    public readonly aggregateId?: string,
+    public readonly expectedVersion?: number,
+    public readonly actualVersion?: number,
+  ) {
+    const detail = aggregateId
+      ? `Concurrent update conflict on ${aggregateId} (expected v${expectedVersion}, got v${actualVersion})`
+      : 'Concurrent update conflict, please try again';
+    super(detail, 'OPTIMISTIC_LOCK');
   }
 }

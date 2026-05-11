@@ -316,7 +316,7 @@ describe('Money Value Object', () => {
         const json = money.toJSON();
 
         expect(json).toEqual({
-          cents: 1099n,
+          cents: '1099',
           decimal: '10.99',
         });
       });

@@ -3,6 +3,7 @@ import { PrismaService } from './prisma.service';
 import { Bet, BetStatus } from '@/domain/entities/bet.entity';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { Bet as BetRow } from '@prisma/client';
+import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
 
 /**
  * Prisma-based implementation of Bet Repository.
@@ -14,9 +15,10 @@ import type { Bet as BetRow } from '@prisma/client';
 export class PrismaBetRepository implements IBetRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(bet: Bet): Promise<void> {
+  async create(bet: Bet, tx?: PrismaTransaction): Promise<void> {
+    const client = tx ?? this.prisma;
     const data = bet.toPersistence();
-    await this.prisma.bet.create({
+    await client.bet.create({
       data: {
         ...data,
         // Domain enum → Prisma enum (same string values)
@@ -25,9 +27,10 @@ export class PrismaBetRepository implements IBetRepository {
     });
   }
 
-  async update(bet: Bet): Promise<void> {
+  async update(bet: Bet, tx?: PrismaTransaction): Promise<void> {
+    const client = tx ?? this.prisma;
     const data = bet.toPersistence();
-    await this.prisma.bet.update({
+    await client.bet.update({
       where: { id: data.id },
       data: {
         status: data.status as any,

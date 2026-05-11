@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type Bet } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
-import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
+import { ROUND_REPOSITORY } from '@/application/di.tokens';
 import { RoundNotFoundError } from '@/domain/errors/domain.errors';
 
 export interface GetCurrentRoundInput {

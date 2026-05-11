@@ -1,9 +1,7 @@
 # Dependencies
 node_modules/
 
-# Environment
-.env
-!.env.example
+# Environment — .env committed for easy local development setup
 
 # Build output
 dist/

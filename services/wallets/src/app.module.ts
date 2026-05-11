@@ -9,6 +9,7 @@ import { PrismaModule } from '@/infrastructure/persistence/prisma/prisma.module'
 import { PrismaWalletRepository } from '@/infrastructure/persistence/prisma/wallet.repository.impl';
 import { PrismaInboxRepository } from '@/infrastructure/persistence/prisma/inbox.repository.impl';
 import { RabbitMQEventPublisher } from '@/infrastructure/messaging/rabbitmq/event-publisher.impl';
+import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 import { OutboxProcessor } from '@/infrastructure/messaging/rabbitmq/outbox-processor';
 import { InboxProcessor } from '@/infrastructure/messaging/rabbitmq/inbox-processor';
 import { GamesEventsController } from '@/infrastructure/messaging/rabbitmq/games-events.controller';
@@ -23,9 +24,9 @@ import { PlayerWalletResolver } from '@/application/services/player-wallet-resol
 import {
   WALLET_REPOSITORY,
   INBOX_REPOSITORY,
-  EVENT_PUBLISHER,
+  RABBITMQ_PUBLISHER,
   PLAYER_WALLET_RESOLVER,
-} from '@/infrastructure/di/tokens';
+} from '@/application/di.tokens';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 import { MetricsInterceptor } from './infrastructure/interceptors/metrics.interceptor';
 
@@ -63,7 +64,11 @@ import { MetricsInterceptor } from './infrastructure/interceptors/metrics.interc
     { provide: WALLET_REPOSITORY, useClass: PrismaWalletRepository },
     { provide: INBOX_REPOSITORY, useClass: PrismaInboxRepository },
     // Messaging
-    { provide: EVENT_PUBLISHER, useClass: RabbitMQEventPublisher },
+    {
+      provide: RABBITMQ_PUBLISHER,
+      useClass: RabbitMQEventPublisher,
+    },
+    OutboxWriter,
     DlqSetupService,
     BetPlacedEventHandler,
     PlayerCashedOutEventHandler,

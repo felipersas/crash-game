@@ -22,6 +22,8 @@ Pronto. O comando sobe toda a stack: PostgreSQL, Redis, RabbitMQ, Keycloak (com 
 
 O seeding da carteira é automático: o usuário de teste já inicia com $1.000,00 de saldo.
 
+> **Nota sobre .env:** Os arquivos `.env` dos serviços e do frontend estão versionados para facilitar o setup — basta clonar e rodar `docker:up`. Isso **não é uma boa prática** para projetos reais, mas para este desafio elimina o atrito de configuração manual. Em produção, use secrets management (Vault, env vars do orquestrador, etc).
+
 ### URLs
 
 | Serviço | URL | Credenciais |

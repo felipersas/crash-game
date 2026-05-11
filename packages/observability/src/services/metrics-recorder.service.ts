@@ -5,36 +5,26 @@ export const METRICS_RECORDER = 'METRICS_RECORDER';
 
 @Injectable()
 export class MetricsRecorderService {
-  // Game metrics
   private readonly betsTotal: Counter;
   private readonly betAmountCents: Histogram;
   private readonly payoutCentsTotal: Counter;
   private readonly roundCrashPoint: Histogram;
   private readonly roundDurationSeconds: Histogram;
-  private readonly activePlayers: Gauge;
   private readonly rtpPercentage: Gauge;
 
-  // HTTP metrics
   private readonly httpRequestDuration: Histogram;
   private readonly httpRequestsTotal: Counter;
 
-  // WebSocket metrics
   private readonly wsConnectionsActive: Gauge;
   private readonly wsEventsBroadcast: Counter;
 
-  // RabbitMQ metrics
   private readonly rabbitmqPublished: Counter;
   private readonly rabbitmqConsumed: Counter;
 
-  // Wallet metrics
   private readonly walletOperations: Counter;
   private readonly walletBalanceChange: Histogram;
 
   constructor() {
-    // All metrics register on the global default registry
-    // which @willsoto/nestjs-prometheus exposes at /metrics
-
-    // --- Game Metrics ---
     this.betsTotal = new Counter({
       name: 'crash_game_bets_total',
       help: 'Total number of bets by status',
@@ -65,17 +55,11 @@ export class MetricsRecorderService {
       buckets: [1, 2, 5, 10, 15, 20, 30, 60, 120],
     });
 
-    this.activePlayers = new Gauge({
-      name: 'crash_game_active_players',
-      help: 'Number of players with active bets',
-    });
-
     this.rtpPercentage = new Gauge({
       name: 'crash_game_rtp_percentage',
       help: 'Return to player percentage (payouts / wagers * 100)',
     });
 
-    // --- HTTP Metrics ---
     this.httpRequestDuration = new Histogram({
       name: 'http_request_duration_seconds',
       help: 'HTTP request duration in seconds',
@@ -89,7 +73,6 @@ export class MetricsRecorderService {
       labelNames: ['method', 'route', 'status_code'],
     });
 
-    // --- WebSocket Metrics ---
     this.wsConnectionsActive = new Gauge({
       name: 'ws_connections_active',
       help: 'Number of active WebSocket connections',
@@ -101,7 +84,6 @@ export class MetricsRecorderService {
       labelNames: ['event_type'],
     });
 
-    // --- RabbitMQ Metrics ---
     this.rabbitmqPublished = new Counter({
       name: 'rabbitmq_events_published_total',
       help: 'Total events published to RabbitMQ',
@@ -114,7 +96,6 @@ export class MetricsRecorderService {
       labelNames: ['queue', 'event_type'],
     });
 
-    // --- Wallet Metrics ---
     this.walletOperations = new Counter({
       name: 'wallet_operations_total',
       help: 'Total wallet operations',
@@ -128,8 +109,6 @@ export class MetricsRecorderService {
       buckets: [100, 500, 1000, 2500, 5000, 10000, 50000, 100000],
     });
   }
-
-  // --- Game Metrics ---
 
   incrBet(status: string, amountCents: number): void {
     this.betsTotal.inc({ status }, 1);
@@ -148,15 +127,9 @@ export class MetricsRecorderService {
     this.roundDurationSeconds.observe(seconds);
   }
 
-  setActivePlayers(count: number): void {
-    this.activePlayers.set(count);
-  }
-
   setRtp(percentage: number): void {
     this.rtpPercentage.set(percentage);
   }
-
-  // --- HTTP Metrics ---
 
   observeHttpRequest(
     method: string,
@@ -174,8 +147,6 @@ export class MetricsRecorderService {
     );
   }
 
-  // --- WebSocket Metrics ---
-
   setWsConnections(count: number): void {
     this.wsConnectionsActive.set(count);
   }
@@ -184,8 +155,6 @@ export class MetricsRecorderService {
     this.wsEventsBroadcast.inc({ event_type: eventType }, 1);
   }
 
-  // --- RabbitMQ Metrics ---
-
   incrRabbitPublished(exchange: string, eventType: string): void {
     this.rabbitmqPublished.inc({ exchange, event_type: eventType }, 1);
   }
@@ -193,8 +162,6 @@ export class MetricsRecorderService {
   incrRabbitConsumed(queue: string, eventType: string): void {
     this.rabbitmqConsumed.inc({ queue, event_type: eventType }, 1);
   }
-
-  // --- Wallet Metrics ---
 
   incrWalletOp(operation: string, amountCents: number): void {
     this.walletOperations.inc({ operation }, 1);

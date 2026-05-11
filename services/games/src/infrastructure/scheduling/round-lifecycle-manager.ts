@@ -3,20 +3,16 @@ import { Cron } from '@nestjs/schedule';
 import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
 import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
-import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
 import { RedisService } from '@/infrastructure/redis/redis.service';
 import type { RoundState } from '@/infrastructure/redis/redis.service';
-import {
-  ROUND_REPOSITORY,
-  EVENT_PUBLISHER,
-  GAMES_GATEWAY,
-  SEED_CHAIN_REPOSITORY,
-} from '@/infrastructure/di/tokens';
+import { ROUND_REPOSITORY, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/application/di.tokens';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
 import { RoundCrashHandler } from './round-crash-handler';
+import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
+import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 /**
  * Round Lifecycle Manager - Infrastructure Layer
@@ -41,10 +37,11 @@ export class RoundLifecycleManager implements IRoundStateProvider {
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(SEED_CHAIN_REPOSITORY) private readonly seedChainRepository: ISeedChainRepository,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
     private readonly redisService: RedisService,
     private readonly crashHandler: RoundCrashHandler,
+    private readonly prisma: PrismaService,
+    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   /**
@@ -56,7 +53,7 @@ export class RoundLifecycleManager implements IRoundStateProvider {
 
     if (!this.currentSeedChain) {
       this.logger.log('No seed chain found, generating new chain...');
-      this.currentSeedChain = await SeedChain.generate(1000);
+      this.currentSeedChain = await SeedChain.generate(1000, process.env.DETERMINISTIC_SEED);
       await this.seedChainRepository.save(this.currentSeedChain);
 
       const summary = this.currentSeedChain.getSummary();
@@ -100,7 +97,7 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     // Check if chain needs regeneration
     if (this.currentSeedChain.needsRegeneration()) {
       this.logger.warn('Seed chain running low, regenerating...');
-      this.currentSeedChain = await SeedChain.generate(1000);
+      this.currentSeedChain = await SeedChain.generate(1000, process.env.DETERMINISTIC_SEED);
       await this.seedChainRepository.save(this.currentSeedChain);
 
       const summary = this.currentSeedChain.getSummary();
@@ -111,7 +108,20 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     }
 
     const newRound = await Round.createWithSeedChain(this.currentSeedChain, DEFAULT_ROUND_CONFIG);
-    await this.roundRepository.create(newRound);
+
+    const events = newRound.pullEvents();
+    let outboxIds: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      await this.roundRepository.create(newRound, tx);
+      if (events.length > 0) {
+        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, newRound.id, events);
+      }
+    });
+
+    // Best-effort immediate publish for low latency
+    if (events.length > 0 && outboxIds.length > 0) {
+      await this.outboxWriter.tryImmediatePublish(events, outboxIds);
+    }
 
     try {
       this.currentSeedChain = this.currentSeedChain.advance();
@@ -123,11 +133,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     }
 
     this.currentRound = newRound;
-
-    const events = this.currentRound.pullEvents();
-    if (events.length > 0) {
-      await this.eventPublisher.publishBatch(events);
-    }
 
     const roundStarted = events.find((e) => e.eventType === 'RoundStarted');
     if (roundStarted && this.currentRound) {
@@ -199,7 +204,23 @@ export class RoundLifecycleManager implements IRoundStateProvider {
 
     try {
       await this.currentRound.startRound();
-      await this.roundRepository.save(this.currentRound);
+      const events = this.currentRound.pullEvents();
+      let outboxIds: string[] = [];
+      await this.prisma.$transaction(async (tx) => {
+        await this.roundRepository.save(this.currentRound!, tx);
+        if (events.length > 0) {
+          outboxIds = await this.outboxWriter.writeWithinTransaction(
+            tx,
+            this.currentRound!.id,
+            events,
+          );
+        }
+      });
+
+      // Best-effort immediate publish for low latency
+      if (events.length > 0 && outboxIds.length > 0) {
+        await this.outboxWriter.tryImmediatePublish(events, outboxIds);
+      }
     } catch (error) {
       if (error instanceof OptimisticLockError) {
         this.logger.warn(
@@ -224,17 +245,29 @@ export class RoundLifecycleManager implements IRoundStateProvider {
         if (reloaded.getStatus() === RoundStatus.BETTING) {
           this.logger.log(`Retrying transition for round ${this.currentRound.id}`);
           await reloaded.startRound();
-          await this.roundRepository.save(reloaded);
+          const retryEvents = reloaded.pullEvents();
+          let retryOutboxIds: string[] = [];
+          await this.prisma.$transaction(async (tx) => {
+            await this.roundRepository.save(reloaded, tx);
+            if (retryEvents.length > 0) {
+              retryOutboxIds = await this.outboxWriter.writeWithinTransaction(
+                tx,
+                reloaded.id,
+                retryEvents,
+              );
+            }
+          });
+
+          // Best-effort immediate publish for low latency
+          if (retryEvents.length > 0 && retryOutboxIds.length > 0) {
+            await this.outboxWriter.tryImmediatePublish(retryEvents, retryOutboxIds);
+          }
+
           this.currentRound = reloaded;
         }
       } else {
         throw error;
       }
-    }
-
-    const events = this.currentRound.pullEvents();
-    if (events.length > 0) {
-      await this.eventPublisher.publishBatch(events);
     }
 
     this.gamesGateway.broadcastBettingEnded(this.currentRound.id);

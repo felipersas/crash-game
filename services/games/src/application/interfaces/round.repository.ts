@@ -1,4 +1,5 @@
 import { type Round } from '@/domain/entities/round.entity';
+import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
 
 /**
  * Round Repository Interface - Application Layer
@@ -21,13 +22,15 @@ export interface IRoundRepository {
 
   /**
    * Update an existing round (with optimistic locking).
+   * Optional tx for atomic operations within a transaction boundary.
    */
-  save(round: Round): Promise<void>;
+  save(round: Round, tx?: PrismaTransaction): Promise<void>;
 
   /**
    * Create a new round.
+   * Optional tx for atomic operations within a transaction boundary.
    */
-  create(round: Round): Promise<void>;
+  create(round: Round, tx?: PrismaTransaction): Promise<void>;
 
   /**
    * Get historical rounds with pagination.

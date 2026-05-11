@@ -6,6 +6,7 @@ import type { IRoundRepository } from '@/application/interfaces/round.repository
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
 import type { Round as RoundRow } from '@prisma/client';
 import type { Bet as BetRow } from '@prisma/client';
+import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
 
 @Injectable()
 export class PrismaRoundRepository implements IRoundRepository {
@@ -31,11 +32,12 @@ export class PrismaRoundRepository implements IRoundRepository {
     return this.toDomain(record);
   }
 
-  async save(round: Round): Promise<void> {
+  async save(round: Round, tx?: PrismaTransaction): Promise<void> {
+    const client = tx ?? this.prisma;
     const data = round.toPersistence();
 
     try {
-      await this.prisma.round.update({
+      await client.round.update({
         where: {
           id: data.id,
           version: data.version - 1, // Optimistic locking
@@ -57,9 +59,10 @@ export class PrismaRoundRepository implements IRoundRepository {
     }
   }
 
-  async create(round: Round): Promise<void> {
+  async create(round: Round, tx?: PrismaTransaction): Promise<void> {
+    const client = tx ?? this.prisma;
     const data = round.toPersistence();
-    await this.prisma.round.create({ data });
+    await client.round.create({ data });
   }
 
   async findHistory(limit: number, offset: number): Promise<Round[]> {

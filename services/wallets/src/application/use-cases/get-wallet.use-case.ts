@@ -8,7 +8,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 import { Wallet } from '@/domain/entities/wallet.entity';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
-import { WALLET_REPOSITORY } from '@/infrastructure/di/tokens';
+import { WALLET_REPOSITORY } from '@/application/di.tokens';
 
 export interface GetWalletInput {
   playerId: string;

@@ -73,11 +73,32 @@ function createMockMetrics() {
   };
 }
 
+function createMockPrisma() {
+  return {
+    $transaction: async (fn: any) => {
+      const tx = {
+        outboxEvent: { create: async () => {} },
+        round: { create: async () => {}, update: async () => {} },
+        bet: { create: async () => {}, update: async () => {} },
+      };
+      return fn(tx);
+    },
+  };
+}
+
+function createMockOutboxWriter() {
+  return {
+    writeWithinTransaction: mockFn(async () => ['outbox-id-1']),
+    tryImmediatePublish: mockFn(async () => {}),
+  };
+}
+
 describe('CancelBetUseCase', () => {
   let betRepository: ReturnType<typeof createMockBetRepository>;
-  let eventPublisher: ReturnType<typeof createMockEventPublisher>;
   let gamesGateway: ReturnType<typeof createMockGamesGateway>;
   let metrics: ReturnType<typeof createMockMetrics>;
+  let prisma: ReturnType<typeof createMockPrisma>;
+  let outboxWriter: ReturnType<typeof createMockOutboxWriter>;
   let useCase: CancelBetUseCase;
 
   const roundId = 'round-789';
@@ -88,14 +109,16 @@ describe('CancelBetUseCase', () => {
 
   beforeEach(() => {
     betRepository = createMockBetRepository();
-    eventPublisher = createMockEventPublisher();
     gamesGateway = createMockGamesGateway();
     metrics = createMockMetrics();
+    prisma = createMockPrisma();
+    outboxWriter = createMockOutboxWriter();
     useCase = new CancelBetUseCase(
       betRepository as any,
-      eventPublisher as any,
       gamesGateway as any,
       metrics as any,
+      prisma as any,
+      outboxWriter as any,
     );
   });
 
@@ -142,7 +165,7 @@ describe('CancelBetUseCase', () => {
 
     await useCase.execute({ roundId, betId: bet.id, playerId, reason: cancelReason });
 
-    expect(eventPublisher.publishBatch.callCount).toBe(1);
+    expect(outboxWriter.writeWithinTransaction.callCount).toBe(1);
   });
 
   test('should broadcast via WebSocket', async () => {

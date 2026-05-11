@@ -2,8 +2,6 @@
  * Unit tests for PlayerWalletResolver
  *
  * Tests cover:
- * - resolveWalletId: returns wallet ID for existing player
- * - resolveWalletId: throws WalletNotFoundError when no wallet
  * - resolveWallet: returns full wallet entity for existing player
  * - resolveWallet: throws WalletNotFoundError when no wallet
  */
@@ -40,7 +38,6 @@ function createMockWalletRepository(overrides: Record<string, any> = {}) {
     findByPlayerId: mockFn(() => Promise.resolve(null)),
     save: mockFn(() => Promise.resolve()),
     create: mockFn(() => Promise.resolve()),
-    existsByPlayerId: mockFn(() => Promise.resolve(false)),
     ...overrides,
   };
 }
@@ -52,23 +49,6 @@ describe('PlayerWalletResolver', () => {
   beforeEach(() => {
     mockWalletRepo = createMockWalletRepository();
     resolver = new PlayerWalletResolver(mockWalletRepo as any);
-  });
-
-  describe('resolveWalletId', () => {
-    test('should return wallet ID for existing player', async () => {
-      const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 1);
-      mockWalletRepo.findByPlayerId.mockResolvedValue(wallet);
-
-      const walletId = await resolver.resolveWalletId('player-1');
-
-      expect(walletId).toBe('wallet-1');
-    });
-
-    test('should throw WalletNotFoundError when no wallet', async () => {
-      mockWalletRepo.findByPlayerId.mockResolvedValue(null);
-
-      expect(resolver.resolveWalletId('unknown-player')).rejects.toThrow(WalletNotFoundError);
-    });
   });
 
   describe('resolveWallet', () => {

@@ -234,44 +234,6 @@ export function createRoundCrashedEvent(
   };
 }
 
-export function createWalletDebitedEvent(
-  roundId: string,
-  betId: string,
-  playerId: string,
-  amount: bigint,
-  version: number,
-): WalletDebitedEvent {
-  return {
-    ...createBaseEvent(roundId, version),
-    eventType: 'WalletDebited',
-    roundId,
-    betId,
-    playerId,
-    amount,
-    timestamp: new Date(),
-  };
-}
-
-export function createWalletDebitFailedEvent(
-  roundId: string,
-  betId: string,
-  playerId: string,
-  amount: bigint,
-  reason: string,
-  version: number,
-): WalletDebitFailedEvent {
-  return {
-    ...createBaseEvent(roundId, version),
-    eventType: 'WalletDebitFailed',
-    roundId,
-    betId,
-    playerId,
-    amount,
-    reason,
-    timestamp: new Date(),
-  };
-}
-
 export function createBetConfirmedEvent(
   roundId: string,
   betId: string,

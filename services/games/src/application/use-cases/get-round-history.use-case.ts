@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
-import { ROUND_REPOSITORY } from '@/infrastructure/di/tokens';
+import { ROUND_REPOSITORY } from '@/application/di.tokens';
 import {
   computePagination,
   buildPaginationMeta,

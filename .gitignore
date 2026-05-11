@@ -1,9 +1,8 @@
 # Dependencies
 node_modules/
 
-# Environment
-.env
-!.env.example
+# Environment (root-level only — service .env files are committed for easy setup)
+/.env
 
 # Build output
 dist/
@@ -31,5 +30,11 @@ yarn-error.log*
 
 # Test coverage
 coverage/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Next.js
+.next/
 
 .omc/

@@ -9,6 +9,7 @@ import { PrismaService } from './prisma.service';
 import { Wallet } from '@/domain/entities/wallet.entity';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
+import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
 
 @Injectable()
 export class PrismaWalletRepository implements IWalletRepository {
@@ -38,11 +39,12 @@ export class PrismaWalletRepository implements IWalletRepository {
     return this.toDomain(record);
   }
 
-  async save(wallet: Wallet): Promise<void> {
+  async save(wallet: Wallet, tx?: PrismaTransaction): Promise<void> {
     const data = wallet.toPersistence();
+    const client = tx ?? this.prisma;
 
     try {
-      await this.prisma.wallet.update({
+      await client.wallet.update({
         where: {
           id: data.id,
           version: data.version - 1, // Optimistic locking
@@ -53,28 +55,22 @@ export class PrismaWalletRepository implements IWalletRepository {
         },
       });
     } catch (error: unknown) {
-      // Prisma throws error if no rows were updated (version mismatch)
-      if (error instanceof Error && 'code' in error) {
+      // Prisma P2025 = record not found (version WHERE matched zero rows)
+      if (error instanceof Error && 'code' in error && (error as any).code === 'P2025') {
         throw new OptimisticLockError(data.id, data.version, data.version - 1);
       }
       throw error;
     }
   }
 
-  async existsByPlayerId(playerId: string): Promise<boolean> {
-    const count = await this.prisma.wallet.count({
-      where: { playerId },
-    });
-    return count > 0;
-  }
-
   /**
    * Create a new wallet in the database.
    * Used internally by CreateWalletUseCase.
    */
-  async create(wallet: Wallet): Promise<void> {
+  async create(wallet: Wallet, tx?: PrismaTransaction): Promise<void> {
     const data = wallet.toPersistence();
-    await this.prisma.wallet.create({
+    const client = tx ?? this.prisma;
+    await client.wallet.create({
       data: {
         id: data.id,
         playerId: data.playerId,

@@ -129,3 +129,24 @@ Infra credentials are hardcoded in `docker-compose.yml` for local dev (no root `
   - `chore:` maintenance tasks
 - **Granular commits** — One logical change per commit, small and focused
 - **NO co-author** — Never add `Co-Authored-By: Claude` or similar to commits
+
+## Repository Skills (MANDATORY)
+
+When working in specific areas of the codebase, read and follow the relevant skill file BEFORE making any code changes. These skills contain the exact patterns, conventions, and coding standards that MUST be followed:
+
+| Skill | File | When to Use |
+|-------|------|-------------|
+| **games-service** | `.claude/skills/games-service/SKILL.md` | Any change to `services/games/` — use cases, entities, round lifecycle, bet saga, WebSocket |
+| **wallets-service** | `.claude/skills/wallets-service/SKILL.md` | Any change to `services/wallets/` — balance ops, credit/debit, inbox/outbox |
+| **frontend** | `.claude/skills/frontend/SKILL.md` | Any change to `frontend/` — components, hooks, store, WebSocket client, API layer |
+| **domain-modeling** | `.claude/skills/domain-modeling/SKILL.md` | Creating/modifying entities, value objects, domain events, errors, or Money usage |
+| **testing-patterns** | `.claude/skills/testing-patterns/SKILL.md` | Writing unit or E2E tests — mock factories, entity tests, use case tests |
+| **infrastructure** | `.claude/skills/infrastructure/SKILL.md` | Docker, Kong routes, Keycloak, RabbitMQ config, Redis, environment changes |
+| **messaging** | `.claude/skills/messaging/SKILL.md` | Event schemas, RabbitMQ handlers, inbox/outbox, saga coordination between services |
+
+### How to Use Skills
+
+1. **Identify the area** you're working on (games, wallets, frontend, tests, etc.)
+2. **Read the skill file** before making changes — it contains project-specific patterns
+3. **Follow the validation checklist** at the end of each skill before completing work
+4. **Multiple skills may apply** — e.g., adding a new use case requires both `games-service` and `testing-patterns`

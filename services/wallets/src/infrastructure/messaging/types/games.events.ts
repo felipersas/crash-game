@@ -8,10 +8,7 @@
  * for these events is in the Games service.
  */
 
-/**
- * Base domain event interface (minimal version for external consumption).
- */
-export interface BaseDomainEvent {
+interface BaseDomainEvent {
   readonly aggregateId: string;
   readonly occurredAt: Date;
   readonly version: number;

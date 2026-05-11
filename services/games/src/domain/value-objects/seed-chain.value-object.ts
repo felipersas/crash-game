@@ -46,10 +46,10 @@ export class SeedChain {
    * @param size - Number of seeds to generate (default: 1000)
    * @returns A new SeedChain with randomly generated seeds
    */
-  static async generate(size: number = 1000): Promise<SeedChain> {
-    // Check for deterministic seed in test mode
-    if (process.env.DETERMINISTIC_SEED) {
-      return SeedChain.generateDeterministic(process.env.DETERMINISTIC_SEED, size);
+  static async generate(size: number = 1000, deterministicSeed?: string): Promise<SeedChain> {
+    // Use deterministic seed if provided (for testing)
+    if (deterministicSeed) {
+      return SeedChain.generateDeterministic(deterministicSeed, size);
     }
 
     const seeds: string[] = [];
@@ -228,23 +228,6 @@ export class SeedChain {
   static async verifySeed(seed: string, committedHash: string): Promise<boolean> {
     const seedHash = await SeedChain.hashSeed(seed);
     return seedHash === committedHash;
-  }
-
-  /**
-   * Verify a seed at a specific position in the chain.
-   * Used by players to verify past rounds.
-   */
-  async verifySeedAtPosition(position: number, seed: string): Promise<boolean> {
-    if (position < 0 || position >= this.seeds.length) {
-      return false;
-    }
-
-    // The seed at position N should hash to seed at position N+1
-    const expectedNextSeed =
-      position < this.seeds.length - 1 ? this.seeds[position + 1] : this.commitment;
-
-    const actualHash = await SeedChain.hashSeed(seed);
-    return actualHash === expectedNextSeed;
   }
 
   /**

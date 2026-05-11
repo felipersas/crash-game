@@ -3,7 +3,7 @@ import { type Round, RoundStatus } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
-import type { IEventPublisher } from '@crash/messaging';
+import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import {
   RoundNotFoundError,
@@ -17,7 +17,7 @@ import {
   GAME_BROADCASTER,
   IDEMPOTENCY_CACHE,
   ROUND_STATE_PROVIDER,
-} from '@/infrastructure/di/tokens';
+} from '@/application/di.tokens';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
 import type {
   IIdempotencyCache,
@@ -25,6 +25,8 @@ import type {
 } from '@/application/interfaces/idempotency-cache';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
+import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
+import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 /**
  * Cash Out Use Case
@@ -54,11 +56,13 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     @Inject(ROUND_STATE_PROVIDER) private readonly roundStateProvider: IRoundStateProvider,
     @Inject(IDEMPOTENCY_CACHE) private readonly idempotencyCache: IIdempotencyCache,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
+    private readonly prisma: PrismaService,
+    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
@@ -69,19 +73,31 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     const bet = await this.loadBet(input.playerId, round.id);
     const payout = round.cashOut(input.playerId);
 
-    // Persist updated bet status (separate from round aggregate)
+    // Persist updated bet status + round + outbox events atomically
     const cashedOutBet = round.getBetByPlayer(input.playerId);
-    if (cashedOutBet) {
-      await this.betRepository.update(cashedOutBet);
-    }
+    const events = round.pullEvents();
 
-    await this.roundRepository.save(round);
+    let outboxIds: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      if (cashedOutBet) {
+        await this.betRepository.update(cashedOutBet, tx);
+      }
+      await this.roundRepository.save(round, tx);
+      if (events.length > 0) {
+        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, round.id, events);
+      }
+    });
+
+    // Best-effort immediate publish for low latency
+    if (events.length > 0 && outboxIds.length > 0) {
+      await this.outboxWriter.tryImmediatePublish(events, outboxIds);
+    }
 
     this.metrics.incrBet('cashed_out', Number(bet.getAmount().toCents()));
     this.metrics.incrPayout(Number(payout.toCents()));
 
     await this.storeIdempotencyResult(input.idempotencyKey, input.playerId, bet, round, payout);
-    await this.publishEvents(round);
+    await this.broadcastCashOut(round, events);
 
     return this.mapToOutput(input.playerId, bet, round, payout);
   }
@@ -154,13 +170,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     await this.idempotencyCache.setCashoutIdempotency(idempotencyKey, result);
   }
 
-  private async publishEvents(round: Round): Promise<void> {
-    const events = round.pullEvents();
-    if (events.length === 0) return;
-
-    await this.eventPublisher.publishBatch(events);
-
-    // Broadcast player cashed out via WebSocket (fire-and-forget)
+  private async broadcastCashOut(round: Round, events: any[]): Promise<void> {
     const cashedOut = events.find(
       (e): e is PlayerCashedOutEvent => e.eventType === 'PlayerCashedOut',
     );
