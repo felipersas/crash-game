@@ -41,7 +41,7 @@ export function BetInput({ amount, onAmountChange, disabled }: BetInputProps) {
           onChange={handleChange}
           type="text"
           inputMode="numeric"
-          className="h-10 bg-surface/80 border-border text-text-primary text-lg font-bold focus-visible:border-primary focus-visible:ring-primary/30"
+          className="h-10 bg-background border-border text-text-primary text-lg font-bold focus-visible:border-primary focus-visible:ring-primary/30"
           disabled={disabled}
         />
       </div>
