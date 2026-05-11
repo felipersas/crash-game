@@ -1,4 +1,5 @@
 import { type Bet, type BetStatus } from '@/domain/entities/bet.entity';
+import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
 
 /**
  * Bet Repository Interface - Application Layer
@@ -10,13 +11,15 @@ import { type Bet, type BetStatus } from '@/domain/entities/bet.entity';
 export interface IBetRepository {
   /**
    * Create a new bet.
+   * Optional tx for atomic operations within a transaction boundary.
    */
-  create(bet: Bet): Promise<void>;
+  create(bet: Bet, tx?: PrismaTransaction): Promise<void>;
 
   /**
    * Update an existing bet (status changes).
+   * Optional tx for atomic operations within a transaction boundary.
    */
-  update(bet: Bet): Promise<void>;
+  update(bet: Bet, tx?: PrismaTransaction): Promise<void>;
 
   /**
    * Find a bet by ID.
