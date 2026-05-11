@@ -303,7 +303,7 @@ O fator de multiplicação e truncado (floor) em vez de arredondado — o jogado
 
 ### 7. Crash do Round — Delegação para RoundCrashHandler
 
-**Decisão arquitetural - Extração do RoundCrashHandler**: A lógica de crash foi extraida do `RoundLifecycleManager` (antes um god class de 470+ linhas) para uma classe dedicada `RoundCrashHandler`. Motivos:
+**Decisão arquitetural - RoundCrashHandler dedicado**: A lógica de crash vive em uma classe separada (`RoundCrashHandler`) do orquestrador de lifecycle (`RoundLifecycleManager`). Motivos:
 - **Single Responsibility**: RLM orquestra lifecycle; RCH resolve crash
 - **Testabilidade**: Crash handling pode ser testado isoladamente
 - **Clareza**: Cada classe tem um propósito único

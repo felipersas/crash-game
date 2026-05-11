@@ -6,16 +6,15 @@ Este documento descreve os padrões transactional outbox e inbox implementados e
 
 ---
 
-## O Problema
+## Problema
 
-Os serviços publicam eventos de domínio (BetPlaced, PlayerCashedOut, RoundCrashed, etc.) que movimentam dinheiro entre serviços. Antes desta implementação:
+Em um sistema onde eventos de domínio (BetPlaced, PlayerCashedOut, RoundCrashed, etc.) movimentam dinheiro entre serviços, é necessário garantir que:
 
-1. **Eventos eram publicados diretamente no RabbitMQ** após writes no banco — não atômico
-2. **Sem inbox para eventos recebidos** — mensagens duplicadas (WalletDebited/WalletDebitFailed) poderiam causar processamento duplo
-3. **DI tokens na camada de infraestrutura** — use cases importavam de infra, violando DDD
-4. **Camada de domínio lia `process.env`** — acoplamento com ambiente em lógica pura
+1. **Eventos publicados sejam atômicos com o estado persistido** — um write no banco seguido de publish no broker não é atômico; falhas entre os dois causam perda de eventos
+2. **Eventos recebidos sejam processados exatamente uma vez** — mensagens duplicadas (redelivery do broker) podem causar crédito/débito duplo
+3. **O domínio permaneça puro** — sem dependência de infraestrutura (DI tokens, `process.env`) na camada de domínio
 
-Se o serviço crashasse entre o write no banco e o publish no RabbitMQ, ou se o RabbitMQ estivesse temporariamente indisponível, **eventos que movimentam dinheiro seriam perdidos**.
+A combinação dos padrões **transactional outbox** e **inbox** resolve esses problemas.
 
 ---
 
@@ -120,7 +119,7 @@ Garante exactly-once processing mesmo com redelivery do RabbitMQ.
 
 ### 6. `process.env` removido da camada de domínio
 
-`SeedChain.generate()` antes lia `process.env.DETERMINISTIC_SEED` diretamente. Agora aceita parâmetro opcional, injetado da camada de infraestrutura (`RoundLifecycleManager`). Mantém a camada de domínio pura e testável sem manipulação de ambiente.
+`SeedChain.generate()` aceita parâmetro opcional para o seed determinístico, injetado pela camada de infraestrutura (`RoundLifecycleManager`). A camada de domínio permanece pura e testável sem acoplamento com `process.env`.
 
 ---
 
