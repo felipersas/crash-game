@@ -23,9 +23,3 @@ scrape_configs:
       - targets: ['rabbitmq:15692']
         labels:
           service: 'rabbitmq'
-
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis-exporter:9121']
-        labels:
-          service: 'redis'
