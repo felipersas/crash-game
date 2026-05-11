@@ -4,6 +4,7 @@ import { Bet, BetStatus } from '@/domain/entities/bet.entity';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { Bet as BetRow } from '@prisma/client';
 import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
+import { DuplicateBetError } from '@/domain/errors/domain.errors';
 
 /**
  * Prisma-based implementation of Bet Repository.
@@ -18,13 +19,19 @@ export class PrismaBetRepository implements IBetRepository {
   async create(bet: Bet, tx?: PrismaTransaction): Promise<void> {
     const client = tx ?? this.prisma;
     const data = bet.toPersistence();
-    await client.bet.create({
-      data: {
-        ...data,
-        // Domain enum → Prisma enum (same string values)
-        status: data.status as any,
-      },
-    });
+    try {
+      await client.bet.create({
+        data: {
+          ...data,
+          status: data.status as any,
+        },
+      });
+    } catch (error: unknown) {
+      if (error instanceof Error && 'code' in error && error.code === 'P2002') {
+        throw new DuplicateBetError();
+      }
+      throw error;
+    }
   }
 
   async update(bet: Bet, tx?: PrismaTransaction): Promise<void> {
