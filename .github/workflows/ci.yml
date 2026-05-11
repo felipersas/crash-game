@@ -28,7 +28,20 @@ jobs:
           cd ../messaging && bun run build
           cd ../observability && bun run build
 
+      - name: Link workspace packages
+        run: |
+          for pkg in domain messaging observability eslint-config prettier-config; do
+            mkdir -p "node_modules/@crash/$pkg"
+            ln -s "$GITHUB_WORKSPACE/packages/$pkg/package.json" "node_modules/@crash/$pkg/package.json"
+            if [ -d "packages/$pkg/dist" ]; then
+              ln -s "$GITHUB_WORKSPACE/packages/$pkg/dist" "node_modules/@crash/$pkg/dist"
+            fi
+          done
+
       - run: cd services/games && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
+
+      - name: Verify module resolution
+        run: node -e "console.log(require.resolve('@crash/domain'))"
 
       - name: Run unit tests
         run: cd services/games && bun test tests/unit
@@ -50,7 +63,20 @@ jobs:
           cd ../messaging && bun run build
           cd ../observability && bun run build
 
+      - name: Link workspace packages
+        run: |
+          for pkg in domain messaging observability eslint-config prettier-config; do
+            mkdir -p "node_modules/@crash/$pkg"
+            ln -s "$GITHUB_WORKSPACE/packages/$pkg/package.json" "node_modules/@crash/$pkg/package.json"
+            if [ -d "packages/$pkg/dist" ]; then
+              ln -s "$GITHUB_WORKSPACE/packages/$pkg/dist" "node_modules/@crash/$pkg/dist"
+            fi
+          done
+
       - run: cd services/wallets && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
+
+      - name: Verify module resolution
+        run: node -e "console.log(require.resolve('@crash/domain'))"
 
       - name: Run unit tests
         run: cd services/wallets && bun test tests/unit
@@ -66,6 +92,12 @@ jobs:
           bun-version: "1.3.3"
 
       - run: bun install
+
+      - name: Link workspace packages
+        run: |
+          mkdir -p node_modules/@crash
+          ln -s "$GITHUB_WORKSPACE/packages/eslint-config" node_modules/@crash/eslint-config
+          ln -s "$GITHUB_WORKSPACE/packages/prettier-config" node_modules/@crash/prettier-config
 
       - name: Check games formatting
         run: bun run --cwd services/games format:check
@@ -91,6 +123,16 @@ jobs:
           cd packages/domain && bun run build
           cd ../messaging && bun run build
           cd ../observability && bun run build
+
+      - name: Link workspace packages
+        run: |
+          for pkg in domain messaging observability eslint-config prettier-config; do
+            mkdir -p "node_modules/@crash/$pkg"
+            ln -s "$GITHUB_WORKSPACE/packages/$pkg/package.json" "node_modules/@crash/$pkg/package.json"
+            if [ -d "packages/$pkg/dist" ]; then
+              ln -s "$GITHUB_WORKSPACE/packages/$pkg/dist" "node_modules/@crash/$pkg/dist"
+            fi
+          done
 
       - name: Run Games E2E tests
         run: cd services/games && bun test tests/e2e
