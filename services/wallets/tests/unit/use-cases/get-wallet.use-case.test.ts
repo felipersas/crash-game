@@ -39,7 +39,6 @@ function createMockWalletRepository(overrides: Record<string, any> = {}) {
     findByPlayerId: mockFn(() => Promise.resolve(null)),
     save: mockFn(() => Promise.resolve()),
     create: mockFn(() => Promise.resolve()),
-    existsByPlayerId: mockFn(() => Promise.resolve(false)),
     ...overrides,
   };
 }

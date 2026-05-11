@@ -46,7 +46,6 @@ function createMockWalletRepository(overrides: Record<string, any> = {}) {
     findByPlayerId: mockFn(() => Promise.resolve(null)),
     save: mockFn(() => Promise.resolve()),
     create: mockFn(() => Promise.resolve()),
-    existsByPlayerId: mockFn(() => Promise.resolve(false)),
     ...overrides,
   };
 }
@@ -63,7 +62,10 @@ function createMockPrisma() {
     $transaction: mockFn(async (fn: any) => {
       const mockTx = {
         outboxEvent: { create: mockFn(() => Promise.resolve()) },
-        wallet: { create: mockFn(() => Promise.resolve()), update: mockFn(() => Promise.resolve()) },
+        wallet: {
+          create: mockFn(() => Promise.resolve()),
+          update: mockFn(() => Promise.resolve()),
+        },
       };
       return fn(mockTx);
     }),
