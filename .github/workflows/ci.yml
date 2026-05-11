@@ -24,9 +24,9 @@ jobs:
       - run: bun install
 
       - run: |
-          cd packages/domain && bun run build
-          cd ../messaging && bun run build
-          cd ../observability && bun run build
+          cd packages/domain && bunx tsc && ls dist/
+          cd ../messaging && bunx tsc && ls dist/
+          cd ../observability && bunx tsc && ls dist/
 
       - name: Link workspace packages
         run: |
@@ -61,9 +61,9 @@ jobs:
       - run: bun install
 
       - run: |
-          cd packages/domain && bun run build
-          cd ../messaging && bun run build
-          cd ../observability && bun run build
+          cd packages/domain && bunx tsc && ls dist/
+          cd ../messaging && bunx tsc && ls dist/
+          cd ../observability && bunx tsc && ls dist/
 
       - name: Link workspace packages
         run: |
@@ -124,9 +124,9 @@ jobs:
       - run: bun install
 
       - run: |
-          cd packages/domain && bun run build
-          cd ../messaging && bun run build
-          cd ../observability && bun run build
+          cd packages/domain && bunx tsc && ls dist/
+          cd ../messaging && bunx tsc && ls dist/
+          cd ../observability && bunx tsc && ls dist/
 
       - name: Link workspace packages
         run: |
