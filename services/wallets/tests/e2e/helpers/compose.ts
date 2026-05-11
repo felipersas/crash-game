@@ -75,7 +75,6 @@ export class TestCompose {
     // Start Docker Compose environment
     this.environment = await new DockerComposeEnvironment(composeFilePath, composeFile)
       .withWaitStrategy('postgres-1', Wait.forHealthCheck())
-      .withWaitStrategy('redis-1', Wait.forHealthCheck())
       .withWaitStrategy('rabbitmq-1', Wait.forHealthCheck())
       .withWaitStrategy('games-1', Wait.forHealthCheck())
       .withWaitStrategy('wallets-1', Wait.forHealthCheck())

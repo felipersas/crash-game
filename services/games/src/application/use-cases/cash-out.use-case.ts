@@ -1,5 +1,6 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { type Round, RoundStatus } from '@/domain/entities/round.entity';
+import { BetStatus } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
@@ -15,14 +16,9 @@ import {
   BET_REPOSITORY,
   EVENT_PUBLISHER,
   GAME_BROADCASTER,
-  IDEMPOTENCY_CACHE,
   ROUND_STATE_PROVIDER,
 } from '@/application/di.tokens';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
-import type {
-  IIdempotencyCache,
-  CashoutIdempotencyResult,
-} from '@/application/interfaces/idempotency-cache';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
@@ -58,7 +54,6 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     @Inject(ROUND_STATE_PROVIDER) private readonly roundStateProvider: IRoundStateProvider,
-    @Inject(IDEMPOTENCY_CACHE) private readonly idempotencyCache: IIdempotencyCache,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
     private readonly prisma: PrismaService,
@@ -66,11 +61,26 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
-    const cachedResult = await this.getCachedResultIfValid(input);
-    if (cachedResult) return cachedResult;
+    this.validateIdempotencyKey(input.idempotencyKey);
 
     const round = await this.loadRound(input.roundId);
     const bet = await this.loadBet(input.playerId, round.id);
+
+    // Idempotency: if bet is already cashed out, return existing result
+    if (bet.getStatus() === BetStatus.CASHED_OUT) {
+      const multiplier = bet.getCashOutMultiplier();
+      const payoutAmount = bet.getCashOutAmount();
+      if (multiplier && payoutAmount) {
+        return {
+          betId: bet.id,
+          roundId: round.id,
+          playerId: input.playerId,
+          cashOutMultiplier: multiplier.getValue(),
+          payoutCents: payoutAmount.toCents(),
+        };
+      }
+    }
+
     round.syncBet(bet);
     const payout = round.cashOut(input.playerId);
 
@@ -96,29 +106,9 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     this.metrics.incrBet('cashed_out', Number(bet.getAmount().toCents()));
     this.metrics.incrPayout(Number(payout.toCents()));
 
-    await this.storeIdempotencyResult(input.idempotencyKey, input.playerId, bet, round, payout);
     await this.broadcastCashOut(round, events);
 
     return this.mapToOutput(input.playerId, bet, round, payout);
-  }
-
-  private async getCachedResultIfValid(input: CashOutInput): Promise<CashOutOutput | null> {
-    this.validateIdempotencyKey(input.idempotencyKey);
-    const cached = await this.idempotencyCache.checkCashoutIdempotency(input.idempotencyKey);
-
-    if (!cached) return null;
-
-    if (cached.playerId !== input.playerId) {
-      throw new InvalidIdempotencyKeyError();
-    }
-
-    return {
-      betId: cached.betId,
-      roundId: cached.roundId,
-      playerId: cached.playerId,
-      cashOutMultiplier: cached.cashOutMultiplier,
-      payoutCents: BigInt(cached.payoutCents),
-    };
   }
 
   private async loadRound(roundId?: string): Promise<Round> {
@@ -149,25 +139,6 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     }
 
     return bet;
-  }
-
-  private async storeIdempotencyResult(
-    idempotencyKey: string,
-    playerId: string,
-    bet: { id: string },
-    round: Round,
-    payout: { toCents(): bigint },
-  ): Promise<void> {
-    const result: CashoutIdempotencyResult = {
-      betId: bet.id,
-      roundId: round.id,
-      playerId,
-      cashOutMultiplier: round.getCurrentMultiplier(),
-      payoutCents: Number(payout.toCents()),
-      cashedOutAt: new Date().toISOString(),
-    };
-
-    await this.idempotencyCache.setCashoutIdempotency(idempotencyKey, result);
   }
 
   private async broadcastCashOut(round: Round, events: any[]): Promise<void> {

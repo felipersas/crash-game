@@ -20,7 +20,6 @@ import { InboxProcessor } from './infrastructure/messaging/rabbitmq/inbox-proces
 import { PrismaInboxRepository } from './infrastructure/persistence/prisma/inbox.repository.impl';
 import { RoundLifecycleManager } from './infrastructure/scheduling/round-lifecycle-manager';
 import { RoundCrashHandler } from './infrastructure/scheduling/round-crash-handler';
-import { RedisService } from './infrastructure/redis/redis.service';
 import { MetricsInterceptor } from './infrastructure/interceptors/metrics.interceptor';
 import { PlaceBetUseCase } from './application/use-cases/place-bet.use-case';
 import { CashOutUseCase } from './application/use-cases/cash-out.use-case';
@@ -40,7 +39,6 @@ import {
   SEED_CHAIN_REPOSITORY,
   GAMES_GATEWAY,
   GAME_BROADCASTER,
-  IDEMPOTENCY_CACHE,
   ROUND_STATE_PROVIDER,
   INBOX_REPOSITORY,
 } from './application/di.tokens';
@@ -119,11 +117,6 @@ import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-
     {
       provide: INBOX_REPOSITORY,
       useClass: PrismaInboxRepository,
-    },
-    RedisService,
-    {
-      provide: IDEMPOTENCY_CACHE,
-      useExisting: RedisService,
     },
     RoundCrashHandler,
     RoundLifecycleManager,

@@ -38,7 +38,6 @@ describe('CashOutUseCase', () => {
   let mockBetRepo: any;
   let mockEventPublisher: any;
   let mockLifecycleManager: any;
-  let mockRedis: any;
   let mockGateway: any;
   let mockMetrics: any;
   let mockPrisma: any;
@@ -79,11 +78,6 @@ describe('CashOutUseCase', () => {
       getCurrentRound: mockFn(() => null),
     };
 
-    mockRedis = {
-      checkCashoutIdempotency: mockFn(async () => null),
-      setCashoutIdempotency: mockFn(async () => true),
-    };
-
     mockGateway = {
       broadcastPlayerCashedOut: mockFn(() => {}),
     };
@@ -114,7 +108,6 @@ describe('CashOutUseCase', () => {
       mockBetRepo,
       mockEventPublisher,
       mockLifecycleManager,
-      mockRedis,
       mockGateway,
       mockMetrics,
       mockPrisma as any,
@@ -141,49 +134,25 @@ describe('CashOutUseCase', () => {
     expect(result.betId).toBe(bet.id);
   });
 
-  test('Should return cached result for valid idempotency key', async () => {
-    const cachedResult = {
-      betId: 'bet-123',
-      roundId: 'round-123',
-      playerId: PLAYER_ID,
-      cashOutMultiplier: 2.5,
-      payoutCents: 2500,
-      cashedOutAt: new Date().toISOString(),
-    };
+  test('Should return existing result when bet is already cashed out (idempotency)', async () => {
+    const { round, bet } = await createActiveRoundWithBet();
 
-    mockRedis.checkCashoutIdempotency.mockResolvedValue(cachedResult);
+    // Simulate the bet already being cashed out
+    round.cashOut(PLAYER_ID);
+    const cashedOutBet = round.getBetByPlayer(PLAYER_ID);
+
+    mockLifecycleManager.getCurrentRound.mockReturnValue(round);
+    mockBetRepo.findByPlayerAndRound.mockResolvedValue(cashedOutBet);
 
     const result = await useCase.execute({
       playerId: PLAYER_ID,
       idempotencyKey: VALID_UUID,
     });
 
-    expect(result.betId).toBe('bet-123');
-    expect(result.roundId).toBe('round-123');
-    expect(result.cashOutMultiplier).toBe(2.5);
-    expect(result.payoutCents).toBe(2500n);
-    // Should NOT have called save since cached result was returned
-    expect(mockRoundRepo.save.calls.length).toBe(0);
-  });
-
-  test('Should throw InvalidIdempotencyKeyError for mismatched playerId on cached result', async () => {
-    const cachedResult = {
-      betId: 'bet-123',
-      roundId: 'round-123',
-      playerId: 'different-player',
-      cashOutMultiplier: 2.5,
-      payoutCents: 2500,
-      cashedOutAt: new Date().toISOString(),
-    };
-
-    mockRedis.checkCashoutIdempotency.mockResolvedValue(cachedResult);
-
-    expect(
-      useCase.execute({
-        playerId: PLAYER_ID,
-        idempotencyKey: VALID_UUID,
-      }),
-    ).rejects.toThrow(InvalidIdempotencyKeyError);
+    expect(result.betId).toBe(cashedOutBet.id);
+    expect(result.roundId).toBe(round.id);
+    // Should NOT have called update since bet was already cashed out
+    expect(mockBetRepo.update.calls.length).toBe(0);
   });
 
   test('Should throw InvalidIdempotencyKeyError for invalid UUID format', async () => {
@@ -268,21 +237,6 @@ describe('CashOutUseCase', () => {
     expect(updatedBet?.getStatus()).toBe(BetStatus.CASHED_OUT);
     // betRepository.update should have been called
     expect(mockBetRepo.update.calls.length).toBe(1);
-  });
-
-  test('Should store idempotency result in Redis', async () => {
-    const { round, bet } = await createActiveRoundWithBet();
-
-    mockLifecycleManager.getCurrentRound.mockReturnValue(round);
-    mockBetRepo.findByPlayerAndRound.mockResolvedValue(bet);
-
-    await useCase.execute({
-      playerId: PLAYER_ID,
-      idempotencyKey: VALID_UUID,
-    });
-
-    // setCashoutIdempotency should have been called
-    expect(mockRedis.setCashoutIdempotency.calls.length).toBe(1);
   });
 
   test('Should publish events and broadcast via WebSocket', async () => {

@@ -5,8 +5,6 @@ import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
-import { RedisService } from '@/infrastructure/redis/redis.service';
-import type { RoundState } from '@/infrastructure/redis/redis.service';
 import { ROUND_REPOSITORY, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/application/di.tokens';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
@@ -38,7 +36,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(SEED_CHAIN_REPOSITORY) private readonly seedChainRepository: ISeedChainRepository,
     @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
-    private readonly redisService: RedisService,
     private readonly crashHandler: RoundCrashHandler,
     private readonly prisma: PrismaService,
     private readonly outboxWriter: OutboxWriter,
@@ -299,8 +296,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     const elapsedSeconds = (Date.now() - this.roundStartTime.getTime()) / 1000;
     this.currentRound.updateMultiplier(elapsedSeconds);
 
-    this.persistToRedis();
-
     this.gamesGateway.broadcastMultiplierUpdate(
       this.currentRound.id,
       this.currentRound.getCurrentMultiplier(),
@@ -309,30 +304,6 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     if (this.currentRound.getStatus() === RoundStatus.CRASHED) {
       this.handleRoundCrashed();
     }
-  }
-
-  /**
-   * Persist current round state to Redis.
-   * Called on every multiplier update (every 100ms).
-   */
-  private persistToRedis(): void {
-    if (!this.currentRound) return;
-
-    const roundState: RoundState = {
-      id: this.currentRound.id,
-      status: this.currentRound.getStatus(),
-      crashPoint: this.currentRound.getCrashPoint(),
-      currentMultiplier: this.currentRound.getCurrentMultiplier(),
-      bettingEndTime: this.currentRound.getBettingEndTime()?.toISOString() || null,
-      startedAt: this.currentRound.getStartedAt()?.toISOString() || null,
-      crashedAt: this.currentRound.getCrashedAt()?.toISOString() || null,
-      version: this.currentRound.getVersion(),
-      lastUpdatedAt: Date.now(),
-    };
-
-    this.redisService.setCurrentRound(this.currentRound.id, roundState).catch((error) => {
-      this.logger.warn(`Failed to persist to Redis: ${error}`);
-    });
   }
 
   /**

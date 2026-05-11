@@ -141,7 +141,7 @@ When working in specific areas of the codebase, read and follow the relevant ski
 | **frontend** | `.claude/skills/frontend/SKILL.md` | Any change to `frontend/` — components, hooks, store, WebSocket client, API layer |
 | **domain-modeling** | `.claude/skills/domain-modeling/SKILL.md` | Creating/modifying entities, value objects, domain events, errors, or Money usage |
 | **testing-patterns** | `.claude/skills/testing-patterns/SKILL.md` | Writing unit or E2E tests — mock factories, entity tests, use case tests |
-| **infrastructure** | `.claude/skills/infrastructure/SKILL.md` | Docker, Kong routes, Keycloak, RabbitMQ config, Redis, environment changes |
+| **infrastructure** | `.claude/skills/infrastructure/SKILL.md` | Docker, Kong routes, Keycloak, RabbitMQ config, environment changes |
 | **messaging** | `.claude/skills/messaging/SKILL.md` | Event schemas, RabbitMQ handlers, inbox/outbox, saga coordination between services |
 
 ### How to Use Skills

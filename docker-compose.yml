@@ -41,28 +41,6 @@ services:
       retries: 10
 
   # ---------------------------------------------------------------------------
-  # Redis (Fast in-memory data store for current game state)
-  # ---------------------------------------------------------------------------
-  redis:
-    image: redis:7.4-alpine
-    ports:
-      - "6379:6379"
-    command: [
-      "redis-server",
-      "--appendonly", "yes",           # AOF persistence for durability
-      "--appendfsync", "everysec",     # Sync every second (balance speed/durability)
-      "--maxmemory", "256mb",          # Limit memory usage
-      "--maxmemory-policy", "allkeys-lru",  # Evict least recently used keys
-    ]
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  # ---------------------------------------------------------------------------
   # Keycloak (Identity Provider)
   # ---------------------------------------------------------------------------
   keycloak:
@@ -134,13 +112,10 @@ services:
       DATABASE_PORT: 5432
       DATABASE_USER: admin
       DATABASE_PASSWORD: admin
-      REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:4001/games/health || exit 1"]
@@ -247,40 +222,7 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  # ---------------------------------------------------------------------------
-  # Grafana (Dashboards & visualization)
-  # ---------------------------------------------------------------------------
-  grafana:
-    image: grafana/grafana:11.6.1
-    ports:
-      - "3001:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes:
-      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana_data:/var/lib/grafana
-    depends_on:
-      - prometheus
-
-  # ---------------------------------------------------------------------------
-  # Redis Exporter (Prometheus metrics for Redis)
-  # ---------------------------------------------------------------------------
-  redis-exporter:
-    image: oliver006/redis_exporter:v1.70.0
-    ports:
-      - "9121:9121"
-    environment:
-      REDIS_ADDR: redis:6379
-    depends_on:
-      redis:
-        condition: service_healthy
-
 volumes:
   postgres_data:
   rabbitmq_data:
-  redis_data:
   prometheus_data:
-  grafana_data:

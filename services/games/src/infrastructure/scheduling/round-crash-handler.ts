@@ -5,7 +5,6 @@ import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { ROUND_REPOSITORY, BET_REPOSITORY, GAMES_GATEWAY } from '@/application/di.tokens';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
-import { RedisService } from '@/infrastructure/redis/redis.service';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
@@ -17,7 +16,6 @@ import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
  * 2. Settles bets (LOST/CANCELLED) via BetRepository
  * 3. Publishes domain events via message broker
  * 4. Broadcasts crash via WebSocket
- * 5. Cleans up Redis state
  */
 @Injectable()
 export class RoundCrashHandler {
@@ -27,7 +25,6 @@ export class RoundCrashHandler {
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
-    private readonly redisService: RedisService,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
     private readonly prisma: PrismaService,
     private readonly outboxWriter: OutboxWriter,
@@ -52,7 +49,6 @@ export class RoundCrashHandler {
     const latestRound = await this.roundRepository.findById(roundId);
     if (!latestRound) {
       this.logger.error(`Round ${roundId} not found in DB during crash handling`);
-      await this.redisService.deleteRound(roundId);
       return inMemoryRound;
     }
 
@@ -106,8 +102,6 @@ export class RoundCrashHandler {
     if (totalBetAmount > 0) {
       this.metrics.setRtp((totalWinAmount / totalBetAmount) * 100);
     }
-
-    await this.redisService.deleteRound(roundId);
 
     // Publish events from DB version (has authoritative state) via outbox
     const events = latestRound.pullEvents();
