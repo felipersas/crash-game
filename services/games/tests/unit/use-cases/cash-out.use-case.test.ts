@@ -41,28 +41,23 @@ describe('CashOutUseCase', () => {
   let mockRedis: any;
   let mockGateway: any;
   let mockMetrics: any;
+  let mockPrisma: any;
+  let mockOutboxWriter: any;
 
   // Use deterministic seed to guarantee a high crash point so updateMultiplier doesn't crash early
   async function createActiveRoundWithBet(): Promise<{ round: Round; bet: Bet }> {
-    const orig = process.env.DETERMINISTIC_SEED;
-    process.env.DETERMINISTIC_SEED = 'test-crash-10.0';
-    try {
-      const round = await Round.create();
-      const amount = Money.fromDecimal('10.00');
-      round.placeBet(PLAYER_ID, PLAYER_NAME, amount);
+    const round = await Round.create(undefined, 'test-crash-10.0');
+    const amount = Money.fromDecimal('10.00');
+    round.placeBet(PLAYER_ID, PLAYER_NAME, amount);
 
-      const bet = round.getBetByPlayer(PLAYER_ID)!;
-      bet.confirm();
+    const bet = round.getBetByPlayer(PLAYER_ID)!;
+    bet.confirm();
 
-      await round.startRound();
-      // With test-crash-10.0, crash is around 10x, so multiplier 5 is safe
-      round.updateMultiplier(5);
+    await round.startRound();
+    // With test-crash-10.0, crash is around 10x, so multiplier 5 is safe
+    round.updateMultiplier(5);
 
-      return { round, bet };
-    } finally {
-      if (orig !== undefined) process.env.DETERMINISTIC_SEED = orig;
-      else delete process.env.DETERMINISTIC_SEED;
-    }
+    return { round, bet };
   }
 
   beforeEach(() => {
@@ -98,6 +93,22 @@ describe('CashOutUseCase', () => {
       incrPayout: mockFn(() => {}),
     };
 
+    mockPrisma = {
+      $transaction: mockFn(async (fn: any) => {
+        const tx = {
+          outboxEvent: { create: async () => {} },
+          round: { create: async () => {}, update: async () => {} },
+          bet: { create: async () => {}, update: async () => {} },
+        };
+        return fn(tx);
+      }),
+    };
+
+    mockOutboxWriter = {
+      writeWithinTransaction: mockFn(async () => ['outbox-id-1']),
+      tryImmediatePublish: mockFn(async () => {}),
+    };
+
     useCase = new CashOutUseCase(
       mockRoundRepo,
       mockBetRepo,
@@ -106,6 +117,8 @@ describe('CashOutUseCase', () => {
       mockRedis,
       mockGateway,
       mockMetrics,
+      mockPrisma as any,
+      mockOutboxWriter as any,
     );
   });
 
@@ -283,7 +296,8 @@ describe('CashOutUseCase', () => {
       idempotencyKey: VALID_UUID,
     });
 
-    expect(mockEventPublisher.publishBatch.calls.length).toBe(1);
+    expect(mockOutboxWriter.writeWithinTransaction.calls.length).toBe(1);
+    // Events are now published via outboxWriter within transaction
     expect(mockGateway.broadcastPlayerCashedOut.calls.length).toBe(1);
   });
 

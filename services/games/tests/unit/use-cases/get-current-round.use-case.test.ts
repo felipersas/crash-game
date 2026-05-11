@@ -92,34 +92,27 @@ describe('GetCurrentRoundUseCase', () => {
   });
 
   test('Should map bet output correctly with cash out data', async () => {
-    const orig = process.env.DETERMINISTIC_SEED;
-    process.env.DETERMINISTIC_SEED = 'test-crash-10.0';
-    try {
-      const round = await Round.create();
-      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
-      const bet = round.getBetByPlayer('player-1')!;
-      bet.confirm();
-      await round.startRound();
-      // Use a modest multiplier safe for crash ~10x
-      round.updateMultiplier(5);
+    const round = await Round.create(undefined, 'test-crash-10.0');
+    round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
+    const bet = round.getBetByPlayer('player-1')!;
+    bet.confirm();
+    await round.startRound();
+    // Use a modest multiplier safe for crash ~10x
+    round.updateMultiplier(5);
 
-      // Cash out the bet so it has cash out data
-      round.cashOut('player-1');
+    // Cash out the bet so it has cash out data
+    round.cashOut('player-1');
 
-      mockRoundRepo.findCurrentRound.mockResolvedValue(round);
+    mockRoundRepo.findCurrentRound.mockResolvedValue(round);
 
-      const result = await useCase.execute({ includeBets: true });
+    const result = await useCase.execute({ includeBets: true });
 
-      expect(result.bets).toHaveLength(1);
-      const betOutput = result.bets[0];
-      expect(betOutput.status).toBe(BetStatus.CASHED_OUT);
-      expect(betOutput.cashOutMultiplier).not.toBeNull();
-      expect(betOutput.cashOutMultiplier).toBeGreaterThan(1);
-      expect(betOutput.cashOutAmountCents).not.toBeNull();
-      expect(betOutput.cashedOutAt).not.toBeNull();
-    } finally {
-      if (orig !== undefined) process.env.DETERMINISTIC_SEED = orig;
-      else delete process.env.DETERMINISTIC_SEED;
-    }
+    expect(result.bets).toHaveLength(1);
+    const betOutput = result.bets[0];
+    expect(betOutput.status).toBe(BetStatus.CASHED_OUT);
+    expect(betOutput.cashOutMultiplier).not.toBeNull();
+    expect(betOutput.cashOutMultiplier).toBeGreaterThan(1);
+    expect(betOutput.cashOutAmountCents).not.toBeNull();
+    expect(betOutput.cashedOutAt).not.toBeNull();
   });
 });

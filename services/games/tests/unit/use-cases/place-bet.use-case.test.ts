@@ -71,6 +71,26 @@ function createMockEventPublisher() {
   };
 }
 
+function createMockPrisma() {
+  return {
+    $transaction: mockFn(async (fn: any) => {
+      const tx = {
+        outboxEvent: { create: mockFn(() => Promise.resolve()) },
+        round: { create: mockFn(() => Promise.resolve()), update: mockFn(() => Promise.resolve()) },
+        bet: { create: mockFn(() => Promise.resolve()), update: mockFn(() => Promise.resolve()) },
+      };
+      return fn(tx);
+    }),
+  };
+}
+
+function createMockOutboxWriter() {
+  return {
+    writeWithinTransaction: mockFn(() => Promise.resolve(['outbox-id-1'])),
+    tryImmediatePublish: mockFn(() => Promise.resolve()),
+  };
+}
+
 function createMockGamesGateway(overrides = {}) {
   return {
     broadcastBetPlaced: mockFn(() => {}),
@@ -98,6 +118,8 @@ describe('PlaceBetUseCase', () => {
   let eventPublisher: ReturnType<typeof createMockEventPublisher>;
   let gamesGateway: ReturnType<typeof createMockGamesGateway>;
   let metrics: ReturnType<typeof createMockMetrics>;
+  let prisma: ReturnType<typeof createMockPrisma>;
+  let outboxWriter: ReturnType<typeof createMockOutboxWriter>;
   let useCase: PlaceBetUseCase;
 
   const playerId = 'player-123';
@@ -110,12 +132,16 @@ describe('PlaceBetUseCase', () => {
     eventPublisher = createMockEventPublisher();
     gamesGateway = createMockGamesGateway();
     metrics = createMockMetrics();
+    prisma = createMockPrisma();
+    outboxWriter = createMockOutboxWriter();
     useCase = new PlaceBetUseCase(
       roundRepository as any,
       betRepository as any,
       eventPublisher as any,
       gamesGateway as any,
       metrics as any,
+      prisma as any,
+      outboxWriter as any,
     );
   });
 
@@ -152,23 +178,23 @@ describe('PlaceBetUseCase', () => {
     expect(betRepository.create.callCount).toBe(1);
   });
 
-  test('should publish domain events', async () => {
+  test('should write domain events to outbox', async () => {
     const round = await Round.create(DEFAULT_ROUND_CONFIG);
     round.pullEvents();
     roundRepository.findCurrentRound.mockResolvedValue(round);
 
     await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
-    expect(eventPublisher.publishBatch.callCount).toBe(1);
+    expect(outboxWriter.writeWithinTransaction.callCount).toBe(1);
   });
 
-  test('should publish events for new round creation and bet placement', async () => {
+  test('should write events for new round creation and bet placement to outbox', async () => {
     roundRepository.findCurrentRound.mockResolvedValue(null);
 
     await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
     // First call: events from round creation; second call: events from bet placement
-    expect(eventPublisher.publishBatch.callCount).toBe(2);
+    expect(prisma.$transaction.callCount).toBe(2);
   });
 
   test('should broadcast via WebSocket', async () => {

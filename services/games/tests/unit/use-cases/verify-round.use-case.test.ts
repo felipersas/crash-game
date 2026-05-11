@@ -1,9 +1,11 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { VerifyRoundUseCase } from '../../../src/application/use-cases/verify-round.use-case';
-import { Round, RoundStatus } from '../../../src/domain/entities/round.entity';
+import { Round } from '../../../src/domain/entities/round.entity';
 import { Money } from '@crash/domain';
-import { RoundNotFoundError } from '../../../src/domain/errors/domain.errors';
-import { UnauthorizedException } from '@nestjs/common';
+import {
+  RoundNotFoundError,
+  SeedNotAvailableError,
+} from '../../../src/domain/errors/domain.errors';
 
 function mockFn<T extends (...args: any[]) => any>(
   impl?: T,
@@ -32,24 +34,13 @@ describe('VerifyRoundUseCase', () => {
 
   // Create a real crashed round using deterministic seed for reproducibility
   async function createCrashedRound(): Promise<Round> {
-    const originalEnv = process.env.DETERMINISTIC_SEED;
-    process.env.DETERMINISTIC_SEED = 'test-crash-2.00';
-
-    try {
-      const round = await Round.create();
-      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
-      round.getBetByPlayer('player-1')!.confirm();
-      await round.startRound();
-      // Force crash
-      round.updateMultiplier(1000);
-      return round;
-    } finally {
-      if (originalEnv !== undefined) {
-        process.env.DETERMINISTIC_SEED = originalEnv;
-      } else {
-        delete process.env.DETERMINISTIC_SEED;
-      }
-    }
+    const round = await Round.create(undefined, 'test-crash-2.00');
+    round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
+    round.getBetByPlayer('player-1')!.confirm();
+    await round.startRound();
+    // Force crash
+    round.updateMultiplier(1000);
+    return round;
   }
 
   test('Should verify a crashed round and return verification result', async () => {
@@ -78,7 +69,7 @@ describe('VerifyRoundUseCase', () => {
     const round = await Round.create();
     mockRoundRepo.findById.mockResolvedValue(round);
 
-    expect(useCase.execute({ roundId: round.id })).rejects.toThrow(UnauthorizedException);
+    expect(useCase.execute({ roundId: round.id })).rejects.toThrow(SeedNotAvailableError);
   });
 
   test('Should show verified: true when seed hash matches and crash point matches', async () => {

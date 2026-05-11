@@ -49,41 +49,21 @@ describe('Deterministic Seed', () => {
     }
   });
 
-  test('random seeds should be used when DETERMINISTIC_SEED is not set', async () => {
-    // Clear the env var if it exists
-    const originalValue = process.env.DETERMINISTIC_SEED;
-    delete process.env.DETERMINISTIC_SEED;
-
+  test('random seeds should be used when deterministic seed is not provided', async () => {
     const chain1 = await SeedChain.generate();
     const chain2 = await SeedChain.generate();
 
     // Random seeds should be different (extremely unlikely to be the same)
     expect(chain1.getSeed()).not.toBe(chain2.getSeed());
-
-    // Restore original value
-    if (originalValue) {
-      process.env.DETERMINISTIC_SEED = originalValue;
-    }
   });
 
-  test('DETERMINISTIC_SEED env var should be respected', async () => {
+  test('deterministic seed parameter should be respected', async () => {
     const testSeed = 'test-seed-env-var';
 
-    // Set the env var
-    const originalValue = process.env.DETERMINISTIC_SEED;
-    process.env.DETERMINISTIC_SEED = testSeed;
+    const chain1 = await SeedChain.generate(1000, testSeed);
+    const chain2 = await SeedChain.generate(1000, testSeed);
 
-    const chain1 = await SeedChain.generate();
-    const chain2 = await SeedChain.generate();
-
-    // Should produce the same seed because DETERMINISTIC_SEED is set
+    // Should produce the same seed because deterministic seed is provided
     expect(chain1.getSeed()).toBe(chain2.getSeed());
-
-    // Restore original value
-    if (originalValue) {
-      process.env.DETERMINISTIC_SEED = originalValue;
-    } else {
-      delete process.env.DETERMINISTIC_SEED;
-    }
   });
 });
