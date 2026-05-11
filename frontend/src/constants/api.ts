@@ -1,6 +1,5 @@
 export const API_ENDPOINTS = {
   GAMES: {
-    HEALTH: '/games/health',
     BET: '/games/bet',
     CASHOUT: '/games/bet/cashout',
     CURRENT_ROUND: '/games/rounds/current',
@@ -9,9 +8,7 @@ export const API_ENDPOINTS = {
     MY_BETS: '/games/bets/me',
   },
   WALLETS: {
-    HEALTH: '/wallets/health',
     CREATE: '/wallets',
     ME: '/wallets/me',
   },
-  WS: '/games',
 } as const;

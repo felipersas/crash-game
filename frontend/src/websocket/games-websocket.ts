@@ -11,9 +11,8 @@ const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:8000';
 const INITIAL_RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_DELAY = 30000;
 const MAX_RECONNECT_ATTEMPTS = 20;
-const BACKOFF_FACTOR = 1.5;
 
-export interface GamesWebSocketConfig {
+interface GamesWebSocketConfig {
   token?: string;
   onConnect?: () => void;
   onDisconnect?: (reason: string) => void;
@@ -27,12 +26,6 @@ export interface GamesWebSocketConfig {
   onBetConfirmed?: (data: Parameters<ServerToClientEvents['betConfirmed']>[0]) => void;
   onBetCancelled?: (data: Parameters<ServerToClientEvents['betCancelled']>[0]) => void;
   onPlayerCashedOut?: (data: Parameters<ServerToClientEvents['playerCashedOut']>[0]) => void;
-}
-
-function getBackoffDelay(attempt: number): number {
-  const delay = INITIAL_RECONNECT_DELAY * Math.pow(BACKOFF_FACTOR, attempt - 1);
-  const jittered = delay * (0.8 + Math.random() * 0.4);
-  return Math.min(jittered, MAX_RECONNECT_DELAY);
 }
 
 /**
@@ -75,13 +68,11 @@ export class GamesWebSocket {
     if (!this.socket) return;
 
     this.socket.on('connect', () => {
-      console.log('WebSocket connected:', this.socket?.id);
       this.reconnectAttempts = 0;
       this.config.onConnect?.();
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('WebSocket disconnected:', reason);
       this.config.onDisconnect?.(reason);
     });
 
@@ -92,8 +83,6 @@ export class GamesWebSocket {
     });
 
     this.socket.io.on('reconnect_attempt', (attempt) => {
-      const delay = getBackoffDelay(attempt);
-      console.log(`WebSocket reconnect attempt ${attempt}, next backoff ~${Math.round(delay)}ms`);
       this.config.onReconnecting?.(attempt);
     });
 

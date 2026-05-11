@@ -1,41 +1,8 @@
 import { z } from "zod";
 import { RoundStatus, BetStatus } from "@/types/game.types";
 
-// Money schema (both formats for safety)
-export const moneySchema = z.object({
-  cents: z.number().int().nonnegative(),
-  decimal: z.string(),
-});
-
-// Bet schema
-export const betSchema = z.object({
-  id: z.string().uuid(),
-  roundId: z.string().uuid(),
-  playerId: z.string(),
-  playerName: z.string(),
-  amountCents: z.number().int().nonnegative(),
-  amountDecimal: z.string(),
-  status: z.nativeEnum(BetStatus),
-  cashOutMultiplier: z.number().nonnegative().nullable(),
-  cashOutAmountCents: z.number().int().nonnegative().nullable(), // backend still sends this for current round bets
-  cashOutAmountDecimal: z.string().nullable(),
-  cashedOutAt: z.coerce.date().nullable(),
-});
-
-// Round schema
-export const roundSchema = z.object({
-  roundId: z.string().uuid(),
-  status: z.nativeEnum(RoundStatus),
-  crashPoint: z.number().nonnegative().nullable(),
-  currentMultiplier: z.number().nonnegative(),
-  bettingEndTime: z.coerce.date().nullable(),
-  startedAt: z.coerce.date().nullable(),
-  crashedAt: z.coerce.date().nullable(),
-  bets: z.array(betSchema),
-});
-
 // Round summary schema (for history)
-export const roundSummarySchema = z.object({
+const roundSummarySchema = z.object({
   roundId: z.string().uuid(),
   crashPoint: z.number().nonnegative().nullable(),
   status: z.nativeEnum(RoundStatus),
@@ -47,7 +14,7 @@ export const roundSummarySchema = z.object({
 });
 
 // Pagination meta schema
-export const paginationMetaSchema = z.object({
+const paginationMetaSchema = z.object({
   page: z.number().int().positive(),
   limit: z.number().int().positive(),
   total: z.number().int().nonnegative(),
@@ -55,40 +22,21 @@ export const paginationMetaSchema = z.object({
 });
 
 // Get round history response (page-based)
-export const getRoundHistoryResponseSchema = z.object({
+const getRoundHistoryResponseSchema = z.object({
   data: z.array(roundSummarySchema),
   meta: paginationMetaSchema,
 });
 
-// Wallet schema
-export const walletSchema = z.object({
-  walletId: z.string().uuid(),
-  playerId: z.string(),
-  balance: z.string(), // Decimal string for precision
-  version: z.number().int().positive(),
-});
-
-// Place bet request
-export const placeBetRequestSchema = z.object({
-  amount: z.number().int().min(100).max(100000), // Amount in cents
-});
-
 // Place bet response
-export const placeBetResponseSchema = z.object({
+const placeBetResponseSchema = z.object({
   roundId: z.string().uuid(),
   betId: z.string().uuid(),
   amountCents: z.number().int().nonnegative(),
   status: z.nativeEnum(BetStatus),
 });
 
-// Cash out request
-export const cashOutRequestSchema = z.object({
-  idempotencyKey: z.string().uuid(),
-  roundId: z.string().uuid().optional(),
-});
-
 // Cash out response
-export const cashOutResponseSchema = z.object({
+const cashOutResponseSchema = z.object({
   betId: z.string().uuid(),
   roundId: z.string().uuid(),
   playerId: z.string(),
@@ -98,7 +46,7 @@ export const cashOutResponseSchema = z.object({
 });
 
 // Verify round response
-export const verifyRoundResponseSchema = z.object({
+const verifyRoundResponseSchema = z.object({
   roundId: z.string().uuid(),
   seed: z.string(),
   seedHash: z.string(),
@@ -109,7 +57,7 @@ export const verifyRoundResponseSchema = z.object({
 });
 
 // My bet schema
-export const myBetSchema = z.object({
+const myBetSchema = z.object({
   id: z.string().uuid(),
   roundId: z.string().uuid(),
   amountCents: z.number().int().nonnegative(),
@@ -125,7 +73,7 @@ export const myBetSchema = z.object({
 });
 
 // Bets summary schema
-export const betsSummarySchema = z.object({
+const betsSummarySchema = z.object({
   totalWageredCents: z.number().int().nonnegative(),
   totalWageredDecimal: z.string(),
   wins: z.number().int().nonnegative(),
@@ -135,7 +83,7 @@ export const betsSummarySchema = z.object({
 });
 
 // Get my bets response
-export const getMyBetsResponseSchema = z.object({
+const getMyBetsResponseSchema = z.object({
   data: z.array(myBetSchema),
   meta: paginationMetaSchema,
   summary: betsSummarySchema,
