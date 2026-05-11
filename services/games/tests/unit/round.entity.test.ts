@@ -122,7 +122,9 @@ describe('Round Entity', () => {
 
       await round.startRound();
 
-      expect(() => round.placeBet(playerId, 'Player One', amount)).toThrow(RoundNotAcceptingBetsError);
+      expect(() => round.placeBet(playerId, 'Player One', amount)).toThrow(
+        RoundNotAcceptingBetsError,
+      );
     });
 
     test('should reject duplicate bet from same player', () => {
@@ -521,8 +523,12 @@ describe('Round Entity', () => {
     test('should use default config when not provided', async () => {
       const defaultRound = await Round.create();
 
-      expect(() => defaultRound.placeBet('p1', 'Player 1', Money.fromDecimal('1.00'))).not.toThrow();
-      expect(() => defaultRound.placeBet('p2', 'Player 2', Money.fromDecimal('1000.00'))).not.toThrow();
+      expect(() =>
+        defaultRound.placeBet('p1', 'Player 1', Money.fromDecimal('1.00')),
+      ).not.toThrow();
+      expect(() =>
+        defaultRound.placeBet('p2', 'Player 2', Money.fromDecimal('1000.00')),
+      ).not.toThrow();
     });
 
     test('should accept custom config', async () => {
