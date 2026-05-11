@@ -76,7 +76,11 @@ describe('DebitWalletUseCase', () => {
     mockWalletRepo = createMockWalletRepository();
     mockEventPublisher = createMockEventPublisher();
     mockMetrics = createMockMetrics();
-    useCase = new DebitWalletUseCase(mockWalletRepo as any, mockEventPublisher as any, mockMetrics as any);
+    useCase = new DebitWalletUseCase(
+      mockWalletRepo as any,
+      mockEventPublisher as any,
+      mockMetrics as any,
+    );
   });
 
   test('should debit amount from wallet with sufficient balance', async () => {

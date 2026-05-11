@@ -72,7 +72,11 @@ describe('CreditWalletUseCase', () => {
     mockWalletRepo = createMockWalletRepository();
     mockEventPublisher = createMockEventPublisher();
     mockMetrics = createMockMetrics();
-    useCase = new CreditWalletUseCase(mockWalletRepo as any, mockEventPublisher as any, mockMetrics as any);
+    useCase = new CreditWalletUseCase(
+      mockWalletRepo as any,
+      mockEventPublisher as any,
+      mockMetrics as any,
+    );
   });
 
   test('should credit amount to existing wallet', async () => {
