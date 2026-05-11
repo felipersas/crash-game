@@ -243,7 +243,7 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
       </div>
 
       {/* Progress Bar */}
-      {!isActivePhase && (
+      {phase !== "active" && (
         <div className="h-2 bg-surface-bright/20 relative overflow-hidden">
           <motion.div
             className={`h-full ${isCrashed ? "bg-error" : "bg-primary"}`}
