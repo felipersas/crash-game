@@ -71,6 +71,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
 
     const round = await this.loadRound(input.roundId);
     const bet = await this.loadBet(input.playerId, round.id);
+    round.syncBet(bet);
     const payout = round.cashOut(input.playerId);
 
     // Persist updated bet status + round + outbox events atomically
@@ -82,7 +83,6 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
       if (cashedOutBet) {
         await this.betRepository.update(cashedOutBet, tx);
       }
-      await this.roundRepository.save(round, tx);
       if (events.length > 0) {
         outboxIds = await this.outboxWriter.writeWithinTransaction(tx, round.id, events);
       }

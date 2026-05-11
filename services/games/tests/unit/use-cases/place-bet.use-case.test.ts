@@ -147,7 +147,7 @@ describe('PlaceBetUseCase', () => {
 
   test('should place bet on existing round', async () => {
     const round = await Round.create(DEFAULT_ROUND_CONFIG);
-    round.pullEvents(); // Clear round creation events
+    round.pullEvents();
     roundRepository.findCurrentRound.mockResolvedValue(round);
 
     const result = await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
@@ -193,7 +193,6 @@ describe('PlaceBetUseCase', () => {
 
     await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
-    // First call: events from round creation; second call: events from bet placement
     expect(prisma.$transaction.callCount).toBe(2);
   });
 
@@ -215,7 +214,6 @@ describe('PlaceBetUseCase', () => {
       throw new Error('WS connection lost');
     });
 
-    // Should NOT throw
     const result = await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
     expect(result.betId).toBeDefined();
@@ -227,7 +225,7 @@ describe('PlaceBetUseCase', () => {
     round.pullEvents();
     roundRepository.findCurrentRound.mockResolvedValue(round);
 
-    const belowMinCents = 50n; // $0.50, below $1.00 minimum
+    const belowMinCents = 50n;
 
     expect(useCase.execute({ playerId, playerName, amountCents: belowMinCents })).rejects.toThrow(
       BetBelowMinimumError,
@@ -239,21 +237,21 @@ describe('PlaceBetUseCase', () => {
     round.pullEvents();
     roundRepository.findCurrentRound.mockResolvedValue(round);
 
-    const aboveMaxCents = 100_000_00n; // $100,000.00, above $1,000.00 maximum
+    const aboveMaxCents = 100_000_00n;
 
     expect(useCase.execute({ playerId, playerName, amountCents: aboveMaxCents })).rejects.toThrow(
       BetAboveMaximumError,
     );
   });
 
-  test('should save round after placing bet', async () => {
+  test('should NOT save round when placing bet (bet is separate entity)', async () => {
     const round = await Round.create(DEFAULT_ROUND_CONFIG);
     round.pullEvents();
     roundRepository.findCurrentRound.mockResolvedValue(round);
 
     await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
-    expect(roundRepository.save.callCount).toBe(1);
+    expect(roundRepository.save.callCount).toBe(0);
   });
 
   test('should return output with correct fields', async () => {
@@ -271,5 +269,20 @@ describe('PlaceBetUseCase', () => {
     expect(typeof result.betId).toBe('string');
     expect(typeof result.amountCents).toBe('bigint');
     expect(typeof result.status).toBe('string');
+  });
+
+  describe('Bet replacement', () => {
+    test('should handle bet replacement when player has PENDING bet', async () => {
+      const round = await Round.create(DEFAULT_ROUND_CONFIG);
+      round.pullEvents();
+      round.placeBet(playerId, playerName, Money.fromDecimal('5.00'));
+      roundRepository.findCurrentRound.mockResolvedValue(round);
+
+      const result = await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
+
+      expect(betRepository.update.callCount).toBe(1);
+      expect(betRepository.create.callCount).toBe(1);
+      expect(result.amountCents).toBe(validAmountCents);
+    });
   });
 });
