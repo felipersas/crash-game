@@ -5,7 +5,11 @@ import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { ROUND_REPOSITORY } from '@/application/di.tokens';
 import { RoundStatus } from '@/domain/entities/round.entity';
-import { RoundNotFoundError, SeedNotAvailableError, VerificationFailedError } from '@/domain/errors/domain.errors';
+import {
+  RoundNotFoundError,
+  SeedNotAvailableError,
+  VerificationFailedError,
+} from '@/domain/errors/domain.errors';
 
 export interface VerifyRoundInput {
   roundId: string;

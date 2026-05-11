@@ -7,11 +7,7 @@ import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.r
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
 import { RedisService } from '@/infrastructure/redis/redis.service';
 import type { RoundState } from '@/infrastructure/redis/redis.service';
-import {
-  ROUND_REPOSITORY,
-  GAMES_GATEWAY,
-  SEED_CHAIN_REPOSITORY,
-} from '@/application/di.tokens';
+import { ROUND_REPOSITORY, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/application/di.tokens';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
 import { RoundCrashHandler } from './round-crash-handler';
@@ -213,7 +209,11 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       await this.prisma.$transaction(async (tx) => {
         await this.roundRepository.save(this.currentRound!, tx);
         if (events.length > 0) {
-          outboxIds = await this.outboxWriter.writeWithinTransaction(tx, this.currentRound!.id, events);
+          outboxIds = await this.outboxWriter.writeWithinTransaction(
+            tx,
+            this.currentRound!.id,
+            events,
+          );
         }
       });
 
@@ -250,7 +250,11 @@ export class RoundLifecycleManager implements IRoundStateProvider {
           await this.prisma.$transaction(async (tx) => {
             await this.roundRepository.save(reloaded, tx);
             if (retryEvents.length > 0) {
-              retryOutboxIds = await this.outboxWriter.writeWithinTransaction(tx, reloaded.id, retryEvents);
+              retryOutboxIds = await this.outboxWriter.writeWithinTransaction(
+                tx,
+                reloaded.id,
+                retryEvents,
+              );
             }
           });
 

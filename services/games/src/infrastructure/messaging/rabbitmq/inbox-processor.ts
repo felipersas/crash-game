@@ -54,7 +54,9 @@ export class InboxProcessor {
       const failedEvents = await this.inboxRepository.findFailed(this.MAX_RETRIES);
 
       for (const event of failedEvents) {
-        this.logger.warn(`Retrying failed inbox event: ${event.idempotencyKey} (attempt ${event.retryCount + 1})`);
+        this.logger.warn(
+          `Retrying failed inbox event: ${event.idempotencyKey} (attempt ${event.retryCount + 1})`,
+        );
 
         try {
           if (event.eventType === 'WalletDebited') {

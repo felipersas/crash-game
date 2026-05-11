@@ -3,11 +3,7 @@ import { type Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
-import {
-  ROUND_REPOSITORY,
-  BET_REPOSITORY,
-  GAMES_GATEWAY,
-} from '@/application/di.tokens';
+import { ROUND_REPOSITORY, BET_REPOSITORY, GAMES_GATEWAY } from '@/application/di.tokens';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
 import { RedisService } from '@/infrastructure/redis/redis.service';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';

@@ -231,23 +231,6 @@ export class SeedChain {
   }
 
   /**
-   * Verify a seed at a specific position in the chain.
-   * Used by players to verify past rounds.
-   */
-  async verifySeedAtPosition(position: number, seed: string): Promise<boolean> {
-    if (position < 0 || position >= this.seeds.length) {
-      return false;
-    }
-
-    // The seed at position N should hash to seed at position N+1
-    const expectedNextSeed =
-      position < this.seeds.length - 1 ? this.seeds[position + 1] : this.commitment;
-
-    const actualHash = await SeedChain.hashSeed(seed);
-    return actualHash === expectedNextSeed;
-  }
-
-  /**
    * Generate a cryptographically secure random seed (32 bytes = 64 hex chars).
    */
   private static async generateRandomSeed(): Promise<string> {

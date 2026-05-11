@@ -8,10 +8,7 @@
  * for these events is in the Wallets service.
  */
 
-/**
- * Base domain event interface (minimal version for external consumption).
- */
-export interface BaseDomainEvent {
+interface BaseDomainEvent {
   readonly aggregateId: string;
   readonly occurredAt: Date;
   readonly version: number;
@@ -43,8 +40,3 @@ export interface WalletDebitFailedEvent extends BaseDomainEvent {
   readonly reason: string;
   timestamp: Date;
 }
-
-/**
- * Union type of all wallet events consumed by Games service.
- */
-export type WalletDomainEvent = WalletDebitedEvent | WalletDebitFailedEvent;
