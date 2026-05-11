@@ -12,6 +12,7 @@ concurrency:
 
 env:
   BUN_VERSION: "latest"
+  NODE_VERSION: "22"
 
 jobs:
   unit-tests-games:
@@ -24,21 +25,19 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Cache bun global
-        uses: actions/cache@v4
+      - uses: actions/setup-node@v4
         with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
-      - run: bun install --frozen-lockfile
+      - run: npm ci
 
       - run: |
-          cd packages/domain && bun run build
-          cd ../messaging && bun run build
-          cd ../observability && bun run build
+          cd packages/domain && npx tsc
+          cd ../messaging && npx tsc
+          cd ../observability && npx tsc
 
-      - run: cd services/games && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
+      - run: cd services/games && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
 
       - name: Run unit tests
         run: bun test services/games/tests/unit
@@ -53,30 +52,19 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Cache bun global
-        uses: actions/cache@v4
+      - uses: actions/setup-node@v4
         with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
-      - run: bun install
+      - run: npm ci
 
       - run: |
-          cd packages/domain && bun run build
-          cd ../messaging && bun run build
-          cd ../observability && bun run build
+          cd packages/domain && npx tsc
+          cd ../messaging && npx tsc
+          cd ../observability && npx tsc
 
-      - run: cd services/wallets && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
-
-      - name: Debug module resolution
-        run: |
-          echo "=== node_modules/@crash ==="
-          ls -la node_modules/@crash/ 2>/dev/null || echo "NOT FOUND"
-          echo "=== domain dist ==="
-          ls packages/domain/dist/ 2>/dev/null || echo "NOT FOUND"
-          echo "=== readlink ==="
-          readlink -f node_modules/@crash/domain 2>/dev/null || echo "NOT A SYMLINK"
+      - run: cd services/wallets && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
 
       - name: Run unit tests
         run: bun test services/wallets/tests/unit
@@ -91,14 +79,12 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Cache bun global
-        uses: actions/cache@v4
+      - uses: actions/setup-node@v4
         with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
-      - run: bun install --frozen-lockfile
+      - run: npm ci
 
       - name: Check games formatting
         run: bun run --cwd services/games format:check
@@ -118,19 +104,17 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Cache bun global
-        uses: actions/cache@v4
+      - uses: actions/setup-node@v4
         with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
-      - run: bun install --frozen-lockfile
+      - run: npm ci
 
       - run: |
-          cd packages/domain && bun run build
-          cd ../messaging && bun run build
-          cd ../observability && bun run build
+          cd packages/domain && npx tsc
+          cd ../messaging && npx tsc
+          cd ../observability && npx tsc
 
       - name: Run Games E2E tests
         run: bun test services/games/tests/e2e
