@@ -48,8 +48,8 @@ describe('GetCurrentRoundUseCase', () => {
 
   test('Should include bets when includeBets is true', async () => {
     const round = await Round.create();
-    round.placeBet('player-1', Money.fromDecimal('10.00'));
-    round.placeBet('player-2', Money.fromDecimal('20.00'));
+    round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
+    round.placeBet('player-2', 'Player Two', Money.fromDecimal('20.00'));
 
     mockRoundRepo.findCurrentRound.mockResolvedValue(round);
 
@@ -65,7 +65,7 @@ describe('GetCurrentRoundUseCase', () => {
 
   test('Should exclude bets when includeBets is false', async () => {
     const round = await Round.create();
-    round.placeBet('player-1', Money.fromDecimal('10.00'));
+    round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
 
     mockRoundRepo.findCurrentRound.mockResolvedValue(round);
 
@@ -76,7 +76,7 @@ describe('GetCurrentRoundUseCase', () => {
 
   test('Should exclude bets when includeBets is undefined', async () => {
     const round = await Round.create();
-    round.placeBet('player-1', Money.fromDecimal('10.00'));
+    round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
 
     mockRoundRepo.findCurrentRound.mockResolvedValue(round);
 
@@ -96,7 +96,7 @@ describe('GetCurrentRoundUseCase', () => {
     process.env.DETERMINISTIC_SEED = 'test-crash-10.0';
     try {
       const round = await Round.create();
-      round.placeBet('player-1', Money.fromDecimal('10.00'));
+      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
       const bet = round.getBetByPlayer('player-1')!;
       bet.confirm();
       await round.startRound();

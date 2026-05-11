@@ -85,14 +85,23 @@ function createMockGamesGateway(overrides = {}) {
   };
 }
 
+function createMockMetrics() {
+  return {
+    incrBet: mockFn(() => {}),
+    incrPayout: mockFn(() => {}),
+  };
+}
+
 describe('PlaceBetUseCase', () => {
   let roundRepository: ReturnType<typeof createMockRoundRepository>;
   let betRepository: ReturnType<typeof createMockBetRepository>;
   let eventPublisher: ReturnType<typeof createMockEventPublisher>;
   let gamesGateway: ReturnType<typeof createMockGamesGateway>;
+  let metrics: ReturnType<typeof createMockMetrics>;
   let useCase: PlaceBetUseCase;
 
   const playerId = 'player-123';
+  const playerName = 'Player 123';
   const validAmountCents = 1000n; // $10.00
 
   beforeEach(() => {
@@ -100,11 +109,13 @@ describe('PlaceBetUseCase', () => {
     betRepository = createMockBetRepository();
     eventPublisher = createMockEventPublisher();
     gamesGateway = createMockGamesGateway();
+    metrics = createMockMetrics();
     useCase = new PlaceBetUseCase(
       roundRepository as any,
       betRepository as any,
       eventPublisher as any,
       gamesGateway as any,
+      metrics as any,
     );
   });
 
@@ -113,7 +124,7 @@ describe('PlaceBetUseCase', () => {
     round.pullEvents(); // Clear round creation events
     roundRepository.findCurrentRound.mockResolvedValue(round);
 
-    const result = await useCase.execute({ playerId, amountCents: validAmountCents });
+    const result = await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
     expect(result.roundId).toBe(round.id);
     expect(result.betId).toBeDefined();
@@ -124,7 +135,7 @@ describe('PlaceBetUseCase', () => {
   test('should create new round when no current round exists', async () => {
     roundRepository.findCurrentRound.mockResolvedValue(null);
 
-    const result = await useCase.execute({ playerId, amountCents: validAmountCents });
+    const result = await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
     expect(result.roundId).toBeDefined();
     expect(result.betId).toBeDefined();
@@ -136,7 +147,7 @@ describe('PlaceBetUseCase', () => {
     round.pullEvents();
     roundRepository.findCurrentRound.mockResolvedValue(round);
 
-    await useCase.execute({ playerId, amountCents: validAmountCents });
+    await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
     expect(betRepository.create.callCount).toBe(1);
   });
@@ -146,7 +157,7 @@ describe('PlaceBetUseCase', () => {
     round.pullEvents();
     roundRepository.findCurrentRound.mockResolvedValue(round);
 
-    await useCase.execute({ playerId, amountCents: validAmountCents });
+    await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
     expect(eventPublisher.publishBatch.callCount).toBe(1);
   });
@@ -154,7 +165,7 @@ describe('PlaceBetUseCase', () => {
   test('should publish events for new round creation and bet placement', async () => {
     roundRepository.findCurrentRound.mockResolvedValue(null);
 
-    await useCase.execute({ playerId, amountCents: validAmountCents });
+    await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
     // First call: events from round creation; second call: events from bet placement
     expect(eventPublisher.publishBatch.callCount).toBe(2);
@@ -165,7 +176,7 @@ describe('PlaceBetUseCase', () => {
     round.pullEvents();
     roundRepository.findCurrentRound.mockResolvedValue(round);
 
-    await useCase.execute({ playerId, amountCents: validAmountCents });
+    await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
     expect(gamesGateway.broadcastBetPlaced.callCount).toBe(1);
   });
@@ -179,7 +190,7 @@ describe('PlaceBetUseCase', () => {
     });
 
     // Should NOT throw
-    const result = await useCase.execute({ playerId, amountCents: validAmountCents });
+    const result = await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
     expect(result.betId).toBeDefined();
     expect(result.roundId).toBe(round.id);
@@ -192,7 +203,7 @@ describe('PlaceBetUseCase', () => {
 
     const belowMinCents = 50n; // $0.50, below $1.00 minimum
 
-    expect(useCase.execute({ playerId, amountCents: belowMinCents })).rejects.toThrow(
+    expect(useCase.execute({ playerId, playerName, amountCents: belowMinCents })).rejects.toThrow(
       BetBelowMinimumError,
     );
   });
@@ -204,7 +215,7 @@ describe('PlaceBetUseCase', () => {
 
     const aboveMaxCents = 100_000_00n; // $100,000.00, above $1,000.00 maximum
 
-    expect(useCase.execute({ playerId, amountCents: aboveMaxCents })).rejects.toThrow(
+    expect(useCase.execute({ playerId, playerName, amountCents: aboveMaxCents })).rejects.toThrow(
       BetAboveMaximumError,
     );
   });
@@ -214,7 +225,7 @@ describe('PlaceBetUseCase', () => {
     round.pullEvents();
     roundRepository.findCurrentRound.mockResolvedValue(round);
 
-    await useCase.execute({ playerId, amountCents: validAmountCents });
+    await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
     expect(roundRepository.save.callCount).toBe(1);
   });
@@ -224,7 +235,7 @@ describe('PlaceBetUseCase', () => {
     round.pullEvents();
     roundRepository.findCurrentRound.mockResolvedValue(round);
 
-    const result = await useCase.execute({ playerId, amountCents: validAmountCents });
+    const result = await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
 
     expect(result).toHaveProperty('roundId');
     expect(result).toHaveProperty('betId');

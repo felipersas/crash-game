@@ -55,15 +55,28 @@ function createMockEventPublisher(overrides: Record<string, any> = {}) {
   };
 }
 
+function createMockMetrics(overrides: Record<string, any> = {}) {
+  return {
+    incrWalletOp: mockFn(() => {}),
+    ...overrides,
+  };
+}
+
 describe('CreditWalletUseCase', () => {
   let mockWalletRepo: ReturnType<typeof createMockWalletRepository>;
   let mockEventPublisher: ReturnType<typeof createMockEventPublisher>;
+  let mockMetrics: ReturnType<typeof createMockMetrics>;
   let useCase: CreditWalletUseCase;
 
   beforeEach(() => {
     mockWalletRepo = createMockWalletRepository();
     mockEventPublisher = createMockEventPublisher();
-    useCase = new CreditWalletUseCase(mockWalletRepo as any, mockEventPublisher as any);
+    mockMetrics = createMockMetrics();
+    useCase = new CreditWalletUseCase(
+      mockWalletRepo as any,
+      mockEventPublisher as any,
+      mockMetrics as any,
+    );
   });
 
   test('should credit amount to existing wallet', async () => {

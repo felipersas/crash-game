@@ -17,9 +17,10 @@ export class MetricsInterceptor implements NestInterceptor {
     const method = request.method;
 
     // Use the route pattern (e.g. /wallets/:id) for stable labels
-    const route = this.reflector.get<string>('path', context.getHandler())
-      || request.route?.path
-      || request.url;
+    const route =
+      this.reflector.get<string>('path', context.getHandler()) ||
+      request.route?.path ||
+      request.url;
 
     const start = performance.now();
 

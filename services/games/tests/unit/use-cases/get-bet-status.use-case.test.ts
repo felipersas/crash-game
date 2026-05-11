@@ -48,6 +48,7 @@ describe('GetBetStatusUseCase', () => {
 
   const roundId = 'round-999';
   const playerId = 'player-777';
+  const playerName = 'Player 777';
   const amount = Money.fromDecimal('50.00');
 
   beforeEach(() => {
@@ -56,7 +57,7 @@ describe('GetBetStatusUseCase', () => {
   });
 
   test('should return bet status for existing bet', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findById.mockResolvedValue(bet);
 
     const result = await useCase.execute({ betId: bet.id });
@@ -75,7 +76,7 @@ describe('GetBetStatusUseCase', () => {
   });
 
   test('should include cash out data for cashed out bet', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     bet.confirm();
     const multiplier = Multiplier.fromValue(3.5);
     bet.cashOut(multiplier);
@@ -92,7 +93,7 @@ describe('GetBetStatusUseCase', () => {
   });
 
   test('should include cancel reason for cancelled bet', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     bet.cancel('Insufficient funds');
 
     betRepository.findById.mockResolvedValue(bet);
@@ -107,7 +108,7 @@ describe('GetBetStatusUseCase', () => {
   });
 
   test('should return correct status for pending bet', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
 
     betRepository.findById.mockResolvedValue(bet);
 
@@ -121,7 +122,7 @@ describe('GetBetStatusUseCase', () => {
   });
 
   test('should return correct status for active (confirmed) bet', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     bet.confirm();
 
     betRepository.findById.mockResolvedValue(bet);
@@ -136,7 +137,7 @@ describe('GetBetStatusUseCase', () => {
   });
 
   test('should return correct status for lost bet', async () => {
-    const bet = Bet.create(roundId, playerId, amount);
+    const bet = Bet.create(roundId, playerId, playerName, amount);
     bet.confirm();
     bet.markAsLost();
 

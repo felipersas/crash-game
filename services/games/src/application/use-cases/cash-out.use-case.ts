@@ -167,7 +167,9 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     if (cashedOut) {
       const cashedOutBet = round.getBetByPlayer(cashedOut.playerId);
       if (!cashedOutBet) {
-        this.logger.warn(`Bet not found for cashed out player ${cashedOut.playerId} in round ${cashedOut.roundId}`);
+        this.logger.warn(
+          `Bet not found for cashed out player ${cashedOut.playerId} in round ${cashedOut.roundId}`,
+        );
       }
       try {
         this.broadcaster.broadcastPlayerCashedOut(

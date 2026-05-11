@@ -89,7 +89,7 @@ describe('Round Entity', () => {
       const playerId = 'player-1';
       const amount = Money.fromDecimal('10.00');
 
-      round.placeBet(playerId, amount);
+      round.placeBet(playerId, 'Player One', amount);
 
       const bet = round.getBetByPlayer(playerId);
       expect(bet).toBeDefined();
@@ -104,7 +104,7 @@ describe('Round Entity', () => {
       // Clear existing events from round creation
       round.pullEvents();
 
-      round.placeBet(playerId, amount);
+      round.placeBet(playerId, 'Player One', amount);
 
       const events = round.pullEvents();
       expect(events).toHaveLength(1);
@@ -122,44 +122,46 @@ describe('Round Entity', () => {
 
       await round.startRound();
 
-      expect(() => round.placeBet(playerId, amount)).toThrow(RoundNotAcceptingBetsError);
+      expect(() => round.placeBet(playerId, 'Player One', amount)).toThrow(
+        RoundNotAcceptingBetsError,
+      );
     });
 
     test('should reject duplicate bet from same player', () => {
       const playerId = 'player-1';
       const amount = Money.fromDecimal('10.00');
 
-      round.placeBet(playerId, amount);
+      round.placeBet(playerId, 'Player One', amount);
 
-      expect(() => round.placeBet(playerId, amount)).toThrow(DuplicateBetError);
+      expect(() => round.placeBet(playerId, 'Player One', amount)).toThrow(DuplicateBetError);
     });
 
     test('should reject bet below minimum', () => {
       const playerId = 'player-1';
       const amount = Money.fromDecimal('0.50'); // Below $1.00 minimum
 
-      expect(() => round.placeBet(playerId, amount)).toThrow(BetBelowMinimumError);
+      expect(() => round.placeBet(playerId, 'Player One', amount)).toThrow(BetBelowMinimumError);
     });
 
     test('should reject bet above maximum', () => {
       const playerId = 'player-1';
       const amount = Money.fromDecimal('2000.00'); // Above $1000.00 maximum
 
-      expect(() => round.placeBet(playerId, amount)).toThrow(BetAboveMaximumError);
+      expect(() => round.placeBet(playerId, 'Player One', amount)).toThrow(BetAboveMaximumError);
     });
 
     test('should accept minimum bet amount', () => {
       const playerId = 'player-1';
       const amount = Money.fromDecimal('1.00'); // Exact minimum
 
-      expect(() => round.placeBet(playerId, amount)).not.toThrow();
+      expect(() => round.placeBet(playerId, 'Player One', amount)).not.toThrow();
     });
 
     test('should accept maximum bet amount', () => {
       const playerId = 'player-1';
       const amount = Money.fromDecimal('1000.00'); // Exact maximum
 
-      expect(() => round.placeBet(playerId, amount)).not.toThrow();
+      expect(() => round.placeBet(playerId, 'Player One', amount)).not.toThrow();
     });
 
     test('should increment version when bet is placed', () => {
@@ -167,7 +169,7 @@ describe('Round Entity', () => {
       const amount = Money.fromDecimal('10.00');
       const initialVersion = round.getVersion();
 
-      round.placeBet(playerId, amount);
+      round.placeBet(playerId, 'Player One', amount);
 
       expect(round.getVersion()).toBe(initialVersion + 1);
     });
@@ -220,10 +222,10 @@ describe('Round Entity', () => {
   describe('Cash Out', () => {
     beforeEach(async () => {
       // Place a bet and start the round
-      round.placeBet('player-1', Money.fromDecimal('10.00'));
+      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
       await round.startRound();
 
-      // Confirm the bet (simulate wallet confirmation)
+      // Confirm the bet (simulate wallet confirmation: PENDING -> ACTIVE)
       const bet = round.getBetByPlayer('player-1');
       if (bet && bet.isPending()) {
         (bet as any).confirm();
@@ -267,7 +269,7 @@ describe('Round Entity', () => {
     test('should reject cash out when not in ACTIVE phase', async () => {
       // Create new round and don't start it
       const inactiveRound = await Round.create();
-      inactiveRound.placeBet('player-1', Money.fromDecimal('10.00'));
+      inactiveRound.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
 
       expect(() => inactiveRound.cashOut('player-1')).toThrow(RoundAlreadyCrashedError);
     });
@@ -312,7 +314,7 @@ describe('Round Entity', () => {
     });
 
     test('should crash when multiplier exceeds crash point', async () => {
-      round.placeBet('player-1', Money.fromDecimal('10.00'));
+      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
       await round.startRound();
 
       // Set a very low crash point
@@ -326,11 +328,11 @@ describe('Round Entity', () => {
 
   describe('Crash', () => {
     beforeEach(async () => {
-      round.placeBet('player-1', Money.fromDecimal('10.00'));
-      round.placeBet('player-2', Money.fromDecimal('20.00'));
+      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
+      round.placeBet('player-2', 'Player Two', Money.fromDecimal('20.00'));
       await round.startRound();
 
-      // Confirm bets (simulate wallet confirmation)
+      // Confirm bets (simulate wallet confirmation: PENDING -> ACTIVE)
       for (const playerId of ['player-1', 'player-2']) {
         const bet = round.getBetByPlayer(playerId);
         if (bet && bet.isPending()) {
@@ -437,7 +439,7 @@ describe('Round Entity', () => {
 
   describe('Domain Events', () => {
     test('should collect and clear events on pullEvents', async () => {
-      round.placeBet('player-1', Money.fromDecimal('10.00'));
+      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
 
       const events1 = round.pullEvents();
       const events2 = round.pullEvents();
@@ -447,7 +449,7 @@ describe('Round Entity', () => {
     });
 
     test('should track pending events count', async () => {
-      round.placeBet('player-1', Money.fromDecimal('10.00'));
+      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
 
       expect(round.getPendingEventsCount()).toBeGreaterThan(0);
     });
@@ -455,8 +457,8 @@ describe('Round Entity', () => {
 
   describe('Getters', () => {
     test('should return all bets', () => {
-      round.placeBet('player-1', Money.fromDecimal('10.00'));
-      round.placeBet('player-2', Money.fromDecimal('20.00'));
+      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
+      round.placeBet('player-2', 'Player Two', Money.fromDecimal('20.00'));
 
       const bets = round.getBets();
 
@@ -464,7 +466,7 @@ describe('Round Entity', () => {
     });
 
     test('should return bet by player ID', () => {
-      round.placeBet('player-1', Money.fromDecimal('10.00'));
+      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
 
       const bet = round.getBetByPlayer('player-1');
 
@@ -481,7 +483,7 @@ describe('Round Entity', () => {
 
   describe('Persistence', () => {
     test('should convert to persistence format', async () => {
-      round.placeBet('player-1', Money.fromDecimal('10.00'));
+      round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
 
       const data = round.toPersistence();
 
@@ -493,7 +495,7 @@ describe('Round Entity', () => {
 
     test('should restore from persistence', async () => {
       const original = await Round.create();
-      original.placeBet('player-1', Money.fromDecimal('10.00'));
+      original.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
       await original.startRound();
 
       const data = original.toPersistence();
@@ -521,8 +523,12 @@ describe('Round Entity', () => {
     test('should use default config when not provided', async () => {
       const defaultRound = await Round.create();
 
-      expect(() => defaultRound.placeBet('p1', Money.fromDecimal('1.00'))).not.toThrow();
-      expect(() => defaultRound.placeBet('p2', Money.fromDecimal('1000.00'))).not.toThrow();
+      expect(() =>
+        defaultRound.placeBet('p1', 'Player 1', Money.fromDecimal('1.00')),
+      ).not.toThrow();
+      expect(() =>
+        defaultRound.placeBet('p2', 'Player 2', Money.fromDecimal('1000.00')),
+      ).not.toThrow();
     });
 
     test('should accept custom config', async () => {
@@ -534,8 +540,8 @@ describe('Round Entity', () => {
 
       const customRound = await Round.create(customConfig);
 
-      expect(() => customRound.placeBet('p1', Money.fromDecimal('5.00'))).not.toThrow();
-      expect(() => customRound.placeBet('p2', Money.fromDecimal('4.99'))).toThrow();
+      expect(() => customRound.placeBet('p1', 'Player 1', Money.fromDecimal('5.00'))).not.toThrow();
+      expect(() => customRound.placeBet('p2', 'Player 2', Money.fromDecimal('4.99'))).toThrow();
     });
   });
 });

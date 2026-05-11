@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests-games:
+    name: Unit Tests - Games
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.3"
+
+      - run: bun install
+
+      - run: cd services/games && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
+
+      - name: Run unit tests
+        run: cd services/games && bun test tests/unit
+
+  unit-tests-wallets:
+    name: Unit Tests - Wallets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.3"
+
+      - run: bun install
+
+      - run: cd services/wallets && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
+
+      - name: Run unit tests
+        run: cd services/wallets && bun test tests/unit
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.3"
+
+      - run: bun install
+
+      - name: Check games formatting
+        run: bun run --cwd services/games format:check
+
+      - name: Check wallets formatting
+        run: bun run --cwd services/wallets format:check
+
+  e2e-tests:
+    name: Backend E2E Tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests-games, unit-tests-wallets, lint]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.3"
+
+      - run: bun install
+
+      - name: Run Games E2E tests
+        run: cd services/games && bun test tests/e2e
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+          DOCKER_BUILDKIT: "1"
+
+      - name: Run Wallets E2E tests
+        run: cd services/wallets && bun test tests/e2e
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+          DOCKER_BUILDKIT: "1"
