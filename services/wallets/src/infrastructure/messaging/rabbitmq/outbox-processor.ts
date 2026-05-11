@@ -3,7 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import type { IEventPublisher } from '@crash/messaging';
-import { EVENT_PUBLISHER } from '@/infrastructure/di/tokens';
+import { RABBITMQ_PUBLISHER } from '@/application/di.tokens';
 
 @Injectable()
 export class OutboxProcessor {
@@ -13,7 +13,7 @@ export class OutboxProcessor {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    @Inject(RABBITMQ_PUBLISHER) private readonly eventPublisher: IEventPublisher,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
   ) {}
 

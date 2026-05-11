@@ -7,7 +7,7 @@
  * Uses Inbox pattern for idempotency - prevents double debiting
  * if duplicate events are received from RabbitMQ.
  *
- * Emits confirmation events back to Games service:
+ * Emits confirmation events back to Games service via outbox:
  * - WalletDebitedEvent: Success → bet confirmed (PENDING → ACTIVE)
  * - WalletDebitFailedEvent: Failure → bet cancelled (PENDING → CANCELLED)
  */
@@ -17,37 +17,37 @@ import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
 import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
 import {
-  EVENT_PUBLISHER,
   PLAYER_WALLET_RESOLVER,
   INBOX_REPOSITORY,
-} from '@/infrastructure/di/tokens';
-import type { IEventPublisher } from '@crash/messaging';
+} from '@/application/di.tokens';
 import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import {
   createWalletDebitedEvent,
   createWalletDebitFailedEvent,
 } from '@/domain/events/wallet.events';
 import type { BetPlacedEvent } from '../../types/games.events';
+import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
+import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 /**
  * Handler for BetPlacedEvent.
  *
  * When a player places a bet in the Games service, this handler
- * debits the corresponding amount from their wallet and emits
- * a confirmation event.
+ * debits the corresponding amount from their wallet and writes
+ * a confirmation event to the outbox for reliable delivery.
  *
  * Uses Inbox pattern for idempotency:
  * 1. Try create inbox event (fails if duplicate)
  * 2. If duplicate → check status (PROCESSED skip, FAILED retry)
  * 3. Resolve wallet via PlayerWalletResolver
  * 4. Process debit (with compensating rollback on publish failure)
- * 5. Emit confirmation event (with retry)
+ * 5. Write confirmation event to outbox (atomic with inbox status)
  * 6. Mark inbox as PROCESSED/FAILED
  *
  * This is part of the saga pattern:
  * 1. Games creates the bet in PENDING state
  * 2. Wallets debits the amount (this handler)
- * 3. Wallets emits confirmation event (success or failure)
+ * 3. Wallets emits confirmation event via outbox (success or failure)
  * 4. Games consumes confirmation to confirm/cancel bet
  */
 @Injectable()
@@ -58,8 +58,9 @@ export class BetPlacedEventHandler {
     private readonly debitWalletUseCase: DebitWalletUseCase,
     @Inject(PLAYER_WALLET_RESOLVER) private readonly playerWalletResolver: PlayerWalletResolver,
     @Inject(INBOX_REPOSITORY) private readonly inboxRepository: IInboxRepository,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
+    private readonly prisma: PrismaService,
+    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   /**
@@ -125,38 +126,32 @@ export class BetPlacedEventHandler {
         `Debited ${event.amount} cents from player ${event.playerId} for bet ${event.betId}`,
       );
 
-      // 5. Emit success confirmation event
-      try {
-        await this.eventPublisher.publish(
-          createWalletDebitedEvent(
-            event.roundId,
-            event.betId,
-            event.playerId,
-            event.amount,
-            event.version || 1,
-          ),
+      // 5. Write WalletDebitedEvent to outbox for reliable delivery to Games service
+      const confirmationEvent = createWalletDebitedEvent(
+        event.roundId,
+        event.betId,
+        event.playerId,
+        event.amount,
+        event.version || 1,
+      );
+
+      let outboxIds: string[] = [];
+      await this.prisma.$transaction(async (tx) => {
+        outboxIds = await this.outboxWriter.writeWithinTransaction(
+          tx,
+          event.roundId,
+          [confirmationEvent],
         );
+      });
 
-        this.logger.debug(`Emitted WalletDebitedEvent for bet ${event.betId}`);
-      } catch (publishError) {
-        const publishErrorMessage =
-          publishError instanceof Error ? publishError.message : String(publishError);
-
-        // Event publish failed after successful debit - mark as FAILED for retry
-        await this.inboxRepository.markAsFailed(
-          eventId,
-          `Event publish failed: ${publishErrorMessage}`,
-          0,
-        );
-
-        this.logger.error(
-          `Failed to publish WalletDebitedEvent for bet ${event.betId}: ${publishErrorMessage}`,
-        );
-
-        return;
+      // Best-effort immediate publish for low latency
+      if (outboxIds.length > 0) {
+        await this.outboxWriter.tryImmediatePublish([confirmationEvent], outboxIds);
       }
 
-      // 6. Mark inbox as PROCESSED (debit AND publish both succeeded)
+      this.logger.debug(`Wrote WalletDebitedEvent to outbox for bet ${event.betId}`);
+
+      // 6. Mark inbox as PROCESSED (debit AND outbox write both succeeded)
       await this.inboxRepository.markAsProcessed(eventId, new Date());
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -164,27 +159,39 @@ export class BetPlacedEventHandler {
       // Mark as FAILED for visibility
       await this.inboxRepository.markAsFailed(eventId, errorMessage, 0);
 
-      // Emit failure confirmation event
+      // Write WalletDebitFailedEvent to outbox for reliable delivery to Games service
       try {
-        await this.eventPublisher.publish(
-          createWalletDebitFailedEvent(
-            event.roundId,
-            event.betId,
-            event.playerId,
-            event.amount,
-            errorMessage,
-            event.version || 1,
-          ),
+        const failureEvent = createWalletDebitFailedEvent(
+          event.roundId,
+          event.betId,
+          event.playerId,
+          event.amount,
+          errorMessage,
+          event.version || 1,
         );
-      } catch (publishError) {
+
+        let outboxIds: string[] = [];
+        await this.prisma.$transaction(async (tx) => {
+          outboxIds = await this.outboxWriter.writeWithinTransaction(
+            tx,
+            event.roundId,
+            [failureEvent],
+          );
+        });
+
+        // Best-effort immediate publish for low latency
+        if (outboxIds.length > 0) {
+          await this.outboxWriter.tryImmediatePublish([failureEvent], outboxIds);
+        }
+      } catch (outboxError) {
         this.logger.error(
-          `Failed to publish WalletDebitFailedEvent for bet ${event.betId}: ${publishError instanceof Error ? publishError.message : String(publishError)}`,
+          `Failed to write WalletDebitFailedEvent to outbox for bet ${event.betId}: ${outboxError instanceof Error ? outboxError.message : String(outboxError)}`,
         );
       }
 
       this.logger.error(`Failed to debit wallet for bet ${event.betId}: ${errorMessage}`);
 
-      // Don't re-throw - saga pattern: we've emitted the failure event
+      // Don't re-throw - saga pattern: we've written the failure event to outbox
       // Consumer will ACK the message
     }
   }

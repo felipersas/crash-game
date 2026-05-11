@@ -57,4 +57,12 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get outboxEvent() {
     return this.prisma.outboxEvent;
   }
+
+  /**
+   * Delegate $transaction to the underlying PrismaClient.
+   * Used by OutboxWriter and use cases for atomic DB + outbox writes.
+   */
+  $transaction<R>(fn: (tx: any) => Promise<R>): Promise<R> {
+    return this.prisma.$transaction(fn);
+  }
 }

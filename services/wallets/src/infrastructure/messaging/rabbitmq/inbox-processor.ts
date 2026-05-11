@@ -8,7 +8,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
-import { INBOX_REPOSITORY } from '@/infrastructure/di/tokens';
+import { INBOX_REPOSITORY } from '@/application/di.tokens';
 import { BetPlacedEventHandler } from './handlers/bet-placed.handler';
 import { PlayerCashedOutEventHandler } from './handlers/player-cashed-out.handler';
 import type { BetPlacedEvent } from '../../types/games.events';

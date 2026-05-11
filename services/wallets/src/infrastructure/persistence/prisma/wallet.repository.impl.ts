@@ -9,6 +9,7 @@ import { PrismaService } from './prisma.service';
 import { Wallet } from '@/domain/entities/wallet.entity';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
+import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
 
 @Injectable()
 export class PrismaWalletRepository implements IWalletRepository {
@@ -38,11 +39,12 @@ export class PrismaWalletRepository implements IWalletRepository {
     return this.toDomain(record);
   }
 
-  async save(wallet: Wallet): Promise<void> {
+  async save(wallet: Wallet, tx?: PrismaTransaction): Promise<void> {
     const data = wallet.toPersistence();
+    const client = tx ?? this.prisma;
 
     try {
-      await this.prisma.wallet.update({
+      await client.wallet.update({
         where: {
           id: data.id,
           version: data.version - 1, // Optimistic locking
@@ -76,9 +78,10 @@ export class PrismaWalletRepository implements IWalletRepository {
    * Create a new wallet in the database.
    * Used internally by CreateWalletUseCase.
    */
-  async create(wallet: Wallet): Promise<void> {
+  async create(wallet: Wallet, tx?: PrismaTransaction): Promise<void> {
     const data = wallet.toPersistence();
-    await this.prisma.wallet.create({
+    const client = tx ?? this.prisma;
+    await client.wallet.create({
       data: {
         id: data.id,
         playerId: data.playerId,
