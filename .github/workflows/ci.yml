@@ -60,7 +60,7 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
-      - run: bun install --frozen-lockfile
+      - run: bun install
 
       - run: |
           cd packages/domain && bun run build
@@ -68,6 +68,15 @@ jobs:
           cd ../observability && bun run build
 
       - run: cd services/wallets && DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" bunx prisma generate
+
+      - name: Debug module resolution
+        run: |
+          echo "=== node_modules/@crash ==="
+          ls -la node_modules/@crash/ 2>/dev/null || echo "NOT FOUND"
+          echo "=== domain dist ==="
+          ls packages/domain/dist/ 2>/dev/null || echo "NOT FOUND"
+          echo "=== readlink ==="
+          readlink -f node_modules/@crash/domain 2>/dev/null || echo "NOT A SYMLINK"
 
       - name: Run unit tests
         run: bun test services/wallets/tests/unit
