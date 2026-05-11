@@ -101,10 +101,11 @@ export const useGameStore = create<GameState>()(
         }),
 
       setBettingEnded: () =>
-        set({
+        set((state) => ({
           roundStatus: RoundStatus.ACTIVE,
           bettingEndTime: null,
-        }),
+          roundStartedAt: state.roundStartedAt ?? new Date(),
+        })),
 
       setMultiplier: (multiplier) => set({ liveMultiplier: multiplier }),
 

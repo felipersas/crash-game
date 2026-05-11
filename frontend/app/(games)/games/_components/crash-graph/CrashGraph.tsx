@@ -228,8 +228,6 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
           <motion.div
             className={`font-black font-terminal tracking-tighter ${TEXT_CLASS[zone]} ${isBetting ? "text-3xl md:text-4xl" : "text-7xl md:text-8xl"}`}
             style={(isCrashed || phase === "active") ? { textShadow: GLOW_SHADOW[zone] } : undefined}
-            animate={!isCrashed && !isBetting ? { scale: [1, 1.02, 1] } : {}}
-            transition={{ duration: 0.5, repeat: Infinity }}
           >
             {getStatusLabel(phase, multiplier)}
           </motion.div>
@@ -245,20 +243,22 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
       </div>
 
       {/* Progress Bar */}
-      <div className="h-2 bg-surface-bright/20 relative overflow-hidden">
-        <motion.div
-          className={`h-full ${isCrashed ? "bg-error" : "bg-primary"}`}
-          initial={{ width: 0 }}
-          animate={{ width: `${getProgressBarWidth(multiplier, phase)}%` }}
-          transition={{ duration: 0.1 }}
-        >
+      {!isActivePhase && (
+        <div className="h-2 bg-surface-bright/20 relative overflow-hidden">
           <motion.div
-            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-            animate={{ x: ["-100%", "100%"] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-          />
-        </motion.div>
-      </div>
+            className={`h-full ${isCrashed ? "bg-error" : "bg-primary"}`}
+            initial={{ width: 0 }}
+            animate={{ width: `${getProgressBarWidth(multiplier, phase)}%` }}
+            transition={{ duration: 0.1 }}
+          >
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+              animate={{ x: ["-100%", "100%"] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+            />
+          </motion.div>
+        </div>
+      )}
 
       {/* Status Line */}
       <div className="h-8 bg-surface border-t border-border flex items-center justify-between px-4">
