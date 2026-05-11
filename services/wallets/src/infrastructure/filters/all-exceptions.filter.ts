@@ -53,8 +53,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       code = exception.code;
 
       this.logger.warn(`[${errorName}] ${message} - ${request.method} ${request.url}`);
-    }
-    else if (exception instanceof HttpException) {
+    } else if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
       const exceptionResponse = exception.getResponse();
       errorName = exception.constructor.name;
@@ -62,8 +61,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         typeof exceptionResponse === 'string'
           ? exceptionResponse
           : (exceptionResponse as any).message || exception.message;
-    }
-    else if (exception instanceof Error) {
+    } else if (exception instanceof Error) {
       message = exception.message;
 
       this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
