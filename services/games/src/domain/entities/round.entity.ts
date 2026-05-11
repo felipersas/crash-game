@@ -172,6 +172,7 @@ export class Round {
   /**
    * Place a bet for a player.
    * Only allowed during BETTING phase.
+   * Throws if player already has an active/cashed out/lost bet.
    */
   placeBet(playerId: string, playerName: string, amount: Money): void {
     if (this.status !== RoundStatus.BETTING) {
@@ -193,8 +194,54 @@ export class Round {
     const bet = Bet.create(this.id, playerId, playerName, amount);
     this.bets.set(playerId, bet);
 
-    this.version++;
     this.addEvent(createBetPlacedEvent(this.id, bet.id, playerId, amount.toCents(), this.version));
+  }
+
+  /**
+   * Place a bet, replacing any existing PENDING or CANCELLED bet.
+   * Domain rule: a player may retry a bet if the previous one is PENDING
+   * (wallet not yet confirmed) or CANCELLED (wallet rejected).
+   * Returns the new bet and the replaced bet (if any, needs persistence).
+   */
+  placeOrReplaceBet(
+    playerId: string,
+    playerName: string,
+    amount: Money,
+  ): { bet: Bet; replacedBet: Bet | null } {
+    if (this.status !== RoundStatus.BETTING) {
+      throw new RoundNotAcceptingBetsError();
+    }
+
+    let replacedBet: Bet | null = null;
+    const existing = this.bets.get(playerId);
+
+    if (existing) {
+      if (!existing.isPending() && !existing.isCancelled()) {
+        throw new DuplicateBetError();
+      }
+
+      if (existing.isPending()) {
+        existing.cancel('Replaced by new bet attempt');
+        replacedBet = existing;
+      }
+
+      this.bets.delete(playerId);
+    }
+
+    if (amount.isLessThan(this.config.minBetAmount)) {
+      throw new BetBelowMinimumError(amount.toCents());
+    }
+
+    if (amount.isGreaterThan(this.config.maxBetAmount)) {
+      throw new BetAboveMaximumError(amount.toCents());
+    }
+
+    const bet = Bet.create(this.id, playerId, playerName, amount);
+    this.bets.set(playerId, bet);
+
+    this.addEvent(createBetPlacedEvent(this.id, bet.id, playerId, amount.toCents(), this.version));
+
+    return { bet, replacedBet };
   }
 
   /**
@@ -212,7 +259,6 @@ export class Round {
     }
 
     const payout = bet.cashOut(this.currentMultiplier);
-    this.version++;
 
     this.addEvent(
       createPlayerCashedOutEvent(
@@ -391,6 +437,18 @@ export class Round {
    */
   removeBet(playerId: string): void {
     this.bets.delete(playerId);
+  }
+
+  /**
+   * Sync a bet loaded from persistence into the in-memory aggregate.
+   * Needed because the lifecycle manager's in-memory round is a separate
+   * instance from what PlaceBetUseCase mutated — bets are persisted to DB
+   * but the in-memory round never receives them.
+   */
+  syncBet(bet: Bet): void {
+    if (bet.getStatus() !== BetStatus.CANCELLED && !this.bets.has(bet.playerId)) {
+      this.bets.set(bet.playerId, bet);
+    }
   }
 
   /**
