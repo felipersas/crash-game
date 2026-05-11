@@ -1,4 +1,5 @@
 import { Wallet } from '@/domain/entities/wallet.entity';
+import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
 
 /**
  *
@@ -22,13 +23,15 @@ export interface IWalletRepository {
    * Save a wallet (create or update).
    * Uses optimistic locking via version field.
    * Throws OptimisticLockError if version mismatch.
+   * Optional tx for atomic operations within a transaction.
    */
-  save(wallet: Wallet): Promise<void>;
+  save(wallet: Wallet, tx?: PrismaTransaction): Promise<void>;
 
   /**
    * Create a new wallet in the database.
+   * Optional tx for atomic operations within a transaction.
    */
-  create(wallet: Wallet): Promise<void>;
+  create(wallet: Wallet, tx?: PrismaTransaction): Promise<void>;
 
   /**
    * Check if a wallet exists for the given player ID.

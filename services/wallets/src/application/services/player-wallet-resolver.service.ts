@@ -11,7 +11,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
-import { WALLET_REPOSITORY } from '@/infrastructure/di/tokens';
+import { WALLET_REPOSITORY } from '@/application/di.tokens';
 
 @Injectable()
 export class PlayerWalletResolver {
