@@ -68,7 +68,7 @@ export class AesCipher {
     if (rawKey.length !== 32) {
       throw new Error(
         `Invalid encryption key: expected 32 bytes (256 bits), got ${rawKey.length}. ` +
-        'Generate one with: openssl rand -base64 32'
+          'Generate one with: openssl rand -base64 32',
       );
     }
 
@@ -85,7 +85,7 @@ export class AesCipher {
 
   private static uint8ToHex(bytes: Uint8Array): string {
     return Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, '0'))
+      .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   }
 

@@ -19,7 +19,12 @@
  * ```
  */
 
-import { DockerComposeEnvironment, Wait, StartedDockerComposeEnvironment, StartedTestContainer } from 'testcontainers';
+import {
+  DockerComposeEnvironment,
+  Wait,
+  StartedDockerComposeEnvironment,
+  StartedTestContainer,
+} from 'testcontainers';
 import path from 'path';
 
 export interface ComposeEnvironmentConfig {
@@ -150,7 +155,10 @@ export class TestCompose {
   /**
    * Execute a command in a container.
    */
-  static async exec(containerName: string, command: string[]): Promise<{ output: string; exitCode: number }> {
+  static async exec(
+    containerName: string,
+    command: string[],
+  ): Promise<{ output: string; exitCode: number }> {
     const container = this.getContainer(containerName);
     if (!container) {
       throw new Error(`Container not found: ${containerName}`);
@@ -177,7 +185,9 @@ export class TestCompose {
  * Global test setup exports
  */
 
-export async function beforeAllTests(config?: ComposeEnvironmentConfig): Promise<Record<string, string>> {
+export async function beforeAllTests(
+  config?: ComposeEnvironmentConfig,
+): Promise<Record<string, string>> {
   return await TestCompose.start(config);
 }
 

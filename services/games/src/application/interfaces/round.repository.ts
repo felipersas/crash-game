@@ -1,4 +1,4 @@
-import { Round } from '@/domain/entities/round.entity';
+import { type Round } from '@/domain/entities/round.entity';
 
 /**
  * Round Repository Interface - Application Layer

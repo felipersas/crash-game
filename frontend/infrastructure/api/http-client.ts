@@ -1,10 +1,3 @@
-/**
- * Shared HTTP Client - Singleton axios instance with auto-auth
- *
- * Token is fetched automatically from NextAuth session via interceptor.
- * No need to pass tokens manually — just import and use.
- */
-
 import axios, {
   type AxiosInstance,
   type AxiosError,
@@ -12,7 +5,7 @@ import axios, {
   type AxiosResponse,
   type InternalAxiosRequestConfig,
 } from 'axios';
-import { getSession } from 'next-auth/react';
+import { getSession, signOut } from 'next-auth/react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -35,19 +28,12 @@ interface HttpRequestConfig extends AxiosRequestConfig {
   skipAuth?: boolean;
 }
 
-/**
- * Shared axios instance — created once, reused everywhere.
- * Token injected automatically via interceptor from NextAuth session.
- */
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,
   timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// Request interceptor — auto-inject auth token from session
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     const httpConfig = config as HttpRequestConfig;
@@ -62,10 +48,14 @@ apiClient.interceptors.request.use(
   (error: AxiosError) => Promise.reject(toApiError(error))
 );
 
-// Response interceptor — sanitized errors
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: AxiosError) => Promise.reject(toApiError(error))
+  async (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      await signOut({ callbackUrl: '/login' });
+    }
+    return Promise.reject(toApiError(error));
+  }
 );
 
 function toApiError(error: AxiosError): ApiError {
@@ -79,24 +69,13 @@ function toApiError(error: AxiosError): ApiError {
     };
   }
 
-  const status = error.response.status;
-  const data = error.response.data as BackendErrorResponse | unknown;
-
-  const backendError = isBackendErrorResponse(data)
-    ? { message: data.message, code: data.code }
-    : {};
-
-  if (status >= 400 && status < 500) {
-    return {
-      message: backendError.message || getDefaultMessage(status),
-      status,
-      code: backendError.code,
-    };
-  }
+  const { status, data } = error.response;
+  const backend = isBackendErrorResponse(data) ? data : null;
 
   return {
-    message: getDefaultMessage(status),
+    message: backend?.message ?? getDefaultMessage(status),
     status,
+    code: backend?.code,
   };
 }
 
@@ -105,23 +84,22 @@ function isBackendErrorResponse(data: unknown): data is BackendErrorResponse {
     typeof data === 'object' &&
     data !== null &&
     'statusCode' in data &&
-    'error' in data &&
     'message' in data
   );
 }
 
 function getDefaultMessage(status: number): string {
-  switch (status) {
-    case 400: return 'Invalid request. Please check your input.';
-    case 401: return 'Authentication required. Please log in.';
-    case 403: return 'Access denied.';
-    case 404: return 'Resource not found.';
-    case 409: return 'Conflict. Please refresh and try again.';
-    case 429: return 'Too many requests. Please try again later.';
-    case 500: return 'Server error. Please try again later.';
-    case 503: return 'Service temporarily unavailable.';
-    default: return 'Request failed. Please try again.';
-  }
+  const messages: Record<number, string> = {
+    400: 'Invalid request. Please check your input.',
+    401: 'Authentication required. Please log in.',
+    403: 'Access denied.',
+    404: 'Resource not found.',
+    409: 'Conflict. Please refresh and try again.',
+    429: 'Too many requests. Please try again later.',
+    500: 'Server error. Please try again later.',
+    503: 'Service temporarily unavailable.',
+  };
+  return messages[status] ?? 'Request failed. Please try again.';
 }
 
 export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {

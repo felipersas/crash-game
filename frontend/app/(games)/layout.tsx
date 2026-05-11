@@ -1,9 +1,7 @@
-"use client";
-
 import { ReactNode } from "react";
-import Sidebar from "./components/sidebar/Sidebar";
-import MobileBottomNav from "./components/sidebar/MobileBottomNav";
-import GameLayout from "./games/components/game-layout/GameLayout";
+import Sidebar from "./_components/sidebar/Sidebar";
+import MobileBottomNav from "./_components/sidebar/MobileBottomNav";
+import GameLayout from "./games/_components/game-layout/GameLayout";
 
 export default function GamesLayout({ children }: { children: ReactNode }) {
   return (

@@ -10,10 +10,7 @@
 /// <reference types="bun-types" />
 import { describe, test, expect } from 'bun:test';
 import { Money } from '@crash/domain';
-import {
-  InvalidMoneyAmountError,
-  NegativeMoneyError,
-} from '../../src/domain/errors/domain.errors';
+import { InvalidMoneyAmountError, NegativeMoneyError } from '../../src/domain/errors/domain.errors';
 
 describe('Money Value Object', () => {
   describe('Factory Methods', () => {

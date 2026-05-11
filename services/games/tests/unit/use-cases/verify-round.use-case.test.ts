@@ -5,11 +5,17 @@ import { Money } from '@crash/domain';
 import { RoundNotFoundError } from '../../../src/domain/errors/domain.errors';
 import { UnauthorizedException } from '@nestjs/common';
 
-function mockFn<T extends (...args: any[]) => any>(impl?: T): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
+function mockFn<T extends (...args: any[]) => any>(
+  impl?: T,
+): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
   const fn: any = (...args: any[]) => fn._impl(...args);
   fn._impl = impl || (() => {});
-  fn.mockReturnValue = (v: any) => { fn._impl = () => v; };
-  fn.mockResolvedValue = (v: any) => { fn._impl = () => Promise.resolve(v); };
+  fn.mockReturnValue = (v: any) => {
+    fn._impl = () => v;
+  };
+  fn.mockResolvedValue = (v: any) => {
+    fn._impl = () => Promise.resolve(v);
+  };
   return fn;
 }
 
@@ -64,9 +70,7 @@ describe('VerifyRoundUseCase', () => {
   test('Should throw RoundNotFoundError for non-existent round', async () => {
     mockRoundRepo.findById.mockResolvedValue(null);
 
-    expect(
-      useCase.execute({ roundId: 'non-existent-id' }),
-    ).rejects.toThrow(RoundNotFoundError);
+    expect(useCase.execute({ roundId: 'non-existent-id' })).rejects.toThrow(RoundNotFoundError);
   });
 
   test('Should throw UnauthorizedException for non-crashed round', async () => {
@@ -74,9 +78,7 @@ describe('VerifyRoundUseCase', () => {
     const round = await Round.create();
     mockRoundRepo.findById.mockResolvedValue(round);
 
-    expect(
-      useCase.execute({ roundId: round.id }),
-    ).rejects.toThrow(UnauthorizedException);
+    expect(useCase.execute({ roundId: round.id })).rejects.toThrow(UnauthorizedException);
   });
 
   test('Should show verified: true when seed hash matches and crash point matches', async () => {

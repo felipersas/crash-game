@@ -21,7 +21,7 @@ export interface UserContext {
 function decodeBase64Url(base64Url: string): string {
   // Add padding if needed
   const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
   return Buffer.from(padded, 'base64').toString('utf-8');
 }
 
@@ -48,9 +48,7 @@ export const UserContext = createParamDecorator(
     const authHeader = request.headers['authorization'];
 
     if (!authHeader) {
-      throw new Error(
-        'Authorization header not found - request must come through Kong Gateway',
-      );
+      throw new Error('Authorization header not found - request must come through Kong Gateway');
     }
 
     // Extract claims from JWT (signature already verified by Kong)

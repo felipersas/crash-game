@@ -36,4 +36,4 @@ ENV PORT=4001
 EXPOSE 4001
 
 # Sobe o serviço usando TypeScript diretamente (Bun runtime compila sob demanda)
-CMD ["bun", "run", "src/main.ts"]
+CMD ["bun", "--experimental-decorator-metadata", "run", "src/main.ts"]

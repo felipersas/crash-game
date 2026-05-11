@@ -12,6 +12,7 @@ export const betSchema = z.object({
   id: z.string().uuid(),
   roundId: z.string().uuid(),
   playerId: z.string(),
+  playerName: z.string(),
   amountCents: z.number().int().nonnegative(),
   amountDecimal: z.string(),
   status: z.nativeEnum(BetStatus),

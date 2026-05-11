@@ -33,6 +33,7 @@ export interface Bet {
   id: string;
   roundId: string;
   playerId: string;
+  playerName: string;
   amountCents: number;
   amountDecimal: string;
   status: BetStatus;

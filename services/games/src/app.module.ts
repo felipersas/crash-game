@@ -1,15 +1,17 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import { GamesController } from './presentation/controllers/games.controller';
 import { PrismaModule } from './infrastructure/persistence/prisma/prisma.module';
 import { PrismaService } from './infrastructure/persistence/prisma/prisma.service';
 import { PrismaRoundRepository } from './infrastructure/persistence/prisma/round.repository.impl';
 import { PrismaBetRepository } from './infrastructure/persistence/prisma/bet.repository.impl';
 import { RabbitMQEventPublisher } from './infrastructure/messaging/rabbitmq/event-publisher.impl';
-import { WalletEventsConsumer } from './infrastructure/messaging/rabbitmq/wallet-events.consumer';
+import { WalletEventsController } from './infrastructure/messaging/rabbitmq/wallet-events.controller';
 import { WalletDebitedEventHandler } from './infrastructure/messaging/rabbitmq/handlers/wallet-debited.handler';
 import { WalletDebitFailedEventHandler } from './infrastructure/messaging/rabbitmq/handlers/wallet-debit-failed.handler';
+import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-processor';
 import { RoundLifecycleManager } from './infrastructure/scheduling/round-lifecycle-manager';
 import { RoundCrashHandler } from './infrastructure/scheduling/round-crash-handler';
 import { RedisService } from './infrastructure/redis/redis.service';
@@ -23,12 +25,20 @@ import { CancelBetUseCase } from './application/use-cases/cancel-bet.use-case';
 import { GetBetStatusUseCase } from './application/use-cases/get-bet-status.use-case';
 import { GetMyBetsUseCase } from './application/use-cases/get-my-bets.use-case';
 import { BetTimeoutHandler } from './infrastructure/scheduling/bet-timeout.handler';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, SEED_CHAIN_REPOSITORY, GAMES_GATEWAY, GAME_BROADCASTER, IDEMPOTENCY_CACHE, ROUND_STATE_PROVIDER } from './infrastructure/di/tokens';
+import {
+  ROUND_REPOSITORY,
+  BET_REPOSITORY,
+  EVENT_PUBLISHER,
+  SEED_CHAIN_REPOSITORY,
+  GAMES_GATEWAY,
+  GAME_BROADCASTER,
+  IDEMPOTENCY_CACHE,
+  ROUND_STATE_PROVIDER,
+} from './infrastructure/di/tokens';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
 import { APP_FILTER } from '@nestjs/core';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-chain.repository.impl';
-import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-processor';
 
 @Module({
   imports: [
@@ -37,17 +47,26 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
     }),
     ScheduleModule.forRoot(),
     PrismaModule,
-    // AuthModule, // Removed - auth now handled by Kong OIDC plugin
+    ClientsModule.register([
+      {
+        name: 'GAMES_EVENTS_CLIENT',
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL || 'amqp://admin:admin@localhost:5672'],
+          exchange: 'games.events',
+          exchangeType: 'fanout',
+        },
+      },
+    ]),
   ],
-  controllers: [GamesController],
+  controllers: [GamesController, WalletEventsController],
   providers: [
     // Exception Filter (global - handles all exceptions)
     {
       provide: APP_FILTER,
       useClass: AllExceptionsFilter,
     },
-    // Authentication Guard removed - now handled by Kong OIDC plugin
-    // Infrastructure (PrismaService from global PrismaModule)
+    // Infrastructure
     PrismaService,
     {
       provide: GAMES_GATEWAY,
@@ -69,15 +88,13 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
       provide: SEED_CHAIN_REPOSITORY,
       useClass: FileSeedChainRepository,
     },
+    // Messaging
     {
       provide: EVENT_PUBLISHER,
       useClass: RabbitMQEventPublisher,
     },
-    // Wallet Events Consumer & Handlers
-    WalletEventsConsumer,
     WalletDebitedEventHandler,
     WalletDebitFailedEventHandler,
-    // Outbox Pattern for reliable event publishing
     OutboxProcessor,
     RedisService,
     {
@@ -103,11 +120,6 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
     GetBetStatusUseCase,
     GetMyBetsUseCase,
   ],
-  exports: [
-    ROUND_REPOSITORY,
-    BET_REPOSITORY,
-    SEED_CHAIN_REPOSITORY,
-    EVENT_PUBLISHER,
-  ],
+  exports: [ROUND_REPOSITORY, BET_REPOSITORY, SEED_CHAIN_REPOSITORY],
 })
 export class AppModule {}

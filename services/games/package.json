@@ -10,6 +10,9 @@
     "test:e2e": "bun test tests/e2e",
     "test:find-seeds": "bun run tests/helpers/find-deterministic-seeds.ts",
     "start:prod": "NODE_ENV=production bun dist/main.js",
+    "lint": "eslint \"{src,tests}/**/*.ts\" --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },
@@ -21,10 +24,12 @@
     "@nestjs/core": "^11.1.17",
     "@nestjs/event-emitter": "^3.1.0",
     "@nestjs/jwt": "^11.0.2",
+    "@nestjs/microservices": "^11.1.19",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.17",
     "@nestjs/platform-socket.io": "^11.1.17",
     "@nestjs/schedule": "^6.1.3",
+    "@nestjs/swagger": "^11.4.2",
     "@nestjs/websockets": "^11.1.17",
     "@prisma/client": "^6.3.0",
     "amqp-connection-manager": "^4.1.2",
@@ -40,6 +45,8 @@
     "socket.io": "^4.6.0"
   },
   "devDependencies": {
+    "@crash/eslint-config": "workspace:*",
+    "@crash/prettier-config": "workspace:*",
     "@nestjs/testing": "^11.1.17",
     "@testcontainers/postgresql": "^11.14.0",
     "@testcontainers/rabbitmq": "^11.14.0",
@@ -48,6 +55,8 @@
     "@types/ioredis": "^5.0.0",
     "@types/passport-jwt": "^4.0.1",
     "bun-types": "latest",
+    "eslint": "^9.28.0",
+    "prettier": "^3.5.3",
     "prisma": "^6.3.0",
     "testcontainers": "^11.14.0",
     "typescript": "^5.8.3"

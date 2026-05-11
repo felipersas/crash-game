@@ -39,38 +39,30 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
   ) {}
 
   async execute(input: ConfirmBetInput): Promise<ConfirmBetOutput> {
-    // Find bet directly by player and round
-    const bet = await this.betRepository.findByPlayerAndRound(
-      input.playerId,
-      input.roundId,
-    );
+    const bet = await this.betRepository.findByPlayerAndRound(input.playerId, input.roundId);
 
     if (!bet) {
       throw new BetNotFoundError();
     }
 
-    // Confirm the bet (PENDING → ACTIVE)
     bet.confirm();
-
-    // Save bet state change
     await this.betRepository.update(bet);
 
-    // Emit event for WebSocket notification
     const event = createBetConfirmedEvent(
       input.roundId,
       input.betId,
       input.playerId,
       bet.getAmount().toCents(),
-      1, // version for the event
+      1,
     );
     await this.eventPublisher.publishBatch([event]);
 
-    // Broadcast via WebSocket (fire-and-forget, non-blocking)
     try {
       this.broadcaster.broadcastBetConfirmed(
         input.roundId,
         input.betId,
         input.playerId,
+        bet.playerName,
         bet.getAmount().toCents(),
       );
     } catch (error) {

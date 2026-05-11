@@ -1,6 +1,5 @@
 import { Wallet } from '@/domain/entities/wallet.entity';
 
-
 /**
  *
  * Defines the contract for wallet persistence.

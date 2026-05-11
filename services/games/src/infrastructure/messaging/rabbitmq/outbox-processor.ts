@@ -64,7 +64,7 @@ export class OutboxProcessor {
         },
       });
 
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 

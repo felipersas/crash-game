@@ -37,7 +37,6 @@ export function useGame() {
   const myActiveBet = useGameStore((s) => s.myActiveBet);
   const roundStatus = useGameStore((s) => s.roundStatus);
 
-  // Current round query with smart polling
   const currentRoundQuery = useQuery<Round>({
     queryKey: ["current-round"],
     queryFn: getCurrentRound,
@@ -51,7 +50,6 @@ export function useGame() {
     refetchOnWindowFocus: roundStatus === RoundStatus.BETTING,
   });
 
-  // Place bet mutation
   const placeBetMutation = useMutation<PlaceBetResponse, ApiError, number>({
     mutationFn: placeBet,
     onSuccess: (data: PlaceBetResponse) => {
@@ -59,6 +57,7 @@ export function useGame() {
         id: data.betId,
         roundId: data.roundId,
         playerId: session?.playerId || "",
+        playerName: session?.user?.username || "",
         amountCents: data.amountCents,
         amountDecimal: (data.amountCents / 100).toFixed(2),
         status: data.status,
@@ -78,15 +77,12 @@ export function useGame() {
     },
   });
 
-  // Cash out mutation
   const cashOutMutation = useMutation<CashOutResponse, ApiError, void>({
     mutationFn: () => {
       if (!myActiveBet) throw new Error("No active bet to cash out");
       return cashOut(uuidv4(), myActiveBet.roundId);
     },
     onSuccess: (data: CashOutResponse) => {
-      toast.success(`Cashed out at ${data.cashOutMultiplier.toFixed(2)}x!`);
-
       updateBetStatus(data.betId, BetStatus.CASHED_OUT, {
         multiplier: data.cashOutMultiplier,
         payoutCents: data.payoutCents,

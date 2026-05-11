@@ -38,9 +38,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     for (const { tablename } of tables as Array<{ tablename: string }>) {
       if (tablename !== '_prisma_migrations') {
         try {
-          await this.prisma.$executeRawUnsafe(
-            `TRUNCATE TABLE "public"."${tablename}" CASCADE;`,
-          );
+          await this.prisma.$executeRawUnsafe(`TRUNCATE TABLE "public"."${tablename}" CASCADE;`);
         } catch (error) {
           console.error(`Could not truncate ${tablename}:`, error);
         }
@@ -48,7 +46,6 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // Convenience methods
   get wallet() {
     return this.prisma.wallet;
   }

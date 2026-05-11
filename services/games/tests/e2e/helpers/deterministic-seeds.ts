@@ -47,7 +47,7 @@ export const DETERMINISTIC_SEEDS: TestSeed[] = [
   {
     name: 'high-crash',
     seed: 'test-crash-5-179',
-    crashPoint: 5.10,
+    crashPoint: 5.1,
     description: 'High crash (~5x) - tests longer rounds',
   },
   {
@@ -62,7 +62,7 @@ export const DETERMINISTIC_SEEDS: TestSeed[] = [
  * Get a seed by name.
  */
 export function getSeedByName(name: string): string | undefined {
-  return DETERMINISTIC_SEEDS.find(s => s.name === name)?.seed;
+  return DETERMINISTIC_SEEDS.find((s) => s.name === name)?.seed;
 }
 
 /**
@@ -76,7 +76,7 @@ export function getFastSeed(): string {
  * Get all seed names.
  */
 export function getSeedNames(): string[] {
-  return DETERMINISTIC_SEEDS.map(s => s.name);
+  return DETERMINISTIC_SEEDS.map((s) => s.name);
 }
 
 /**
@@ -86,9 +86,7 @@ export function printSeeds(): void {
   console.log('📋 Available Deterministic Seeds:');
   console.log('='.repeat(70));
   for (const seed of DETERMINISTIC_SEEDS) {
-    console.log(
-      `${seed.name.padEnd(20)} → ${seed.crashPoint.toFixed(2)}x → ${seed.description}`,
-    );
+    console.log(`${seed.name.padEnd(20)} → ${seed.crashPoint.toFixed(2)}x → ${seed.description}`);
   }
   console.log('='.repeat(70));
   console.log('\n💡 Usage: DETERMINISTIC_SEED=<seed-value>');

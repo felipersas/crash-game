@@ -55,11 +55,7 @@ export class PrismaWalletRepository implements IWalletRepository {
     } catch (error: unknown) {
       // Prisma throws error if no rows were updated (version mismatch)
       if (error instanceof Error && 'code' in error) {
-        throw new OptimisticLockError(
-          data.id,
-          data.version,
-          data.version - 1,
-        );
+        throw new OptimisticLockError(data.id, data.version, data.version - 1);
       }
       throw error;
     }
@@ -88,12 +84,12 @@ export class PrismaWalletRepository implements IWalletRepository {
     });
   }
 
-  private toDomain(record: { id: string; playerId: string; balanceCents: bigint; version: number }): Wallet {
-    return Wallet.restore(
-      record.id,
-      record.playerId,
-      record.balanceCents,
-      record.version,
-    );
+  private toDomain(record: {
+    id: string;
+    playerId: string;
+    balanceCents: bigint;
+    version: number;
+  }): Wallet {
+    return Wallet.restore(record.id, record.playerId, record.balanceCents, record.version);
   }
 }

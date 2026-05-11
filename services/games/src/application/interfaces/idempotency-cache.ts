@@ -16,5 +16,9 @@ export interface CashoutIdempotencyResult {
 
 export interface IIdempotencyCache {
   checkCashoutIdempotency(idempotencyKey: string): Promise<CashoutIdempotencyResult | null>;
-  setCashoutIdempotency(idempotencyKey: string, result: CashoutIdempotencyResult, ttl?: number): Promise<boolean>;
+  setCashoutIdempotency(
+    idempotencyKey: string,
+    result: CashoutIdempotencyResult,
+    ttl?: number,
+  ): Promise<boolean>;
 }

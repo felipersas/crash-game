@@ -14,7 +14,9 @@ import { Wallet } from '../../../src/domain/entities/wallet.entity';
 
 // --- Mock helpers ---
 
-function mockFn<T extends (...args: any[]) => any>(impl?: T): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
+function mockFn<T extends (...args: any[]) => any>(
+  impl?: T,
+): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
   const calls: any[] = [];
   const fn: any = (...args: any[]) => {
     calls.push(args);
@@ -22,8 +24,12 @@ function mockFn<T extends (...args: any[]) => any>(impl?: T): T & { mockReturnVa
   };
   fn._impl = impl || (() => {});
   fn._calls = calls;
-  fn.mockReturnValue = (v: any) => { fn._impl = () => v; };
-  fn.mockResolvedValue = (v: any) => { fn._impl = () => Promise.resolve(v); };
+  fn.mockReturnValue = (v: any) => {
+    fn._impl = () => v;
+  };
+  fn.mockResolvedValue = (v: any) => {
+    fn._impl = () => Promise.resolve(v);
+  };
   return fn;
 }
 

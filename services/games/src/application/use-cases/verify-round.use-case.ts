@@ -23,9 +23,7 @@ export interface VerifyRoundOutput {
 
 @Injectable()
 export class VerifyRoundUseCase implements IUseCase<VerifyRoundInput, VerifyRoundOutput> {
-  constructor(
-    @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
-  ) {}
+  constructor(@Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository) {}
 
   async execute(input: VerifyRoundInput): Promise<VerifyRoundOutput> {
     const round = await this.roundRepository.findById(input.roundId);
@@ -60,7 +58,8 @@ export class VerifyRoundUseCase implements IUseCase<VerifyRoundInput, VerifyRoun
       salt: seed,
       crashPoint: crashPointValue,
       verified: hashMatches && crashPointMatches,
-      verificationFormula: 'SHA-256(seed) → extract first 52 bits → crash = max(1.00, (1 - 0.04) / (bits / 2^52))',
+      verificationFormula:
+        'SHA-256(seed) → extract first 52 bits → crash = max(1.00, (1 - 0.04) / (bits / 2^52))',
     };
   }
 }

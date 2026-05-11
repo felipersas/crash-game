@@ -133,13 +133,13 @@ describe('CrashPoint Value Object', () => {
     test('should apply 4% house edge (crash points tend lower)', async () => {
       // Generate many crash points and verify average is below theoretical fair value
       // With 4% house edge, expected value should be around 0.96 / 0.99 ≈ 0.97x the fair value
-      const seeds = Array.from({ length: 100 }, (_, i) => i.toString(16).padStart(2, '0').repeat(32));
-      const crashPoints = await Promise.all(
-        seeds.map(seed => CrashPoint.fromSeed(seed))
+      const seeds = Array.from({ length: 100 }, (_, i) =>
+        i.toString(16).padStart(2, '0').repeat(32),
       );
+      const crashPoints = await Promise.all(seeds.map((seed) => CrashPoint.fromSeed(seed)));
 
       // Count how many are "low" crash points (instant or near-instant crashes)
-      const lowCrashes = crashPoints.filter(cp => cp.getValue() < 1.1).length;
+      const lowCrashes = crashPoints.filter((cp) => cp.getValue() < 1.1).length;
 
       // With house edge, we expect a significant portion of low crashes
       // This is a probabilistic test, but should generally hold
@@ -150,12 +150,14 @@ describe('CrashPoint Value Object', () => {
       // This test verifies the randomness in the algorithm
       const seed = 'cc'.repeat(32); // valid 64-char hex seed
       const crashPoints = await Promise.all(
-        Array(10).fill(0).map(() => CrashPoint.fromSeed(seed))
+        Array(10)
+          .fill(0)
+          .map(() => CrashPoint.fromSeed(seed)),
       );
 
       // All should be the same (deterministic from seed)
-      const values = crashPoints.map(cp => cp.getValue());
-      expect(values.every(v => v === values[0])).toBe(true);
+      const values = crashPoints.map((cp) => cp.getValue());
+      expect(values.every((v) => v === values[0])).toBe(true);
     });
   });
 
@@ -163,10 +165,10 @@ describe('CrashPoint Value Object', () => {
     test('should enforce minimum crash point of 1.00x', async () => {
       // Even with seeds that would mathematically result in values below 1.00,
       // the crash point should be clamped to 1.00
-      const seeds = Array.from({ length: 50 }, (_, i) => (i + 100).toString(16).padStart(2, '0').repeat(32));
-      const crashPoints = await Promise.all(
-        seeds.map(seed => CrashPoint.fromSeed(seed))
+      const seeds = Array.from({ length: 50 }, (_, i) =>
+        (i + 100).toString(16).padStart(2, '0').repeat(32),
       );
+      const crashPoints = await Promise.all(seeds.map((seed) => CrashPoint.fromSeed(seed)));
 
       // All crash points should be at least 1.00
       for (const cp of crashPoints) {

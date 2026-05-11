@@ -24,9 +24,9 @@
  */
 
 export interface SeedChainData {
-  readonly seeds: readonly string[];  // [seed_N, seed_N+1, ..., seed_0]
-  readonly current: number;           // Index of current seed
-  readonly commitment: string;        // H(seed_0) - initial commitment
+  readonly seeds: readonly string[]; // [seed_N, seed_N+1, ..., seed_0]
+  readonly current: number; // Index of current seed
+  readonly commitment: string; // H(seed_0) - initial commitment
 }
 
 export class SeedChain {
@@ -129,10 +129,7 @@ export class SeedChain {
    * NOTE: This creates a single-seed chain for backwards compatibility.
    * The actual seed chain is managed separately by SeedChainRepository.
    */
-  static fromRoundPersistence(data: {
-    currentSeed: string;
-    currentHash: string;
-  }): SeedChain {
+  static fromRoundPersistence(data: { currentSeed: string; currentHash: string }): SeedChain {
     return new SeedChain({
       seeds: [data.currentSeed],
       current: 0,
@@ -201,7 +198,7 @@ export class SeedChain {
    */
   needsRegeneration(): boolean {
     const threshold = Math.floor(this.seeds.length * 0.1);
-    return this.current >= (this.seeds.length - threshold);
+    return this.current >= this.seeds.length - threshold;
   }
 
   /**
@@ -243,9 +240,8 @@ export class SeedChain {
     }
 
     // The seed at position N should hash to seed at position N+1
-    const expectedNextSeed = position < this.seeds.length - 1
-      ? this.seeds[position + 1]
-      : this.commitment;
+    const expectedNextSeed =
+      position < this.seeds.length - 1 ? this.seeds[position + 1] : this.commitment;
 
     const actualHash = await SeedChain.hashSeed(seed);
     return actualHash === expectedNextSeed;
@@ -285,7 +281,7 @@ export class SeedChain {
    */
   private static bytesToHex(bytes: Uint8Array): string {
     return Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, '0'))
+      .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   }
 

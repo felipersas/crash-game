@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { CashOutUseCase } from '../../../src/application/use-cases/cash-out.use-case';
 import { Round, RoundStatus } from '../../../src/domain/entities/round.entity';
-import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
+import { type Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
 import { Money } from '@crash/domain';
 import {
   RoundNotFoundError,
@@ -9,13 +9,22 @@ import {
   InvalidIdempotencyKeyError,
 } from '../../../src/domain/errors/domain.errors';
 
-function mockFn<T extends (...args: any[]) => any>(impl?: T): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void; calls: any[] } {
+function mockFn<T extends (...args: any[]) => any>(
+  impl?: T,
+): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void; calls: any[] } {
   const calls: any[] = [];
-  const fn: any = (...args: any[]) => { calls.push(args); return fn._impl(...args); };
+  const fn: any = (...args: any[]) => {
+    calls.push(args);
+    return fn._impl(...args);
+  };
   fn._impl = impl || (() => {});
   fn.calls = calls;
-  fn.mockReturnValue = (v: any) => { fn._impl = () => v; };
-  fn.mockResolvedValue = (v: any) => { fn._impl = () => Promise.resolve(v); };
+  fn.mockReturnValue = (v: any) => {
+    fn._impl = () => v;
+  };
+  fn.mockResolvedValue = (v: any) => {
+    fn._impl = () => Promise.resolve(v);
+  };
   return fn;
 }
 
@@ -276,7 +285,9 @@ describe('CashOutUseCase', () => {
     mockLifecycleManager.getCurrentRound.mockReturnValue(round);
     mockBetRepo.findByPlayerAndRound.mockResolvedValue(bet);
     // Gateway throws - use mockReturnValue with a throwing function
-    mockGateway.broadcastPlayerCashedOut = mockFn(() => { throw new Error('WebSocket error'); });
+    mockGateway.broadcastPlayerCashedOut = mockFn(() => {
+      throw new Error('WebSocket error');
+    });
 
     // Should NOT throw - error is caught internally
     const result = await useCase.execute({

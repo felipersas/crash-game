@@ -1,13 +1,27 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import { Round, RoundStatus } from '@/domain/entities/round.entity';
+import { type Round, RoundStatus } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import type { IEventPublisher } from '@crash/messaging';
-import { RoundNotFoundError, NoActiveBetError, InvalidIdempotencyKeyError } from '@/domain/errors/domain.errors';
-import { ROUND_REPOSITORY, BET_REPOSITORY, EVENT_PUBLISHER, GAME_BROADCASTER, IDEMPOTENCY_CACHE, ROUND_STATE_PROVIDER } from '@/infrastructure/di/tokens';
+import {
+  RoundNotFoundError,
+  NoActiveBetError,
+  InvalidIdempotencyKeyError,
+} from '@/domain/errors/domain.errors';
+import {
+  ROUND_REPOSITORY,
+  BET_REPOSITORY,
+  EVENT_PUBLISHER,
+  GAME_BROADCASTER,
+  IDEMPOTENCY_CACHE,
+  ROUND_STATE_PROVIDER,
+} from '@/infrastructure/di/tokens';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
-import type { IIdempotencyCache, CashoutIdempotencyResult } from '@/application/interfaces/idempotency-cache';
+import type {
+  IIdempotencyCache,
+  CashoutIdempotencyResult,
+} from '@/application/interfaces/idempotency-cache';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
 
@@ -145,11 +159,16 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
       (e): e is PlayerCashedOutEvent => e.eventType === 'PlayerCashedOut',
     );
     if (cashedOut) {
+      const cashedOutBet = round.getBetByPlayer(cashedOut.playerId);
+      if (!cashedOutBet) {
+        this.logger.warn(`Bet not found for cashed out player ${cashedOut.playerId} in round ${cashedOut.roundId}`);
+      }
       try {
         this.broadcaster.broadcastPlayerCashedOut(
           cashedOut.roundId,
           cashedOut.betId,
           cashedOut.playerId,
+          cashedOutBet?.playerName ?? '',
           cashedOut.cashOutMultiplier,
           cashedOut.winAmount,
         );

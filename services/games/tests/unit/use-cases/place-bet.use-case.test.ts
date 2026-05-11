@@ -1,7 +1,11 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { PlaceBetUseCase } from '../../../src/application/use-cases/place-bet.use-case';
 import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
-import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '../../../src/domain/entities/round.entity';
+import {
+  Round,
+  RoundStatus,
+  DEFAULT_ROUND_CONFIG,
+} from '../../../src/domain/entities/round.entity';
 import { Money } from '@crash/domain';
 import {
   BetNotFoundError,
@@ -19,9 +23,17 @@ function mockFn<T extends (...args: any[]) => any>(impl?: T) {
   };
   fn._impl = impl || (() => {});
   fn.callCount = 0;
-  fn.mockReturnValue = (v: any) => { fn._impl = () => v; };
-  fn.mockResolvedValue = (v: any) => { fn._impl = () => Promise.resolve(v); };
-  return fn as T & { callCount: number; mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void };
+  fn.mockReturnValue = (v: any) => {
+    fn._impl = () => v;
+  };
+  fn.mockResolvedValue = (v: any) => {
+    fn._impl = () => Promise.resolve(v);
+  };
+  return fn as T & {
+    callCount: number;
+    mockReturnValue: (v: any) => void;
+    mockResolvedValue: (v: any) => void;
+  };
 }
 
 function createMockRoundRepository(overrides = {}) {
@@ -162,7 +174,9 @@ describe('PlaceBetUseCase', () => {
     const round = await Round.create(DEFAULT_ROUND_CONFIG);
     round.pullEvents();
     roundRepository.findCurrentRound.mockResolvedValue(round);
-    gamesGateway.broadcastBetPlaced = mockFn(() => { throw new Error('WS connection lost'); });
+    gamesGateway.broadcastBetPlaced = mockFn(() => {
+      throw new Error('WS connection lost');
+    });
 
     // Should NOT throw
     const result = await useCase.execute({ playerId, amountCents: validAmountCents });
@@ -178,9 +192,9 @@ describe('PlaceBetUseCase', () => {
 
     const belowMinCents = 50n; // $0.50, below $1.00 minimum
 
-    expect(
-      useCase.execute({ playerId, amountCents: belowMinCents }),
-    ).rejects.toThrow(BetBelowMinimumError);
+    expect(useCase.execute({ playerId, amountCents: belowMinCents })).rejects.toThrow(
+      BetBelowMinimumError,
+    );
   });
 
   test('should throw on invalid bet amount above maximum', async () => {
@@ -190,9 +204,9 @@ describe('PlaceBetUseCase', () => {
 
     const aboveMaxCents = 100_000_00n; // $100,000.00, above $1,000.00 maximum
 
-    expect(
-      useCase.execute({ playerId, amountCents: aboveMaxCents }),
-    ).rejects.toThrow(BetAboveMaximumError);
+    expect(useCase.execute({ playerId, amountCents: aboveMaxCents })).rejects.toThrow(
+      BetAboveMaximumError,
+    );
   });
 
   test('should save round after placing bet', async () => {

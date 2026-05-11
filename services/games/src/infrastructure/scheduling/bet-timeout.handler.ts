@@ -19,7 +19,7 @@ import { CancelBetUseCase } from '@/application/use-cases/cancel-bet.use-case';
 @Injectable()
 export class BetTimeoutHandler {
   private readonly logger = new Logger(BetTimeoutHandler.name);
-  
+
   /**
    * Bets in PENDING state older than this are considered stale.
    * Should be longer than the expected wallet response time.
@@ -39,7 +39,7 @@ export class BetTimeoutHandler {
   async cancelStalePendingBets(): Promise<void> {
     try {
       const staleThreshold = new Date(Date.now() - this.PENDING_TIMEOUT_MS);
-      
+
       // Find PENDING bets older than the stale threshold
       const staleBets = await this.betRepository.findStalePendingBets(staleThreshold);
 

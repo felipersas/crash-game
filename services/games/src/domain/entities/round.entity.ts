@@ -70,11 +70,7 @@ export class Round {
   private events: GameDomainEvent[];
   private config: RoundConfig;
 
-  private constructor(
-    id: string,
-    seedChain: SeedChain,
-    config: RoundConfig,
-  ) {
+  private constructor(id: string, seedChain: SeedChain, config: RoundConfig) {
     this.id = id;
     this.seedChain = seedChain;
     this.config = config;
@@ -97,12 +93,7 @@ export class Round {
 
     // Emit RoundStartedEvent with seed hash (commit before reveal)
     this.addEvent(
-      createRoundStartedEvent(
-        this.id,
-        this.seedChain.getCurrentSeedHash(),
-        endTime,
-        this.version,
-      ),
+      createRoundStartedEvent(this.id, this.seedChain.getCurrentSeedHash(), endTime, this.version),
     );
   }
 
@@ -123,7 +114,10 @@ export class Round {
    * Factory method to create a new round with an existing seed chain.
    * Used by RoundLifecycleManager to use pre-generated seeds.
    */
-  static async createWithSeedChain(seedChain: SeedChain, config: RoundConfig = DEFAULT_ROUND_CONFIG): Promise<Round> {
+  static async createWithSeedChain(
+    seedChain: SeedChain,
+    config: RoundConfig = DEFAULT_ROUND_CONFIG,
+  ): Promise<Round> {
     const roundId = crypto.randomUUID();
     const round = new Round(roundId, seedChain, config);
 
@@ -174,7 +168,7 @@ export class Round {
    * Place a bet for a player.
    * Only allowed during BETTING phase.
    */
-  placeBet(playerId: string, amount: Money): void {
+  placeBet(playerId: string, playerName: string, amount: Money): void {
     if (this.status !== RoundStatus.BETTING) {
       throw new RoundNotAcceptingBetsError();
     }
@@ -191,19 +185,11 @@ export class Round {
       throw new BetAboveMaximumError(amount.toCents());
     }
 
-    const bet = Bet.create(this.id, playerId, amount);
+    const bet = Bet.create(this.id, playerId, playerName, amount);
     this.bets.set(playerId, bet);
 
     this.version++;
-    this.addEvent(
-      createBetPlacedEvent(
-        this.id,
-        bet.id,
-        playerId,
-        amount.toCents(),
-        this.version,
-      ),
-    );
+    this.addEvent(createBetPlacedEvent(this.id, bet.id, playerId, amount.toCents(), this.version));
   }
 
   /**
@@ -251,7 +237,6 @@ export class Round {
     this.status = RoundStatus.ACTIVE;
     this.startedAt = new Date();
 
-    // Calculate crash point from seed
     this.crashPoint = await CrashPoint.fromSeed(this.seedChain.getSeed());
 
     this.addEvent(createBettingPhaseEndedEvent(this.id, this.version));
@@ -268,7 +253,6 @@ export class Round {
 
     this.currentMultiplier = Multiplier.afterDuration(elapsedSeconds, this.config.growthRate);
 
-    // Check if round should crash
     if (this.crashPoint && this.crashPoint.shouldCrashAt(this.currentMultiplier.getValue())) {
       this.crash();
     }
@@ -296,7 +280,6 @@ export class Round {
       }
     }
 
-    // Calculate totals for the event
     let totalBets = 0;
     let totalBetAmount = 0n;
     let totalWinAmount = 0n;
@@ -395,6 +378,14 @@ export class Round {
    */
   getBetByPlayer(playerId: string): Bet | undefined {
     return this.bets.get(playerId);
+  }
+
+  /**
+   * Remove a player's bet from the aggregate.
+   * Used when cancelling a stale PENDING bet before retry.
+   */
+  removeBet(playerId: string): void {
+    this.bets.delete(playerId);
   }
 
   /**

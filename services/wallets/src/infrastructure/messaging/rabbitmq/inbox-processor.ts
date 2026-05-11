@@ -27,7 +27,9 @@ export class InboxProcessor {
       const deletedCount = await this.inboxRepository.deleteOlderThan(this.RETENTION_DAYS);
 
       if (deletedCount > 0) {
-        this.logger.log(`Cleaned up ${deletedCount} old inbox events (older than ${this.RETENTION_DAYS} days)`);
+        this.logger.log(
+          `Cleaned up ${deletedCount} old inbox events (older than ${this.RETENTION_DAYS} days)`,
+        );
       }
     } catch (error: unknown) {
       this.logger.error('Error cleaning up inbox events:', error);

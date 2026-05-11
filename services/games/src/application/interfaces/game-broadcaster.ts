@@ -6,8 +6,28 @@
  */
 
 export interface IGameBroadcaster {
-  broadcastBetPlaced(roundId: string, betId: string, playerId: string, amountCents: bigint): void;
-  broadcastBetConfirmed(roundId: string, betId: string, playerId: string, amountCents: bigint): void;
-  broadcastBetCancelled(roundId: string, betId: string, playerId: string, amountCents: bigint, reason: string): void;
-  broadcastPlayerCashedOut(roundId: string, betId: string, playerId: string, multiplier: number, payoutCents: bigint): void;
+  broadcastBetPlaced(roundId: string, betId: string, playerId: string, playerName: string, amountCents: bigint): void;
+  broadcastBetConfirmed(
+    roundId: string,
+    betId: string,
+    playerId: string,
+    playerName: string,
+    amountCents: bigint,
+  ): void;
+  broadcastBetCancelled(
+    roundId: string,
+    betId: string,
+    playerId: string,
+    playerName: string,
+    amountCents: bigint,
+    reason: string,
+  ): void;
+  broadcastPlayerCashedOut(
+    roundId: string,
+    betId: string,
+    playerId: string,
+    playerName: string,
+    multiplier: number,
+    payoutCents: bigint,
+  ): void;
 }

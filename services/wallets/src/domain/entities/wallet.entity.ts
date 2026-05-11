@@ -23,12 +23,7 @@ export class Wallet {
   private version: number;
   private events: WalletDomainEvent[];
 
-  private constructor(
-    id: string,
-    playerId: string,
-    balance: Money,
-    version: number,
-  ) {
+  private constructor(id: string, playerId: string, balance: Money, version: number) {
     this.id = id;
     this.playerId = playerId;
     this.balance = balance;
@@ -44,9 +39,7 @@ export class Wallet {
   static create(playerId: string): Wallet {
     const walletId = crypto.randomUUID();
     const wallet = new Wallet(walletId, playerId, Money.zero(), 1);
-    wallet.addEvent(
-      createWalletCreatedEvent(walletId, playerId, Money.zero().toCents(), 1),
-    );
+    wallet.addEvent(createWalletCreatedEvent(walletId, playerId, Money.zero().toCents(), 1));
     return wallet;
   }
 
@@ -54,12 +47,7 @@ export class Wallet {
    * Factory method to restore a wallet from persistence.
    * Does NOT emit events (used for rehydration).
    */
-  static restore(
-    id: string,
-    playerId: string,
-    balanceCents: bigint,
-    version: number,
-  ): Wallet {
+  static restore(id: string, playerId: string, balanceCents: bigint, version: number): Wallet {
     const balance = Money.fromCents(balanceCents);
     const wallet = new Wallet(id, playerId, balance, version);
     return wallet;

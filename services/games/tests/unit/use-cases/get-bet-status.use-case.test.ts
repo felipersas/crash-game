@@ -14,9 +14,17 @@ function mockFn<T extends (...args: any[]) => any>(impl?: T) {
   };
   fn._impl = impl || (() => {});
   fn.callCount = 0;
-  fn.mockReturnValue = (v: any) => { fn._impl = () => v; };
-  fn.mockResolvedValue = (v: any) => { fn._impl = () => Promise.resolve(v); };
-  return fn as T & { callCount: number; mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void };
+  fn.mockReturnValue = (v: any) => {
+    fn._impl = () => v;
+  };
+  fn.mockResolvedValue = (v: any) => {
+    fn._impl = () => Promise.resolve(v);
+  };
+  return fn as T & {
+    callCount: number;
+    mockReturnValue: (v: any) => void;
+    mockResolvedValue: (v: any) => void;
+  };
 }
 
 function createMockBetRepository(overrides = {}) {
@@ -63,9 +71,7 @@ describe('GetBetStatusUseCase', () => {
   test('should throw BetNotFoundError when bet not found', async () => {
     betRepository.findById.mockResolvedValue(null);
 
-    expect(
-      useCase.execute({ betId: 'nonexistent-bet-id' }),
-    ).rejects.toThrow(BetNotFoundError);
+    expect(useCase.execute({ betId: 'nonexistent-bet-id' })).rejects.toThrow(BetNotFoundError);
   });
 
   test('should include cash out data for cashed out bet', async () => {

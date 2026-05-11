@@ -2,11 +2,17 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { GetMyBetsUseCase } from '../../../src/application/use-cases/get-my-bets.use-case';
 import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
 
-function mockFn<T extends (...args: any[]) => any>(impl?: T): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
+function mockFn<T extends (...args: any[]) => any>(
+  impl?: T,
+): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
   const fn: any = (...args: any[]) => fn._impl(...args);
   fn._impl = impl || (() => {});
-  fn.mockReturnValue = (v: any) => { fn._impl = () => v; };
-  fn.mockResolvedValue = (v: any) => { fn._impl = () => Promise.resolve(v); };
+  fn.mockReturnValue = (v: any) => {
+    fn._impl = () => v;
+  };
+  fn.mockResolvedValue = (v: any) => {
+    fn._impl = () => Promise.resolve(v);
+  };
   return fn;
 }
 
@@ -55,7 +61,11 @@ describe('GetMyBetsUseCase', () => {
   });
 
   test('Should return paginated bets for player', async () => {
-    const bet1 = makeBet({ status: BetStatus.CASHED_OUT, cashOutMultiplier: 2.5, cashOutAmountCents: 2500n });
+    const bet1 = makeBet({
+      status: BetStatus.CASHED_OUT,
+      cashOutMultiplier: 2.5,
+      cashOutAmountCents: 2500n,
+    });
     const bet2 = makeBet({ status: BetStatus.LOST });
 
     mockBetRepo.findByPlayerPaginated.mockResolvedValue([bet1, bet2]);

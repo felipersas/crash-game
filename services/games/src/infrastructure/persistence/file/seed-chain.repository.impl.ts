@@ -25,7 +25,7 @@ export class FileSeedChainRepository implements ISeedChainRepository {
     this.encryptionKeyBase64 = this.configService.get<string>('SEED_CHAIN_ENCRYPTION_KEY');
 
     // Ensure data directory exists
-    fs.mkdir(dataDir, { recursive: true }).catch(err => {
+    fs.mkdir(dataDir, { recursive: true }).catch((err) => {
       if (err.code !== 'EEXIST') {
         this.logger.error(`Failed to create data directory: ${err.message}`);
       }
@@ -34,7 +34,7 @@ export class FileSeedChainRepository implements ISeedChainRepository {
     if (!this.encryptionKeyBase64) {
       this.logger.warn(
         'SEED_CHAIN_ENCRYPTION_KEY not set — seed chain will be stored in plaintext. ' +
-        'Generate a key with: openssl rand -base64 32'
+          'Generate a key with: openssl rand -base64 32',
       );
     }
   }
@@ -49,7 +49,7 @@ export class FileSeedChainRepository implements ISeedChainRepository {
       this.logger.log(`Seed chain loaded from ${this.filePath}`);
       this.logger.debug(
         `Position: ${chainData.current}/${chainData.seeds.length}, ` +
-        `Commitment: ${chainData.commitment.substring(0, 16)}...`
+          `Commitment: ${chainData.commitment.substring(0, 16)}...`,
       );
 
       return SeedChain.fromPersistence({
@@ -63,7 +63,9 @@ export class FileSeedChainRepository implements ISeedChainRepository {
         return null;
       }
 
-      this.logger.error(`Failed to load seed chain: ${error instanceof Error ? error.message : error}`);
+      this.logger.error(
+        `Failed to load seed chain: ${error instanceof Error ? error.message : error}`,
+      );
       return null;
     }
   }
@@ -81,10 +83,12 @@ export class FileSeedChainRepository implements ISeedChainRepository {
       const summary = chain.getSummary();
       this.logger.log(
         `Seed chain saved: position ${summary.currentPosition}/${summary.total}, ` +
-        `${summary.remaining} remaining`
+          `${summary.remaining} remaining`,
       );
     } catch (error: unknown) {
-      this.logger.error(`Failed to save seed chain: ${error instanceof Error ? error.message : error}`);
+      this.logger.error(
+        `Failed to save seed chain: ${error instanceof Error ? error.message : error}`,
+      );
       throw error;
     }
   }
@@ -99,7 +103,9 @@ export class FileSeedChainRepository implements ISeedChainRepository {
         return;
       }
 
-      this.logger.error(`Failed to delete seed chain: ${error instanceof Error ? error.message : error}`);
+      this.logger.error(
+        `Failed to delete seed chain: ${error instanceof Error ? error.message : error}`,
+      );
       throw error;
     }
   }
@@ -122,7 +128,7 @@ export class FileSeedChainRepository implements ISeedChainRepository {
     if (AesCipher.isEncryptedPayload(parsed)) {
       if (!this.encryptionKeyBase64) {
         throw new Error(
-          'Seed chain file is encrypted but SEED_CHAIN_ENCRYPTION_KEY is not configured'
+          'Seed chain file is encrypted but SEED_CHAIN_ENCRYPTION_KEY is not configured',
         );
       }
       const key = await AesCipher.importKey(this.encryptionKeyBase64);
@@ -131,12 +137,9 @@ export class FileSeedChainRepository implements ISeedChainRepository {
     }
 
     // Legacy plaintext format: { seeds: [...], current: N, commitment: "..." }
-    if (
-      typeof parsed === 'object' && parsed !== null &&
-      'seeds' in parsed && 'current' in parsed
-    ) {
+    if (typeof parsed === 'object' && parsed !== null && 'seeds' in parsed && 'current' in parsed) {
       this.logger.warn(
-        'Seed chain file is stored in plaintext — it will be encrypted on next save'
+        'Seed chain file is stored in plaintext — it will be encrypted on next save',
       );
       return parsed as SeedChainData;
     }

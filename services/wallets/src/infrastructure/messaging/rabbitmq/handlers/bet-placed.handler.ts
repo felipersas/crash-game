@@ -15,7 +15,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
 import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
-import { EVENT_PUBLISHER, PLAYER_WALLET_RESOLVER, INBOX_REPOSITORY } from '@/infrastructure/di/tokens';
+import {
+  EVENT_PUBLISHER,
+  PLAYER_WALLET_RESOLVER,
+  INBOX_REPOSITORY,
+} from '@/infrastructure/di/tokens';
 import type { IEventPublisher } from '@crash/messaging';
 import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import {
@@ -81,16 +85,22 @@ export class BetPlacedEventHandler {
       const existing = await this.inboxRepository.findByIdempotencyKey(idempotencyKey);
 
       if (existing?.status === 'PROCESSED') {
-        this.logger.log(`Duplicate BetPlacedEvent detected (already processed): ${idempotencyKey}. Skipping.`);
+        this.logger.log(
+          `Duplicate BetPlacedEvent detected (already processed): ${idempotencyKey}. Skipping.`,
+        );
         return;
       }
 
       if (existing?.status === 'FAILED') {
-        this.logger.warn(`Duplicate BetPlacedEvent detected (previously failed): ${idempotencyKey}. Retrying.`);
+        this.logger.warn(
+          `Duplicate BetPlacedEvent detected (previously failed): ${idempotencyKey}. Retrying.`,
+        );
         eventId = existing.id;
         // Continue to retry the failed operation
       } else {
-        this.logger.log(`Duplicate BetPlacedEvent detected (pending): ${idempotencyKey}. Skipping.`);
+        this.logger.log(
+          `Duplicate BetPlacedEvent detected (pending): ${idempotencyKey}. Skipping.`,
+        );
         return;
       }
     } else {
@@ -126,10 +136,15 @@ export class BetPlacedEventHandler {
 
         this.logger.debug(`Emitted WalletDebitedEvent for bet ${event.betId}`);
       } catch (publishError) {
-        const publishErrorMessage = publishError instanceof Error ? publishError.message : String(publishError);
+        const publishErrorMessage =
+          publishError instanceof Error ? publishError.message : String(publishError);
 
         // Event publish failed after successful debit - mark as FAILED for retry
-        await this.inboxRepository.markAsFailed(eventId, `Event publish failed: ${publishErrorMessage}`, 0);
+        await this.inboxRepository.markAsFailed(
+          eventId,
+          `Event publish failed: ${publishErrorMessage}`,
+          0,
+        );
 
         this.logger.error(
           `Failed to publish WalletDebitedEvent for bet ${event.betId}: ${publishErrorMessage}`,
@@ -163,9 +178,7 @@ export class BetPlacedEventHandler {
         );
       }
 
-      this.logger.error(
-        `Failed to debit wallet for bet ${event.betId}: ${errorMessage}`,
-      );
+      this.logger.error(`Failed to debit wallet for bet ${event.betId}: ${errorMessage}`);
 
       // Don't re-throw - saga pattern: we've emitted the failure event
       // Consumer will ACK the message

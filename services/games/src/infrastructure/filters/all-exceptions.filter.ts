@@ -1,9 +1,4 @@
-import {
-  Catch,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { Catch, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { ExceptionFilter, ArgumentsHost } from '@nestjs/common';
 import type { Response } from 'express';
 import { DomainError } from '@/domain/errors/domain.errors';
@@ -31,22 +26,22 @@ import {
  * Maps domain errors to appropriate HTTP status codes.
  */
 const ERROR_STATUS_MAP: Record<string, HttpStatus> = {
-  [BetBelowMinimumError.name]: HttpStatus.BAD_REQUEST,        // 400
-  [BetAboveMaximumError.name]: HttpStatus.BAD_REQUEST,        // 400
-  [RoundNotAcceptingBetsError.name]: HttpStatus.BAD_REQUEST,  // 400
-  [DuplicateBetError.name]: HttpStatus.CONFLICT,             // 409
-  [NoActiveBetError.name]: HttpStatus.BAD_REQUEST,           // 400
-  [RoundAlreadyCrashedError.name]: HttpStatus.BAD_REQUEST,   // 400
-  [BetAlreadyCashedOutError.name]: HttpStatus.BAD_REQUEST,   // 400
-  [RoundNotFoundError.name]: HttpStatus.NOT_FOUND,           // 404
-  [BetNotFoundError.name]: HttpStatus.NOT_FOUND,             // 404
-  [RoundAlreadyExistsError.name]: HttpStatus.CONFLICT,       // 409
-  [InvalidSeedError.name]: HttpStatus.BAD_REQUEST,           // 400
+  [BetBelowMinimumError.name]: HttpStatus.BAD_REQUEST, // 400
+  [BetAboveMaximumError.name]: HttpStatus.BAD_REQUEST, // 400
+  [RoundNotAcceptingBetsError.name]: HttpStatus.BAD_REQUEST, // 400
+  [DuplicateBetError.name]: HttpStatus.CONFLICT, // 409
+  [NoActiveBetError.name]: HttpStatus.BAD_REQUEST, // 400
+  [RoundAlreadyCrashedError.name]: HttpStatus.BAD_REQUEST, // 400
+  [BetAlreadyCashedOutError.name]: HttpStatus.BAD_REQUEST, // 400
+  [RoundNotFoundError.name]: HttpStatus.NOT_FOUND, // 404
+  [BetNotFoundError.name]: HttpStatus.NOT_FOUND, // 404
+  [RoundAlreadyExistsError.name]: HttpStatus.CONFLICT, // 409
+  [InvalidSeedError.name]: HttpStatus.BAD_REQUEST, // 400
   [VerificationFailedError.name]: HttpStatus.INTERNAL_SERVER_ERROR, // 500
-  [OptimisticLockError.name]: HttpStatus.CONFLICT,           // 409
-  [InvalidBetStateError.name]: HttpStatus.BAD_REQUEST,      // 400
-  [InvalidRoundStateError.name]: HttpStatus.BAD_REQUEST,    // 400
-  [SeedNotAvailableError.name]: HttpStatus.BAD_REQUEST,     // 400
+  [OptimisticLockError.name]: HttpStatus.CONFLICT, // 409
+  [InvalidBetStateError.name]: HttpStatus.BAD_REQUEST, // 400
+  [InvalidRoundStateError.name]: HttpStatus.BAD_REQUEST, // 400
+  [SeedNotAvailableError.name]: HttpStatus.BAD_REQUEST, // 400
   [InvalidIdempotencyKeyError.name]: HttpStatus.BAD_REQUEST, // 400
 };
 
@@ -71,7 +66,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let errorName = 'InternalServerError';
     let message = 'An unexpected error occurred';
 
-    // Handle DomainError instances
     let code: string | undefined;
 
     if (exception instanceof DomainError) {
@@ -80,11 +74,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message = exception.message;
       code = exception.code;
 
-      this.logger.warn(
-        `[${errorName}] ${message} - ${request.method} ${request.url}`
-      );
+      this.logger.warn(`[${errorName}] ${message} - ${request.method} ${request.url}`);
     }
-    // Handle HttpException instances (including built-in NestJS exceptions)
     else if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
       const exceptionResponse = exception.getResponse();
@@ -94,15 +85,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
           ? exceptionResponse
           : (exceptionResponse as any).message || exception.message;
     }
-    // Handle unexpected errors
     else if (exception instanceof Error) {
       message = exception.message;
 
-      // Log unexpected errors for debugging
-      this.logger.error(
-        `Unhandled exception: ${exception.message}`,
-        exception.stack
-      );
+      this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
     }
 
     return response.status(statusCode).json({

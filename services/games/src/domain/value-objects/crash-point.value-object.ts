@@ -10,7 +10,7 @@ import { InvalidSeedError } from '../errors/domain.errors';
 export class CrashPoint {
   private static readonly SEED_PRECISION = 52; // Number of bits from seed
   private static readonly HOUSE_EDGE = 0.04; // 4% house edge
-  private static readonly MIN_CRASH = 1.00; // Minimum crash point
+  private static readonly MIN_CRASH = 1.0; // Minimum crash point
   private readonly value: number;
 
   private constructor(value: number) {
@@ -76,7 +76,7 @@ export class CrashPoint {
       if (bitsCollected + 8 >= bitCount) {
         const bitsNeeded = bitCount - bitsCollected;
         const mask = (1n << BigInt(bitsNeeded)) - 1n;
-        result = (result << BigInt(bitsNeeded)) | (BigInt(byte) >> BigInt(8 - bitsNeeded)) & mask;
+        result = (result << BigInt(bitsNeeded)) | ((BigInt(byte) >> BigInt(8 - bitsNeeded)) & mask);
         break;
       }
       result = (result << 8n) | BigInt(byte);
