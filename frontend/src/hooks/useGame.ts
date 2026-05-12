@@ -12,10 +12,7 @@ import {
   type Round,
   type Bet,
 } from "@/types/game.types";
-import type {
-  PlaceBetResponse,
-  CashOutResponse,
-} from "@/schemas/api-schemas";
+import type { PlaceBetResponse, CashOutResponse } from "@/schemas/api-schemas";
 import type { ApiError } from "@/libs/axios";
 import { getErrorMessage } from "@/constants/error-codes";
 
@@ -50,8 +47,25 @@ export function useGame() {
     refetchOnWindowFocus: roundStatus === RoundStatus.BETTING,
   });
 
-  const placeBetMutation = useMutation<PlaceBetResponse, ApiError, number>({
+  const placeBetMutation = useMutation<
+    PlaceBetResponse,
+    ApiError,
+    number,
+    { prev?: { balance: string } }
+  >({
     mutationFn: placeBet,
+    onMutate: async (amount: number) => {
+      await queryClient.cancelQueries({ queryKey: ["wallet"] });
+      const prev = queryClient.getQueryData<{ balance: string }>(["wallet"]);
+      if (prev?.balance) {
+        const newBalance = (Number(prev.balance) * 100 - amount * 100) / 100;
+        queryClient.setQueryData(["wallet"], {
+          ...prev,
+          balance: newBalance.toFixed(2),
+        });
+      }
+      return { prev };
+    },
     onSuccess: (data: PlaceBetResponse) => {
       const newBet: Bet = {
         id: data.betId,
@@ -72,7 +86,10 @@ export function useGame() {
       queryClient.invalidateQueries({ queryKey: ["wallet"] });
       queryClient.invalidateQueries({ queryKey: ["current-round"] });
     },
-    onError: (error: ApiError) => {
+    onError: (error: ApiError, _vars, context) => {
+      if (context?.prev) {
+        queryClient.setQueryData(["wallet"], context.prev);
+      }
       toast.error(getErrorMessage(error.code, error.message));
     },
   });
