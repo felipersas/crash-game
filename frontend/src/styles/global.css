@@ -35,6 +35,12 @@
         /* Semantic */
         --warning: 45 100% 55%;
 
+        /* Curve stroke colors */
+        --curve-error: 0 100% 60%;
+        --curve-profit: 72 98% 48%;
+        --curve-warning: 45 100% 55%;
+        --curve-neutral: 0 0% 100%;
+
         /* Radius - Minimal, industrial */
         --radius-sm: 0.125rem;
         --radius-md: 0.25rem;
@@ -59,6 +65,10 @@
     --color-border: hsl(var(--border));
     --color-border-bright: hsl(var(--border-bright));
     --color-warning: hsl(var(--warning));
+    --color-curve-error: hsl(var(--curve-error));
+    --color-curve-profit: hsl(var(--curve-profit));
+    --color-curve-warning: hsl(var(--curve-warning));
+    --color-curve-neutral: hsl(var(--curve-neutral));
     --font-sans: var(--font-sans);
     --font-mono: var(--font-mono);
 }
