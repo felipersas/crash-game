@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState, useRef } from "react";
-import { formatMultiplier } from "@/utils/money";
+import { formatMultiplier } from "@/domain/money";
 import { useGameStore } from "@/store/game-store";
 import type { RoundHistoryItem } from "../round-history/RoundHistoryTable";
 import { useCurvePoints } from "./useCurvePoints";

@@ -1,7 +1,7 @@
 "use client";
 
 import { Hash } from 'lucide-react';
-import { formatMultiplier, formatMoney } from '@/utils/money';
+import { formatMultiplier, formatMoney } from '@/domain/money';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 
 export interface RoundHistoryItem {

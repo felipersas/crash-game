@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useGameStore } from "@/store/game-store";
-import { formatMoney } from "@/utils/money";
+import { formatMoney } from "@/domain/money";
 import { Users } from "lucide-react";
 import type { Bet } from "@/types/game.types";
 

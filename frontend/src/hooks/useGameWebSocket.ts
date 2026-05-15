@@ -21,7 +21,7 @@ import {
 } from "@/types/game.types";
 import { useGameStore } from "@/store/game-store";
 import { toast } from "sonner";
-import { formatMoney } from "@/utils/money";
+import { formatMoney } from "@/domain/money";
 
 export interface UseGameWebSocketOptions {
   token?: string;

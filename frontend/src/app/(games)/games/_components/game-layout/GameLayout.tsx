@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, LogOut, Settings, User } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useWallet } from "@/hooks/useWallet";
-import { formatMoney } from "@/utils/money";
+import { formatMoney } from "@/domain/money";
 import {
   Popover,
   PopoverContent,

@@ -9,7 +9,7 @@ import {
   Minus,
 } from "lucide-react";
 import { useMyBets } from "@/hooks/useMyBets";
-import { formatMoney, formatMultiplier } from "@/utils/money";
+import { formatMoney, formatMultiplier } from "@/domain/money";
 import { BetStatus } from "@/types/game.types";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 

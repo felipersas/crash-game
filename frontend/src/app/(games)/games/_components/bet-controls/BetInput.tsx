@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { Input } from "@/components/ui/Input";
 import { BetButton } from "./BetButton";
 import { GAME_CONSTANTS } from "@/constants/game";
-import { formatMoney } from "@/utils/money";
+import { formatMoney } from "@/domain/money";
 
 interface BetInputProps {
   amount: string;

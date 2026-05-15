@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMoney, calculatePayout } from "@/utils/money";
+import { formatMoney, calculatePayout } from "@/domain/money";
 import type { Bet } from "@/types/game.types";
 
 interface BetStatusDisplayProps {
