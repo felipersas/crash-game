@@ -19,6 +19,7 @@ vi.mock('next-auth/react', () => ({
     user: { username: 'testplayer' },
   })),
   signOut: vi.fn(),
+  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 // Mock WebSocket
