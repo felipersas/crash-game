@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Copy, Check, Shield, X, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { useVerifyRound } from '@/hooks/useVerifyRound';
 import { computeSHA256 } from '@/utils/crypto';
@@ -17,6 +17,46 @@ export default function VerificationModal({ roundId, onClose }: VerificationModa
   const [computedHash, setComputedHash] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
+      return;
+    }
+    if (e.key !== 'Tab' || !panelRef.current) return;
+
+    const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, [onClose]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+
+    const timer = setTimeout(() => {
+      const focusable = panelRef.current?.querySelector<HTMLElement>('button');
+      focusable?.focus();
+    }, 50);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+      clearTimeout(timer);
+    };
+  }, [handleKeyDown]);
 
   const handleVerify = async () => {
     if (!data) return;
@@ -36,10 +76,14 @@ export default function VerificationModal({ roundId, onClose }: VerificationModa
   return (
     <div
       className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Verify Round"
       onClick={onClose}
     >
       <div
         className="panel-cyber max-w-md w-full p-5 space-y-4"
+        ref={panelRef}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
