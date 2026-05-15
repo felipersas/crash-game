@@ -1,0 +1,48 @@
+/* ============================================
+   BASE STYLES — Body, Scrollbar, Borders
+   ============================================ */
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-text-primary font-sans antialiased;
+        background-image:
+            radial-gradient(
+                ellipse at top,
+                rgba(0, 255, 0, 0.03) 0%,
+                transparent 50%
+            ),
+            radial-gradient(
+                ellipse at bottom,
+                rgba(255, 51, 51, 0.02) 0%,
+                transparent 50%
+            );
+        background-attachment: fixed;
+    }
+
+    html {
+        @apply font-sans;
+    }
+
+    /* Terminal-style scrollbar */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+        @apply bg-surface;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        @apply bg-surface-bright;
+        border-radius: 2px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        @apply bg-primary-muted;
+    }
+}

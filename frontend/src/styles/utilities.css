@@ -1,0 +1,40 @@
+/* ============================================
+   UTILITY CLASSES — Cyber Terminal Effects
+   ============================================ */
+
+@layer utilities {
+    /* Terminal scan line effect */
+    .scanlines {
+        background-image: repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.1) 2px,
+            rgba(0, 0, 0, 0.1) 4px
+        );
+        pointer-events: none;
+    }
+
+    /* Grid overlay */
+    .cyber-grid {
+        background-image:
+            linear-gradient(hsl(var(--border) / 0.3) 1px, transparent 1px),
+            linear-gradient(
+                90deg,
+                hsl(var(--border) / 0.3) 1px,
+                transparent 1px
+            );
+        background-size: 40px 40px;
+    }
+
+    /* Monospace for numbers */
+    .font-terminal {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Text selection */
+    ::selection {
+        @apply bg-primary text-black;
+    }
+}

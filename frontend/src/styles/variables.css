@@ -1,0 +1,68 @@
+/* ============================================
+   VARIABLES — CSS Custom Properties & Theme
+   Cyber Terminal Design System
+   ============================================ */
+
+@layer base {
+    :root {
+        /* Neutral / Base */
+        --background: 180 8% 4%;
+        --surface: 212 21% 12%;
+        --surface-bright: 180 4% 22%;
+
+        /* Brand - Lime Green */
+        --primary: 72 98% 48%;
+        --primary-muted: 74 79% 35%;
+
+        /* Error - Crash Red */
+        --error: 0 100% 60%;
+        --error-muted: 0 100% 15%;
+
+        /* Text */
+        --text-primary: 0 0% 100%; /* Pure white for terminal text */
+        --text-muted: 180 2% 60%; /* Dimmed terminal text */
+
+        /* Borders & Dividers */
+        --border: 180 4% 15%; /* Subtle panel borders */
+        --border-bright: 120 100% 30%; /* Glowing active borders */
+
+        /* Semantic */
+        --warning: 45 100% 55%;
+
+        /* Curve stroke colors */
+        --curve-error: 0 100% 60%;
+        --curve-profit: 72 98% 48%;
+        --curve-warning: 45 100% 55%;
+        --curve-neutral: 0 0% 100%;
+
+        /* Radius - Minimal, industrial */
+        --radius-sm: 0.125rem;
+        --radius-md: 0.25rem;
+        --radius-lg: 0.375rem;
+
+        /* Typography */
+        --font-sans: "Space Grotesk", ui-sans-serif, system-ui;
+        --font-mono: "Space Grotesk", "Rajdhani", ui-monospace, monospace;
+    }
+}
+
+@theme inline {
+    --color-background: hsl(var(--background));
+    --color-surface: hsl(var(--surface));
+    --color-surface-bright: hsl(var(--surface-bright));
+    --color-primary: hsl(var(--primary));
+    --color-primary-muted: hsl(var(--primary-muted));
+    --color-error: hsl(var(--error));
+    --color-error-muted: hsl(var(--error-muted));
+    --color-text-primary: hsl(var(--text-primary));
+    --color-text-muted: hsl(var(--text-muted));
+    --color-border: hsl(var(--border));
+    --color-border-bright: hsl(var(--border-bright));
+    --color-warning: hsl(var(--warning));
+    --color-curve-error: hsl(var(--curve-error));
+    --color-curve-profit: hsl(var(--curve-profit));
+    --color-curve-warning: hsl(var(--curve-warning));
+    --color-curve-neutral: hsl(var(--curve-neutral));
+    --font-sans: var(--font-sans);
+    --font-mono: var(--font-mono);
+}
