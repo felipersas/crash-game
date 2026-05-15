@@ -1,3 +1,4 @@
+import { type WalletId, type PlayerId } from '@crash/domain';
 import { Wallet } from '@/domain/entities/wallet.entity';
 import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
 
@@ -11,13 +12,13 @@ export interface IWalletRepository {
    * Find a wallet by player ID.
    * Returns null if not found.
    */
-  findByPlayerId(playerId: string): Promise<Wallet | null>;
+  findByPlayerId(playerId: PlayerId): Promise<Wallet | null>;
 
   /**
    * Find a wallet by its ID.
    * Returns null if not found.
    */
-  findById(id: string): Promise<Wallet | null>;
+  findById(id: WalletId): Promise<Wallet | null>;
 
   /**
    * Save a wallet (create or update).

@@ -1,5 +1,6 @@
 import { type Round } from '@/domain/entities/round.entity';
 import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
+import { type RoundId } from '@crash/domain';
 
 /**
  * Round Repository Interface - Application Layer
@@ -18,7 +19,7 @@ export interface IRoundRepository {
   /**
    * Find a round by ID.
    */
-  findById(id: string): Promise<Round | null>;
+  findById(id: RoundId): Promise<Round | null>;
 
   /**
    * Update an existing round (with optimistic locking).

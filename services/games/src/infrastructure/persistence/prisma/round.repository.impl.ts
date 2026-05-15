@@ -7,6 +7,7 @@ import { OptimisticLockError } from '@/domain/errors/domain.errors';
 import type { Round as RoundRow } from '@prisma/client';
 import type { Bet as BetRow } from '@prisma/client';
 import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
+import { type RoundId, RoundId as RoundIdVO, BetId as BetIdVO, PlayerId as PlayerIdVO } from '@crash/domain';
 
 @Injectable()
 export class PrismaRoundRepository implements IRoundRepository {
@@ -22,7 +23,7 @@ export class PrismaRoundRepository implements IRoundRepository {
     return this.toDomain(record);
   }
 
-  async findById(id: string): Promise<Round | null> {
+  async findById(id: RoundId): Promise<Round | null> {
     const record = await this.prisma.round.findUnique({
       where: { id },
       include: { bets: true },
@@ -87,7 +88,7 @@ export class PrismaRoundRepository implements IRoundRepository {
     const bets = record.bets?.map((b) => this.betToDomain(b)) || [];
 
     return Round.restore(
-      record.id,
+      RoundIdVO.from(record.id),
       record.seed,
       record.seedHash,
       record.nextSeed,
@@ -104,9 +105,9 @@ export class PrismaRoundRepository implements IRoundRepository {
 
   private betToDomain(record: BetRow): Bet {
     return Bet.restore(
-      record.id,
-      record.roundId,
-      record.playerId,
+      BetIdVO.from(record.id),
+      RoundIdVO.from(record.roundId),
+      PlayerIdVO.from(record.playerId),
       record.playerName,
       BigInt(record.amountCents),
       record.status as BetStatus,
