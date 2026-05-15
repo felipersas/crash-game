@@ -226,6 +226,9 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
 
         <div className="relative z-10 text-center">
           <motion.div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
             className={`font-black font-terminal tracking-tighter ${TEXT_CLASS[zone]} ${isBetting ? "text-3xl md:text-4xl" : "text-7xl md:text-8xl"}`}
             style={(isCrashed || phase === "active") ? { textShadow: GLOW_SHADOW[zone] } : undefined}
           >
