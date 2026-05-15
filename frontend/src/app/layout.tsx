@@ -17,7 +17,7 @@ const rajdhani = Rajdhani({
 });
 
 export const metadata: Metadata = {
-  title: "Crash Game | Jungle Gaming",
+  title: "Crash Game",
   description: "Multiplayer real-time crash game",
 };
 

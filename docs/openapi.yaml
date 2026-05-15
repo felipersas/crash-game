@@ -17,7 +17,7 @@ info:
     All requests go through Kong Gateway: `http://localhost:8000`
   version: 1.0.0
   contact:
-    name: Jungle Gaming
+    name: Crash Game
   license:
     name: MIT
 

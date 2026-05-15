@@ -31,7 +31,7 @@ export default function LoginPage() {
               CRASH GAME
             </h1>
             <p className="font-terminal text-xs uppercase tracking-widest text-text-muted">
-              Jungle Gaming
+              Crash Game
             </p>
           </div>
 
