@@ -3,14 +3,10 @@ import { BetStatus } from '@/domain/entities/bet.entity';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { BET_REPOSITORY } from '@/application/di.tokens';
-import {
-  computePagination,
-  buildPaginationMeta,
-  type PaginationMeta,
-} from '../shared/pagination.util';
+import { Pagination, type PaginationMeta, type PlayerId } from '@crash/domain';
 
 export interface GetMyBetsInput {
-  playerId: string;
+  playerId: PlayerId;
   page?: number;
   limit?: number;
 }
@@ -45,7 +41,7 @@ export class GetMyBetsUseCase implements IUseCase<GetMyBetsInput, GetMyBetsOutpu
   constructor(@Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository) {}
 
   async execute(input: GetMyBetsInput): Promise<GetMyBetsOutput> {
-    const { page, limit, offset } = computePagination(input);
+    const { page, limit, offset } = Pagination.compute(input);
 
     const [bets, total] = await Promise.all([
       this.betRepository.findByPlayerPaginated(input.playerId, limit, offset),
@@ -76,7 +72,7 @@ export class GetMyBetsUseCase implements IUseCase<GetMyBetsInput, GetMyBetsOutpu
 
     return {
       data,
-      meta: buildPaginationMeta(page, limit, total),
+      meta: Pagination.buildMeta(page, limit, total),
       summary,
     };
   }

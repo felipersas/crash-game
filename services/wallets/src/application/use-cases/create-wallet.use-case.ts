@@ -6,6 +6,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { type PlayerId } from '@crash/domain';
 import { Wallet } from '@/domain/entities/wallet.entity';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
 import { WALLET_REPOSITORY } from '@/application/di.tokens';
@@ -13,7 +14,7 @@ import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.servic
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 export interface CreateWalletInput {
-  playerId: string;
+  playerId: PlayerId;
 }
 
 export interface CreateWalletOutput {

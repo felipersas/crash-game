@@ -5,7 +5,7 @@ import type { IRoundRepository } from '@/application/interfaces/round.repository
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import type { IUseCase } from '@/application/interfaces/use-case';
-import { Money } from '@crash/domain';
+import { Money, type PlayerId } from '@crash/domain';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import {
   ROUND_REPOSITORY,
@@ -18,7 +18,7 @@ import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.servic
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 export interface PlaceBetInput {
-  playerId: string;
+  playerId: PlayerId;
   playerName: string;
   amountCents: bigint;
 }

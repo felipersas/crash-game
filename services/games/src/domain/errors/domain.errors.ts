@@ -116,9 +116,3 @@ export class SeedNotAvailableError extends DomainError {
     super('Results are not available until the round crashes', 'SEED_NOT_AVAILABLE');
   }
 }
-
-export class InvalidIdempotencyKeyError extends DomainError {
-  constructor() {
-    super('Invalid request, please try again', 'INVALID_IDEMPOTENCY_KEY');
-  }
-}

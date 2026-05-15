@@ -3,11 +3,7 @@ import { type Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { ROUND_REPOSITORY } from '@/application/di.tokens';
-import {
-  computePagination,
-  buildPaginationMeta,
-  type PaginationMeta,
-} from '../shared/pagination.util';
+import { Pagination, type PaginationMeta } from '@crash/domain';
 
 export { type PaginationMeta };
 
@@ -39,7 +35,7 @@ export class GetRoundHistoryUseCase implements IUseCase<
   constructor(@Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository) {}
 
   async execute(input: GetRoundHistoryInput = {}): Promise<GetRoundHistoryOutput> {
-    const { page, limit, offset } = computePagination(input);
+    const { page, limit, offset } = Pagination.compute(input);
 
     const [rounds, total] = await Promise.all([
       this.roundRepository.findHistory(limit, offset),
@@ -48,7 +44,7 @@ export class GetRoundHistoryUseCase implements IUseCase<
 
     return {
       data: rounds.map(this.mapRoundToSummary),
-      meta: buildPaginationMeta(page, limit, total),
+      meta: Pagination.buildMeta(page, limit, total),
     };
   }
 

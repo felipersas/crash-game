@@ -4,9 +4,10 @@ import type { IUseCase } from '../interfaces/use-case';
 import { BET_REPOSITORY } from '@/application/di.tokens';
 import { BetNotFoundError } from '@/domain/errors/domain.errors';
 import { type BetStatus } from '@/domain/entities/bet.entity';
+import { type BetId } from '@crash/domain';
 
 export interface GetBetStatusInput {
-  betId: string;
+  betId: BetId;
 }
 
 export interface BetStatusOutput {
