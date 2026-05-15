@@ -2,7 +2,7 @@ import { z } from "zod";
 import { RoundStatus, BetStatus } from "@/types/game.types";
 
 // Round summary schema (for history)
-const roundSummarySchema = z.object({
+export const roundSummarySchema = z.object({
   roundId: z.string().uuid(),
   crashPoint: z.number().nonnegative().nullable(),
   status: z.nativeEnum(RoundStatus),
@@ -14,7 +14,7 @@ const roundSummarySchema = z.object({
 });
 
 // Pagination meta schema
-const paginationMetaSchema = z.object({
+export const paginationMetaSchema = z.object({
   page: z.number().int().positive(),
   limit: z.number().int().positive(),
   total: z.number().int().nonnegative(),
@@ -22,13 +22,13 @@ const paginationMetaSchema = z.object({
 });
 
 // Get round history response (page-based)
-const getRoundHistoryResponseSchema = z.object({
+export const getRoundHistoryResponseSchema = z.object({
   data: z.array(roundSummarySchema),
   meta: paginationMetaSchema,
 });
 
 // Place bet response
-const placeBetResponseSchema = z.object({
+export const placeBetResponseSchema = z.object({
   roundId: z.string().uuid(),
   betId: z.string().uuid(),
   amountCents: z.number().int().nonnegative(),
@@ -36,7 +36,7 @@ const placeBetResponseSchema = z.object({
 });
 
 // Cash out response
-const cashOutResponseSchema = z.object({
+export const cashOutResponseSchema = z.object({
   betId: z.string().uuid(),
   roundId: z.string().uuid(),
   playerId: z.string(),
@@ -46,7 +46,7 @@ const cashOutResponseSchema = z.object({
 });
 
 // Verify round response
-const verifyRoundResponseSchema = z.object({
+export const verifyRoundResponseSchema = z.object({
   roundId: z.string().uuid(),
   seed: z.string(),
   seedHash: z.string(),
@@ -57,7 +57,7 @@ const verifyRoundResponseSchema = z.object({
 });
 
 // My bet schema
-const myBetSchema = z.object({
+export const myBetSchema = z.object({
   id: z.string().uuid(),
   roundId: z.string().uuid(),
   amountCents: z.number().int().nonnegative(),
@@ -73,7 +73,7 @@ const myBetSchema = z.object({
 });
 
 // Bets summary schema
-const betsSummarySchema = z.object({
+export const betsSummarySchema = z.object({
   totalWageredCents: z.number().int().nonnegative(),
   totalWageredDecimal: z.string(),
   wins: z.number().int().nonnegative(),
@@ -83,7 +83,7 @@ const betsSummarySchema = z.object({
 });
 
 // Get my bets response
-const getMyBetsResponseSchema = z.object({
+export const getMyBetsResponseSchema = z.object({
   data: z.array(myBetSchema),
   meta: paginationMetaSchema,
   summary: betsSummarySchema,

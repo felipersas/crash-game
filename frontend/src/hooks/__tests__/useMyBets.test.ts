@@ -13,8 +13,8 @@ vi.mock('sonner');
 const mockResponse: MyBetsResponse = {
   data: [
     {
-      id: 'bet-1',
-      roundId: 'round-1',
+      id: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+      roundId: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
       amountCents: 1000,
       amountDecimal: '10.00',
       cashOutMultiplier: 2.5,
@@ -235,8 +235,8 @@ describe('useMyBets', () => {
         ...mockResponse,
         data: [
           {
-            id: 'bet-2',
-            roundId: 'round-2',
+            id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+            roundId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
             amountCents: 2000,
             amountDecimal: '20.00',
             cashOutMultiplier: 1.5,
@@ -270,12 +270,12 @@ describe('useMyBets', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(result.current.data?.data[0].id).toBe('bet-1');
+      expect(result.current.data?.data[0].id).toBe('a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d');
 
       await result.current.refetch();
 
       await waitFor(() => {
-        expect(result.current.data?.data[0].id).toBe('bet-2');
+        expect(result.current.data?.data[0].id).toBe('f47ac10b-58cc-4372-a567-0e02b2c3d479');
       });
     });
   });
