@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useGameStore } from '../game-store';
 import { RoundStatus, BetStatus } from '@/types/game.types';
 import type { Bet } from '@/types/game.types';
