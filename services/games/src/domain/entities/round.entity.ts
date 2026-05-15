@@ -2,7 +2,7 @@ import { Bet, BetStatus } from './bet.entity';
 import { CrashPoint } from '../value-objects/crash-point.value-object';
 import { Multiplier } from '../value-objects/multiplier.value-object';
 import { SeedChain } from '../value-objects/seed-chain.value-object';
-import { Money } from '@crash/domain';
+import { Money, type RoundId, type PlayerId, RoundId as RoundIdVO } from '@crash/domain';
 import {
   RoundNotAcceptingBetsError,
   DuplicateBetError,
@@ -57,7 +57,7 @@ export const DEFAULT_ROUND_CONFIG: RoundConfig = {
 };
 
 export class Round {
-  readonly id: string;
+  readonly id: RoundId;
   private status: RoundStatus;
   private seedChain: SeedChain;
   private crashPoint: CrashPoint | null;
@@ -70,7 +70,7 @@ export class Round {
   private events: GameDomainEvent[];
   private config: RoundConfig;
 
-  private constructor(id: string, seedChain: SeedChain, config: RoundConfig) {
+  private constructor(id: RoundId, seedChain: SeedChain, config: RoundConfig) {
     this.id = id;
     this.seedChain = seedChain;
     this.config = config;
@@ -104,7 +104,7 @@ export class Round {
     config: RoundConfig = DEFAULT_ROUND_CONFIG,
     deterministicSeed?: string,
   ): Promise<Round> {
-    const roundId = crypto.randomUUID();
+    const roundId = RoundIdVO.create();
     const seedChain = await SeedChain.generate(1000, deterministicSeed);
     const round = new Round(roundId, seedChain, config);
 
@@ -121,7 +121,7 @@ export class Round {
     seedChain: SeedChain,
     config: RoundConfig = DEFAULT_ROUND_CONFIG,
   ): Promise<Round> {
-    const roundId = crypto.randomUUID();
+    const roundId = RoundIdVO.create();
     const round = new Round(roundId, seedChain, config);
 
     round.setBettingEndTime(new Date(Date.now() + config.bettingDurationMs));
@@ -133,7 +133,7 @@ export class Round {
    * Factory method to restore a round from persistence.
    */
   static restore(
-    id: string,
+    id: RoundId,
     seed: string,
     seedHash: string,
     _nextSeed: string | null,
@@ -174,7 +174,7 @@ export class Round {
    * Only allowed during BETTING phase.
    * Throws if player already has an active/cashed out/lost bet.
    */
-  placeBet(playerId: string, playerName: string, amount: Money): void {
+  placeBet(playerId: PlayerId, playerName: string, amount: Money): void {
     if (this.status !== RoundStatus.BETTING) {
       throw new RoundNotAcceptingBetsError();
     }
@@ -204,7 +204,7 @@ export class Round {
    * Returns the new bet and the replaced bet (if any, needs persistence).
    */
   placeOrReplaceBet(
-    playerId: string,
+    playerId: PlayerId,
     playerName: string,
     amount: Money,
   ): { bet: Bet; replacedBet: Bet | null } {
@@ -248,7 +248,7 @@ export class Round {
    * Cash out a player's bet at the current multiplier.
    * Only allowed during ACTIVE phase.
    */
-  cashOut(playerId: string): Money {
+  cashOut(playerId: PlayerId): Money {
     if (this.status !== RoundStatus.ACTIVE) {
       throw new RoundAlreadyCrashedError(this.crashPoint?.getValue() || 0);
     }
@@ -427,7 +427,7 @@ export class Round {
   /**
    * Get a specific bet by player ID.
    */
-  getBetByPlayer(playerId: string): Bet | undefined {
+  getBetByPlayer(playerId: PlayerId): Bet | undefined {
     return this.bets.get(playerId);
   }
 
@@ -435,7 +435,7 @@ export class Round {
    * Remove a player's bet from the aggregate.
    * Used when cancelling a stale PENDING bet before retry.
    */
-  removeBet(playerId: string): void {
+  removeBet(playerId: PlayerId): void {
     this.bets.delete(playerId);
   }
 

@@ -7,7 +7,7 @@
  * Uses event sourcing pattern - all state changes emit domain events.
  */
 
-import { Money } from '@crash/domain';
+import { Money, type WalletId, type PlayerId, WalletId as WalletIdVO } from '@crash/domain';
 import type { WalletDomainEvent } from '../events/wallet.events';
 import {
   createWalletCreatedEvent,
@@ -17,13 +17,13 @@ import {
 import { InsufficientFundsError } from '../errors/domain.errors';
 
 export class Wallet {
-  readonly id: string;
-  readonly playerId: string;
+  readonly id: WalletId;
+  readonly playerId: PlayerId;
   private balance: Money;
   private version: number;
   private events: WalletDomainEvent[];
 
-  private constructor(id: string, playerId: string, balance: Money, version: number) {
+  private constructor(id: WalletId, playerId: PlayerId, balance: Money, version: number) {
     this.id = id;
     this.playerId = playerId;
     this.balance = balance;
@@ -36,8 +36,8 @@ export class Wallet {
    * Initial balance is zero.
    * Emits WalletCreatedEvent.
    */
-  static create(playerId: string): Wallet {
-    const walletId = crypto.randomUUID();
+  static create(playerId: PlayerId): Wallet {
+    const walletId = WalletIdVO.create();
     const wallet = new Wallet(walletId, playerId, Money.zero(), 1);
     wallet.addEvent(createWalletCreatedEvent(walletId, playerId, Money.zero().toCents(), 1));
     return wallet;
@@ -47,7 +47,7 @@ export class Wallet {
    * Factory method to restore a wallet from persistence.
    * Does NOT emit events (used for rehydration).
    */
-  static restore(id: string, playerId: string, balanceCents: bigint, version: number): Wallet {
+  static restore(id: WalletId, playerId: PlayerId, balanceCents: bigint, version: number): Wallet {
     const balance = Money.fromCents(balanceCents);
     const wallet = new Wallet(id, playerId, balance, version);
     return wallet;

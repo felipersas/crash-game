@@ -1,5 +1,5 @@
 import { Multiplier } from '../value-objects/multiplier.value-object';
-import { Money } from '@crash/domain';
+import { Money, type BetId, type RoundId, type PlayerId, BetId as BetIdVO } from '@crash/domain';
 import { InvalidBetStateError } from '../errors/domain.errors';
 
 /**
@@ -15,9 +15,9 @@ export enum BetStatus {
 }
 
 export class Bet {
-  readonly id: string;
-  readonly roundId: string;
-  readonly playerId: string;
+  readonly id: BetId;
+  readonly roundId: RoundId;
+  readonly playerId: PlayerId;
   readonly playerName: string;
   private amount: Money;
   private status: BetStatus;
@@ -28,9 +28,9 @@ export class Bet {
   private createdAt: Date;
 
   private constructor(
-    id: string,
-    roundId: string,
-    playerId: string,
+    id: BetId,
+    roundId: RoundId,
+    playerId: PlayerId,
     playerName: string,
     amount: Money,
     status: BetStatus,
@@ -52,8 +52,8 @@ export class Bet {
    * Factory method to create a new bet in PENDING state.
    * The bet will be confirmed once the wallet is debited.
    */
-  static create(roundId: string, playerId: string, playerName: string, amount: Money): Bet {
-    const betId = crypto.randomUUID();
+  static create(roundId: RoundId, playerId: PlayerId, playerName: string, amount: Money): Bet {
+    const betId = BetIdVO.create();
     return new Bet(betId, roundId, playerId, playerName, amount, BetStatus.PENDING);
   }
 
@@ -61,9 +61,9 @@ export class Bet {
    * Factory method to restore a bet from persistence.
    */
   static restore(
-    id: string,
-    roundId: string,
-    playerId: string,
+    id: BetId,
+    roundId: RoundId,
+    playerId: PlayerId,
     playerName: string,
     amountCents: bigint,
     status: BetStatus,
