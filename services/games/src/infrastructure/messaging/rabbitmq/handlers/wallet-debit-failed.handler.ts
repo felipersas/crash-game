@@ -13,6 +13,7 @@ import { CancelBetUseCase } from '@/application/use-cases/cancel-bet.use-case';
 import { INBOX_REPOSITORY } from '@/application/di.tokens';
 import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import type { WalletDebitFailedEvent } from '../../types/wallet.events';
+import { RoundId, BetId, PlayerId } from '@crash/domain';
 
 /**
  * Handler for WalletDebitFailedEvent.
@@ -84,9 +85,9 @@ export class WalletDebitFailedEventHandler {
     try {
       // 3. Process: cancel the bet
       await this.cancelBetUseCase.execute({
-        roundId: event.roundId,
-        betId: event.betId,
-        playerId: event.playerId,
+        roundId: RoundId.from(event.roundId),
+        betId: BetId.from(event.betId),
+        playerId: PlayerId.from(event.playerId),
         reason: event.reason,
       });
 
