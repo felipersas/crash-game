@@ -3,6 +3,7 @@ import { useMyBets } from '../useMyBets';
 import { renderHookWithProviders, waitFor } from '../../../tests/helpers';
 import { get } from '@/libs/axios';
 import type { MyBetsResponse } from '@/schemas/api-schemas';
+import { BetStatus } from '@/types/game.types';
 import type { ApiError } from '@/libs/axios';
 import { toast } from 'sonner';
 
@@ -21,7 +22,7 @@ const mockResponse: MyBetsResponse = {
       payoutDecimal: '25.00',
       profitCents: 1500,
       profitDecimal: '15.00',
-      status: 'CASHED_OUT' as const,
+      status: BetStatus.CASHED_OUT,
       cashedOutAt: new Date('2026-05-15'),
       placedAt: new Date('2026-05-15'),
     },
@@ -243,7 +244,7 @@ describe('useMyBets', () => {
             payoutDecimal: '30.00',
             profitCents: 1000,
             profitDecimal: '10.00',
-            status: 'CASHED_OUT' as const,
+            status: BetStatus.CASHED_OUT,
             cashedOutAt: new Date('2026-05-15'),
             placedAt: new Date('2026-05-15'),
           },

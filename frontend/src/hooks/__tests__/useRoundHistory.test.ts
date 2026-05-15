@@ -3,6 +3,7 @@ import { renderHookWithProviders, waitFor } from '../../../tests/helpers';
 import { get } from '@/libs/axios';
 import { useRoundHistory } from '../useRoundHistory';
 import type { RoundHistoryResponse } from '@/schemas/api-schemas';
+import { RoundStatus } from '@/types/game.types';
 
 vi.mock('@/libs/axios');
 
@@ -25,7 +26,7 @@ describe('useRoundHistory', () => {
         {
           roundId: 'round-1',
           crashPoint: 2.5,
-          status: 'CRASHED' as const,
+          status: RoundStatus.CRASHED,
           startedAt: new Date('2026-05-15'),
           crashedAt: new Date('2026-05-15'),
           totalBets: 10,
