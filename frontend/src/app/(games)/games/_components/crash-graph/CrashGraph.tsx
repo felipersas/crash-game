@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, memo } from "react";
 import { formatMultiplier } from "@/domain/money";
 import { useGameStore } from "@/store/game-store";
 import type { RoundHistoryItem } from "../round-history/RoundHistoryTable";
@@ -146,7 +146,7 @@ function BettingCountdown({ timeRemaining }: { timeRemaining: number }) {
 
 /* ── Main component ── */
 
-export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Props) {
+function CrashGraph({ multiplier, phase, recentRounds = [] }: Props) {
   const isCrashed = phase === "crashed";
   const isBetting = phase === "betting";
   const zone = getColorZone(multiplier, isCrashed);
@@ -277,3 +277,5 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
     </motion.div>
   );
 }
+
+export default memo(CrashGraph);

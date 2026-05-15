@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, memo } from "react";
 import { useGameStore } from "@/store/game-store";
 import { formatMoney } from "@/domain/money";
 import { Users } from "lucide-react";
@@ -8,7 +8,7 @@ import type { Bet } from "@/types/game.types";
 
 const MAX_VISIBLE_BETS = 15;
 
-export default function BetsList() {
+function BetsList() {
   const currentBets = useGameStore((s) => s.currentBets);
 
   // Filter out cancelled bets, show newest first, limit to MAX_VISIBLE_BETS
@@ -99,3 +99,5 @@ export default function BetsList() {
     </div>
   );
 }
+
+export default memo(BetsList);
