@@ -7,7 +7,7 @@
  * - useGameEvents: creates event handler functions for game events
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { useConnection } from "./useConnection";
 import { useRoundSync } from "./useRoundSync";
 import { useGameEvents } from "./useGameEvents";
@@ -44,26 +44,25 @@ export function useGameWebSocket(
       },
     });
 
-  const connectWithEvents = useCallback(() => {
-    const eventHandlers = createEventHandlers(currentRoundIdRef);
-    connect(eventHandlers);
-  }, [connect, createEventHandlers]);
+  // Hold latest functions in refs so the effect only re-runs on `enabled` changes
+  const connectRef = useRef(connect);
+  connectRef.current = connect;
+  const disconnectRef = useRef(disconnect);
+  disconnectRef.current = disconnect;
+  const createEventHandlersRef = useRef(createEventHandlers);
+  createEventHandlersRef.current = createEventHandlers;
 
   useEffect(() => {
     if (!enabled) return;
 
-    const eventHandlers = createEventHandlers(currentRoundIdRef);
-    connect(eventHandlers);
-    return () => {
-      disconnect();
-    };
-  }, [enabled, connect, disconnect, createEventHandlers]);
+    const eventHandlers = createEventHandlersRef.current(currentRoundIdRef);
+    connectRef.current(eventHandlers);
 
-  return {
-    isConnected,
-    connectionStatus,
-    reconnectAttempt,
-    connect: connectWithEvents,
-    disconnect,
-  };
+    return () => {
+      disconnectRef.current();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
+
+  return { isConnected, connectionStatus, reconnectAttempt, connect: () => connectRef.current(createEventHandlersRef.current(currentRoundIdRef)), disconnect };
 }

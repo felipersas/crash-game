@@ -4,17 +4,6 @@ services:
   - name: games-service
     url: http://games:4001
     plugins:
-      - name: rate-limiting
-        config:
-          second: 30
-          minute: 200
-          hour: 5000
-          policy: local
-          limit_by: consumer
-          fault_tolerant: true
-          hide_client_headers: false
-          error_code: 429
-          error_message: "Rate limit exceeded. Please slow down."
       - name: cors
         config:
           origins: ["http://localhost:3000", "http://localhost:5173"]
@@ -27,19 +16,52 @@ services:
       - name: games-health
         paths: [/games/health]
         strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 60
+              policy: local
+              limit_by: consumer
       - name: games-rounds-current
         paths: [/games/rounds/current]
         strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              second: 10
+              minute: 120
+              policy: local
+              limit_by: consumer
       - name: games-rounds-history
         paths: [/games/rounds/history]
         strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              second: 5
+              minute: 60
+              policy: local
+              limit_by: consumer
       - name: games-rounds-verify
         paths: [/games/rounds]
         strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              second: 5
+              minute: 60
+              policy: local
+              limit_by: consumer
       - name: games-bets-me
         paths: [/games/bets/me]
         strip_path: false
         plugins:
+          - name: rate-limiting
+            config:
+              second: 5
+              minute: 60
+              policy: local
+              limit_by: consumer
           - name: oidc
             config:
               client_id: crash-game-client
@@ -52,6 +74,12 @@ services:
         paths: [/games/bet]
         strip_path: false
         plugins:
+          - name: rate-limiting
+            config:
+              second: 3
+              minute: 30
+              policy: local
+              limit_by: consumer
           - name: oidc
             config:
               client_id: crash-game-client
@@ -64,6 +92,12 @@ services:
         paths: [/games/bet/cashout]
         strip_path: false
         plugins:
+          - name: rate-limiting
+            config:
+              second: 3
+              minute: 30
+              policy: local
+              limit_by: consumer
           - name: oidc
             config:
               client_id: crash-game-client

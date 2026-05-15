@@ -52,7 +52,7 @@ export class GetCurrentRoundUseCase implements IUseCase<
     return {
       roundId: round.id,
       status: round.getStatus(),
-      crashPoint: round.getCrashPoint(),
+      crashPoint: null,
       seedHash: round.getSeedHash(),
       currentMultiplier: round.getCurrentMultiplier(),
       bettingEndTime: round.getBettingEndTime(),
