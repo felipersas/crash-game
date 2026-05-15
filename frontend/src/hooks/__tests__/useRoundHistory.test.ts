@@ -25,7 +25,7 @@ describe('useRoundHistory', () => {
         {
           roundId: 'round-1',
           crashPoint: 2.5,
-          status: 'CRASHED',
+          status: 'CRASHED' as const,
           startedAt: new Date('2026-05-15'),
           crashedAt: new Date('2026-05-15'),
           totalBets: 10,
