@@ -30,3 +30,12 @@ export class NegativeMoneyError extends DomainError {
     super(`Negative money value not allowed: $${cents.toFixed(2)}`);
   }
 }
+
+/**
+ * Thrown when an idempotency key is not a valid UUID v4.
+ */
+export class InvalidIdempotencyKeyError extends DomainError {
+  constructor() {
+    super('Invalid idempotency key: must be a valid UUID v4');
+  }
+}
