@@ -2,11 +2,10 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { CashOutUseCase } from '../../../src/application/use-cases/cash-out.use-case';
 import { Round, RoundStatus } from '../../../src/domain/entities/round.entity';
 import { type Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
-import { Money } from '@crash/domain';
+import { Money, InvalidIdempotencyKeyError, PlayerId } from '@crash/domain';
 import {
   RoundNotFoundError,
   NoActiveBetError,
-  InvalidIdempotencyKeyError,
 } from '../../../src/domain/errors/domain.errors';
 
 function mockFn<T extends (...args: any[]) => any>(
@@ -29,7 +28,7 @@ function mockFn<T extends (...args: any[]) => any>(
 }
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
-const PLAYER_ID = 'player-1';
+const PLAYER_ID = PlayerId.from('player-1');
 const PLAYER_NAME = 'Player One';
 
 describe('CashOutUseCase', () => {

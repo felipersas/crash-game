@@ -9,7 +9,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import { Wallet } from '../../src/domain/entities/wallet.entity';
-import { Money } from '@crash/domain';
+import { Money, PlayerId, WalletId } from '@crash/domain';
 import {
   InsufficientFundsError,
   InvalidMoneyAmountError,
@@ -23,16 +23,16 @@ import type {
 describe('Wallet Entity', () => {
   describe('Creation', () => {
     test('should create wallet with zero balance', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       expect(wallet.id).toBeDefined();
-      expect(wallet.playerId).toBe('player-123');
+      expect(wallet.playerId).toBe(PlayerId.from('player-123'));
       expect(wallet.getBalance().toDecimal()).toBe('0.00');
       expect(wallet.getVersion()).toBe(1);
     });
 
     test('should emit WalletCreatedEvent on creation', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       const events = wallet.pullEvents();
 
       expect(events).toHaveLength(1);
@@ -45,8 +45,8 @@ describe('Wallet Entity', () => {
     });
 
     test('should generate unique IDs for each wallet', () => {
-      const wallet1 = Wallet.create('player-123');
-      const wallet2 = Wallet.create('player-456');
+      const wallet1 = Wallet.create(PlayerId.from('player-123'));
+      const wallet2 = Wallet.create(PlayerId.from('player-456'));
 
       expect(wallet1.id).not.toBe(wallet2.id);
     });
@@ -55,27 +55,27 @@ describe('Wallet Entity', () => {
   describe('Restore from Persistence', () => {
     test('should restore wallet with existing state', () => {
       const wallet = Wallet.restore(
-        'existing-id',
-        'player-123',
+        WalletId.from('existing-id'),
+        PlayerId.from('player-123'),
         10000n, // $100.00
         5,
       );
 
-      expect(wallet.id).toBe('existing-id');
-      expect(wallet.playerId).toBe('player-123');
+      expect(wallet.id).toBe(WalletId.from('existing-id'));
+      expect(wallet.playerId).toBe(PlayerId.from('player-123'));
       expect(wallet.getBalance().toDecimal()).toBe('100.00');
       expect(wallet.getVersion()).toBe(5);
     });
 
     test('should NOT emit events on restore', () => {
-      const wallet = Wallet.restore('existing-id', 'player-123', 10000n, 1);
+      const wallet = Wallet.restore(WalletId.from('existing-id'), PlayerId.from('player-123'), 10000n, 1);
       const events = wallet.pullEvents();
 
       expect(events).toHaveLength(0);
     });
 
     test('should handle zero balance on restore', () => {
-      const wallet = Wallet.restore('existing-id', 'player-123', 0n, 1);
+      const wallet = Wallet.restore(WalletId.from('existing-id'), PlayerId.from('player-123'), 0n, 1);
 
       expect(wallet.getBalance().isZero()).toBe(true);
     });
@@ -83,7 +83,7 @@ describe('Wallet Entity', () => {
 
   describe('Credit Operations', () => {
     test('should credit money and increase balance', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
 
@@ -92,7 +92,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should emit MoneyCreditedEvent on credit', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       // Clear creation event
       wallet.pullEvents();
@@ -112,7 +112,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should handle multiple credits', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
       wallet.credit(Money.fromDecimal('50.00'), 'bonus');
@@ -123,7 +123,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should credit zero amount', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       wallet.credit(Money.zero(), 'adjustment');
 
@@ -131,7 +131,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should credit small amounts (1 cent)', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       wallet.credit(Money.fromDecimal('0.01'), 'interest');
 
@@ -141,7 +141,7 @@ describe('Wallet Entity', () => {
 
   describe('Debit Operations', () => {
     test('should debit money and decrease balance', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.pullEvents(); // Clear creation event
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
       wallet.pullEvents(); // Clear credit event
@@ -153,7 +153,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should emit MoneyDebitedEvent on debit', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.pullEvents(); // Clear creation event
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
       wallet.pullEvents(); // Clear credit event
@@ -173,7 +173,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should handle multiple debits', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
 
       wallet.debit(Money.fromDecimal('20.00'), 'bet-1');
@@ -184,7 +184,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should debit entire balance', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
 
       wallet.debit(Money.fromDecimal('100.00'), 'withdrawal');
@@ -193,7 +193,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should debit small amounts (1 cent)', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('1.00'), 'deposit');
 
       wallet.debit(Money.fromDecimal('0.01'), 'fee');
@@ -204,7 +204,7 @@ describe('Wallet Entity', () => {
 
   describe('Debit Error Cases', () => {
     test('should throw InsufficientFundsError when balance is insufficient', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('50.00'), 'deposit');
 
       expect(() => {
@@ -213,7 +213,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should throw InsufficientFundsError when balance is zero', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       expect(() => {
         wallet.debit(Money.fromDecimal('1.00'), 'bet');
@@ -221,7 +221,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should throw InsufficientFundsError with correct message', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('10.00'), 'deposit');
 
       try {
@@ -235,7 +235,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should NOT change balance or version on failed debit', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('10.00'), 'deposit');
       const initialBalance = wallet.getBalance().toDecimal();
       const initialVersion = wallet.getVersion();
@@ -251,7 +251,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should NOT emit event on failed debit', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.pullEvents(); // Clear creation event
       wallet.credit(Money.fromDecimal('10.00'), 'deposit');
       wallet.pullEvents(); // Clear credit event
@@ -269,40 +269,40 @@ describe('Wallet Entity', () => {
 
   describe('canDebit Check', () => {
     test('should return true when balance is sufficient', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
 
       expect(wallet.canDebit(Money.fromDecimal('50.00'))).toBe(true);
     });
 
     test('should return true when balance equals amount', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
 
       expect(wallet.canDebit(Money.fromDecimal('100.00'))).toBe(true);
     });
 
     test('should return false when balance is insufficient', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('50.00'), 'deposit');
 
       expect(wallet.canDebit(Money.fromDecimal('100.00'))).toBe(false);
     });
 
     test('should return false when balance is zero', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       expect(wallet.canDebit(Money.fromDecimal('0.01'))).toBe(false);
     });
 
     test('should return true for zero amount debit', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       expect(wallet.canDebit(Money.zero())).toBe(true);
     });
 
     test('should NOT throw when checking canDebit', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       expect(() => {
         wallet.canDebit(Money.fromDecimal('1000.00'));
@@ -310,7 +310,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should NOT change version when checking canDebit', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       const initialVersion = wallet.getVersion();
 
       wallet.canDebit(Money.fromDecimal('100.00'));
@@ -321,7 +321,7 @@ describe('Wallet Entity', () => {
 
   describe('Domain Events', () => {
     test('should accumulate events across operations', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
       wallet.debit(Money.fromDecimal('30.00'), 'bet');
@@ -337,7 +337,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should clear events after pullEvents', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
 
       const events1 = wallet.pullEvents();
@@ -348,7 +348,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should track event version numbers', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.pullEvents(); // Clear creation event (v1)
 
       wallet.credit(Money.fromDecimal('50.00'), 'deposit'); // v2
@@ -363,7 +363,7 @@ describe('Wallet Entity', () => {
 
   describe('Version Management', () => {
     test('should increment version on each state change', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       expect(wallet.getVersion()).toBe(1);
 
@@ -378,7 +378,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should NOT increment version on failed operations', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('10.00'), 'deposit');
       const initialVersion = wallet.getVersion();
 
@@ -392,7 +392,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should NOT increment version on canDebit check', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       const initialVersion = wallet.getVersion();
 
       wallet.canDebit(Money.fromDecimal('100.00'));
@@ -403,7 +403,7 @@ describe('Wallet Entity', () => {
 
   describe('Persistence', () => {
     test('toPersistence should return plain object', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.pullEvents(); // Clear creation event
       wallet.credit(Money.fromDecimal('100.50'), 'deposit');
 
@@ -411,7 +411,7 @@ describe('Wallet Entity', () => {
 
       expect(persistence).toEqual({
         id: wallet.id,
-        playerId: 'player-123',
+        playerId: PlayerId.from('player-123'),
         balance: 10050n, // $100.50 in cents
         version: 2,
       });
@@ -420,7 +420,7 @@ describe('Wallet Entity', () => {
 
   describe('Edge Cases', () => {
     test('should handle large balance values', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('1000000.00'), 'jackpot');
 
       expect(wallet.getBalance().toDecimal()).toBe('1000000.00');
@@ -428,7 +428,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should handle rapid credit/debit cycles', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
 
       // Simulate multiple small transactions
@@ -441,7 +441,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should maintain balance precision through operations', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
 
       wallet.credit(Money.fromDecimal('0.01'), 'interest');
       wallet.credit(Money.fromDecimal('0.02'), 'bonus');
@@ -451,7 +451,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should handle credit then debit of same amount', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       const amount = Money.fromDecimal('50.00');
 
       wallet.credit(amount, 'deposit');
@@ -461,7 +461,7 @@ describe('Wallet Entity', () => {
     });
 
     test('should handle alternating credit and debit operations', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
 
       wallet.debit(Money.fromDecimal('30.00'), 'bet-1');
@@ -475,7 +475,7 @@ describe('Wallet Entity', () => {
 
   describe('Immutability', () => {
     test('Money instances should remain immutable after operations', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       const money = Money.fromDecimal('100.00');
 
       wallet.credit(money, 'deposit');
@@ -485,7 +485,7 @@ describe('Wallet Entity', () => {
     });
 
     test('getBalance should return new Money instance each time', () => {
-      const wallet = Wallet.create('player-123');
+      const wallet = Wallet.create(PlayerId.from('player-123'));
       wallet.credit(Money.fromDecimal('100.00'), 'deposit');
 
       const balance1 = wallet.getBalance();

@@ -18,6 +18,7 @@ import {
   WalletNotFoundError,
   InsufficientFundsError,
 } from '../../../src/domain/errors/domain.errors';
+import { PlayerId, WalletId } from '@crash/domain';
 
 // --- Mock helpers ---
 
@@ -102,11 +103,11 @@ describe('DebitWalletUseCase', () => {
   });
 
   test('should debit amount from wallet with sufficient balance', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 1);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
     mockWalletRepo.findById.mockResolvedValue(wallet);
 
     const result = await useCase.execute({
-      walletId: 'wallet-1',
+      walletId: WalletId.from('wallet-1'),
       amount: 3000n,
       reason: 'bet',
     });
@@ -119,7 +120,7 @@ describe('DebitWalletUseCase', () => {
 
     expect(
       useCase.execute({
-        walletId: 'nonexistent',
+        walletId: WalletId.from('nonexistent'),
         amount: 1000n,
         reason: 'bet',
       }),
@@ -127,12 +128,12 @@ describe('DebitWalletUseCase', () => {
   });
 
   test('should propagate InsufficientFundsError from domain when balance too low', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 1000n, 1);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 1000n, 1);
     mockWalletRepo.findById.mockResolvedValue(wallet);
 
     expect(
       useCase.execute({
-        walletId: 'wallet-1',
+        walletId: WalletId.from('wallet-1'),
         amount: 5000n,
         reason: 'bet',
       }),
@@ -140,11 +141,11 @@ describe('DebitWalletUseCase', () => {
   });
 
   test('should persist updated wallet within transaction', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 1);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
     mockWalletRepo.findById.mockResolvedValue(wallet);
 
     await useCase.execute({
-      walletId: 'wallet-1',
+      walletId: WalletId.from('wallet-1'),
       amount: 2500n,
       reason: 'bet',
     });
@@ -155,11 +156,11 @@ describe('DebitWalletUseCase', () => {
   });
 
   test('should write MoneyDebitedEvent to outbox', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 1);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
     mockWalletRepo.findById.mockResolvedValue(wallet);
 
     await useCase.execute({
-      walletId: 'wallet-1',
+      walletId: WalletId.from('wallet-1'),
       amount: 3000n,
       reason: 'bet',
     });
@@ -174,11 +175,11 @@ describe('DebitWalletUseCase', () => {
   });
 
   test('should return correct newBalance and version', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 5);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 5);
     mockWalletRepo.findById.mockResolvedValue(wallet);
 
     const result = await useCase.execute({
-      walletId: 'wallet-1',
+      walletId: WalletId.from('wallet-1'),
       amount: 4000n,
       reason: 'withdrawal',
     });
@@ -189,11 +190,11 @@ describe('DebitWalletUseCase', () => {
   });
 
   test('should allow debiting entire balance', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 1);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
     mockWalletRepo.findById.mockResolvedValue(wallet);
 
     const result = await useCase.execute({
-      walletId: 'wallet-1',
+      walletId: WalletId.from('wallet-1'),
       amount: 10000n,
       reason: 'cashout',
     });

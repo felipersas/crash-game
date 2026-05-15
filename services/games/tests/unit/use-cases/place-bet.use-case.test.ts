@@ -6,7 +6,7 @@ import {
   RoundStatus,
   DEFAULT_ROUND_CONFIG,
 } from '../../../src/domain/entities/round.entity';
-import { Money } from '@crash/domain';
+import { Money, PlayerId } from '@crash/domain';
 import {
   BetNotFoundError,
   BetBelowMinimumError,
@@ -122,7 +122,7 @@ describe('PlaceBetUseCase', () => {
   let outboxWriter: ReturnType<typeof createMockOutboxWriter>;
   let useCase: PlaceBetUseCase;
 
-  const playerId = 'player-123';
+  const playerId = PlayerId.from('player-123');
   const playerName = 'Player 123';
   const validAmountCents = 1000n; // $10.00
 

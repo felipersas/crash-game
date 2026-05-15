@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { GetCurrentRoundUseCase } from '../../../src/application/use-cases/get-current-round.use-case';
 import { Round, RoundStatus } from '../../../src/domain/entities/round.entity';
 import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
-import { Money } from '@crash/domain';
+import { Money, PlayerId } from '@crash/domain';
 import { RoundNotFoundError } from '../../../src/domain/errors/domain.errors';
 
 function mockFn<T extends (...args: any[]) => any>(
@@ -48,8 +48,8 @@ describe('GetCurrentRoundUseCase', () => {
 
   test('Should include bets when includeBets is true', async () => {
     const round = await Round.create();
-    round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
-    round.placeBet('player-2', 'Player Two', Money.fromDecimal('20.00'));
+    round.placeBet(PlayerId.from('player-1'), 'Player One', Money.fromDecimal('10.00'));
+    round.placeBet(PlayerId.from('player-2'), 'Player Two', Money.fromDecimal('20.00'));
 
     mockRoundRepo.findCurrentRound.mockResolvedValue(round);
 
@@ -65,7 +65,7 @@ describe('GetCurrentRoundUseCase', () => {
 
   test('Should exclude bets when includeBets is false', async () => {
     const round = await Round.create();
-    round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
+    round.placeBet(PlayerId.from('player-1'), 'Player One', Money.fromDecimal('10.00'));
 
     mockRoundRepo.findCurrentRound.mockResolvedValue(round);
 
@@ -76,7 +76,7 @@ describe('GetCurrentRoundUseCase', () => {
 
   test('Should exclude bets when includeBets is undefined', async () => {
     const round = await Round.create();
-    round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
+    round.placeBet(PlayerId.from('player-1'), 'Player One', Money.fromDecimal('10.00'));
 
     mockRoundRepo.findCurrentRound.mockResolvedValue(round);
 
@@ -92,16 +92,17 @@ describe('GetCurrentRoundUseCase', () => {
   });
 
   test('Should map bet output correctly with cash out data', async () => {
+    const p1 = PlayerId.from('player-1');
     const round = await Round.create(undefined, 'test-crash-10.0');
-    round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
-    const bet = round.getBetByPlayer('player-1')!;
+    round.placeBet(p1, 'Player One', Money.fromDecimal('10.00'));
+    const bet = round.getBetByPlayer(p1)!;
     bet.confirm();
     await round.startRound();
     // Use a modest multiplier safe for crash ~10x
     round.updateMultiplier(5);
 
     // Cash out the bet so it has cash out data
-    round.cashOut('player-1');
+    round.cashOut(p1);
 
     mockRoundRepo.findCurrentRound.mockResolvedValue(round);
 

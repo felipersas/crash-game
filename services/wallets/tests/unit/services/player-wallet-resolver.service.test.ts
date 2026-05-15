@@ -10,6 +10,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { PlayerWalletResolver } from '../../../src/application/services/player-wallet-resolver.service';
 import { Wallet } from '../../../src/domain/entities/wallet.entity';
 import { WalletNotFoundError } from '../../../src/domain/errors/domain.errors';
+import { PlayerId, WalletId } from '@crash/domain';
 
 // --- Mock helpers ---
 
@@ -53,14 +54,14 @@ describe('PlayerWalletResolver', () => {
 
   describe('resolveWallet', () => {
     test('should return full wallet entity for existing player', async () => {
-      const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 3);
+      const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 3);
       mockWalletRepo.findByPlayerId.mockResolvedValue(wallet);
 
-      const result = await resolver.resolveWallet('player-1');
+      const result = await resolver.resolveWallet(PlayerId.from('player-1'));
 
       expect(result).toBe(wallet);
-      expect(result.id).toBe('wallet-1');
-      expect(result.playerId).toBe('player-1');
+      expect(result.id).toBe(WalletId.from('wallet-1'));
+      expect(result.playerId).toBe(PlayerId.from('player-1'));
       expect(result.getBalance().toCents()).toBe(10000n);
       expect(result.getVersion()).toBe(3);
     });
@@ -68,7 +69,7 @@ describe('PlayerWalletResolver', () => {
     test('should throw WalletNotFoundError when no wallet', async () => {
       mockWalletRepo.findByPlayerId.mockResolvedValue(null);
 
-      expect(resolver.resolveWallet('unknown-player')).rejects.toThrow(WalletNotFoundError);
+      expect(resolver.resolveWallet(PlayerId.from('unknown-player'))).rejects.toThrow(WalletNotFoundError);
     });
   });
 });

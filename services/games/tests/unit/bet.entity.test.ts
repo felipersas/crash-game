@@ -11,12 +11,12 @@
 
 import { describe, test, expect } from 'bun:test';
 import { Bet, BetStatus } from '../../src/domain/entities/bet.entity';
-import { Money } from '@crash/domain';
+import { Money, RoundId, PlayerId } from '@crash/domain';
 import { Multiplier } from '../../src/domain/value-objects/multiplier.value-object';
 
 describe('Bet Entity', () => {
-  const roundId = 'round-123';
-  const playerId = 'player-456';
+  const roundId = RoundId.from('round-123');
+  const playerId = PlayerId.from('player-456');
   const playerName = 'Player 456';
 
   describe('Creation', () => {

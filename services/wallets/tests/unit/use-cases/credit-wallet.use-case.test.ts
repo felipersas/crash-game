@@ -14,6 +14,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { CreditWalletUseCase } from '../../../src/application/use-cases/credit-wallet.use-case';
 import { Wallet } from '../../../src/domain/entities/wallet.entity';
 import { WalletNotFoundError } from '../../../src/domain/errors/domain.errors';
+import { PlayerId, WalletId } from '@crash/domain';
 
 // --- Mock helpers ---
 
@@ -98,11 +99,11 @@ describe('CreditWalletUseCase', () => {
   });
 
   test('should credit amount to existing wallet', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 1);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
     mockWalletRepo.findById.mockResolvedValue(wallet);
 
     const result = await useCase.execute({
-      walletId: 'wallet-1',
+      walletId: WalletId.from('wallet-1'),
       amount: 5000n,
       reason: 'win',
     });
@@ -115,7 +116,7 @@ describe('CreditWalletUseCase', () => {
 
     expect(
       useCase.execute({
-        walletId: 'nonexistent',
+        walletId: WalletId.from('nonexistent'),
         amount: 1000n,
         reason: 'win',
       }),
@@ -123,11 +124,11 @@ describe('CreditWalletUseCase', () => {
   });
 
   test('should persist updated wallet within transaction', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 1);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
     mockWalletRepo.findById.mockResolvedValue(wallet);
 
     await useCase.execute({
-      walletId: 'wallet-1',
+      walletId: WalletId.from('wallet-1'),
       amount: 2500n,
       reason: 'deposit',
     });
@@ -138,11 +139,11 @@ describe('CreditWalletUseCase', () => {
   });
 
   test('should write MoneyCreditedEvent to outbox', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 1);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
     mockWalletRepo.findById.mockResolvedValue(wallet);
 
     await useCase.execute({
-      walletId: 'wallet-1',
+      walletId: WalletId.from('wallet-1'),
       amount: 3000n,
       reason: 'bonus',
     });
@@ -157,11 +158,11 @@ describe('CreditWalletUseCase', () => {
   });
 
   test('should return correct newBalance and version', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 3);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 3);
     mockWalletRepo.findById.mockResolvedValue(wallet);
 
     const result = await useCase.execute({
-      walletId: 'wallet-1',
+      walletId: WalletId.from('wallet-1'),
       amount: 5000n,
       reason: 'win',
     });
@@ -172,11 +173,11 @@ describe('CreditWalletUseCase', () => {
   });
 
   test('should handle credit of zero amount', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 1);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
     mockWalletRepo.findById.mockResolvedValue(wallet);
 
     const result = await useCase.execute({
-      walletId: 'wallet-1',
+      walletId: WalletId.from('wallet-1'),
       amount: 0n,
       reason: 'adjustment',
     });
