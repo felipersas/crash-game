@@ -6,11 +6,7 @@
  */
 
 import { useRef, useState, useCallback } from "react";
-import {
-  createGamesWebSocket,
-  GamesWebSocket,
-} from "@/websocket/games-websocket";
-import type { GamesWebSocketConfig } from "@/websocket/games-websocket";
+import { createGamesWebSocket, GamesWebSocket } from "@/websocket/games-websocket";
 import { useGameStore } from "@/store/game-store";
 
 interface UseConnectionOptions {
@@ -42,16 +38,8 @@ export function useConnection(options: UseConnectionOptions) {
   const setStoreConnected = useGameStore((s) => s.setConnected);
 
   const connect = useCallback(
-    (
-      eventConfig: Omit<
-        GamesWebSocketConfig,
-        | "token"
-        | "onConnect"
-        | "onDisconnect"
-        | "onConnectError"
-        | "onReconnecting"
-      > = {},
-    ) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (eventConfig: Record<string, any> = {}) => {
       if (!enabled || wsRef.current?.isConnected) return;
 
       setConnectionStatus("connecting");
