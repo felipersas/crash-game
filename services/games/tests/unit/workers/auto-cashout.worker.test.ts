@@ -86,7 +86,7 @@ describe('AutoCashOutWorker', () => {
 
     const result = await worker.process(job);
 
-    expect(result).toEqual({ multiplier: 2.5, payoutCents: 2500n });
+    expect(result).toEqual({ cashOutMultiplier: 2.5, payoutCents: 2500n });
     expect(cashOutUseCase.execute.callCount).toBe(0);
   });
 

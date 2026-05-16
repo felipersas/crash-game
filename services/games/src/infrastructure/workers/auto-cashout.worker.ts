@@ -35,7 +35,7 @@ export class AutoCashOutWorker extends WorkerHost {
       const cached = await this.autoCashOutRepo.getCachedResult(roundId, playerId);
       if (cached) {
         this.logger.debug(`Returning cached result for player ${playerId}`);
-        return cached;
+        return { cashOutMultiplier: cached.multiplier, payoutCents: cached.payoutCents };
       }
       throw new Error(`Lock not acquired for auto cash-out: ${playerId}, will retry`);
     }
