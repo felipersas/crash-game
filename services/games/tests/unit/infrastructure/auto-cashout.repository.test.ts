@@ -67,7 +67,7 @@ describe('AutoCashOutRepository', () => {
 
     const acquired = await repo.acquireLock('round-1', 'player-1');
     expect(acquired).toBe(true);
-    expect(redis.set._calls[0]).toEqual(['cashout:round-1:player-1', '', 'NX', 'EX', 300]);
+    expect(redis.set._calls[0]).toEqual(['cashout:round-1:player-1', '', 'EX', 300, 'NX']);
   });
 
   test('should fail to acquire lock if already held', async () => {

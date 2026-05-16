@@ -38,9 +38,9 @@ export class AutoCashOutRepository {
     const result = await this.redis.set(
       `cashout:${roundId}:${playerId}`,
       '',
-      'NX',
       'EX',
       300,
+      'NX',
     );
     return result === 'OK';
   }
