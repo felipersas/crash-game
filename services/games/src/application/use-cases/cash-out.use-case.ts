@@ -20,6 +20,7 @@ import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 import { type PlayerId, type RoundId, PlayerId as PlayerIdVO, IdempotencyKey } from '@crash/domain';
+import { Multiplier } from '@/domain/value-objects/multiplier.value-object';
 
 /**
  * Cash Out Use Case
@@ -32,6 +33,7 @@ export interface CashOutInput {
   playerId: PlayerId;
   roundId?: RoundId;
   idempotencyKey: string;
+  targetMultiplier?: number;
 }
 
 export interface CashOutOutput {
@@ -79,7 +81,10 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     }
 
     round.syncBet(bet);
-    const payout = round.cashOut(input.playerId);
+    const overrideMultiplier = input.targetMultiplier
+      ? Multiplier.fromValue(input.targetMultiplier)
+      : undefined;
+    const payout = round.cashOut(input.playerId, overrideMultiplier);
 
     // Persist updated bet status + round + outbox events atomically
     const cashedOutBet = round.getBetByPlayer(input.playerId);
@@ -105,7 +110,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
 
     await this.broadcastCashOut(round, events);
 
-    return this.mapToOutput(input.playerId, bet, round, payout);
+    return this.mapToOutput(input.playerId, bet, round, payout, overrideMultiplier);
   }
 
   private async loadRound(roundId?: RoundId): Promise<Round> {
@@ -169,12 +174,16 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     bet: { id: string },
     round: Round,
     payout: { toCents(): bigint },
+    overrideMultiplier?: Multiplier,
   ): CashOutOutput {
+    const effectiveMultiplier = overrideMultiplier
+      ? overrideMultiplier.getValue()
+      : round.getCurrentMultiplier();
     return {
       betId: bet.id,
       roundId: round.id,
       playerId,
-      cashOutMultiplier: round.getCurrentMultiplier(),
+      cashOutMultiplier: effectiveMultiplier,
       payoutCents: payout.toCents(),
     };
   }
