@@ -1,11 +1,9 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import Redis from 'ioredis';
-import { AUTO_CASHOUT_REPOSITORY, ROUND_CACHE_REPOSITORY } from '@/application/di.tokens';
+import { AUTO_CASHOUT_REPOSITORY, ROUND_CACHE_REPOSITORY, REDIS_CLIENT } from '@/application/di.tokens';
 import { AutoCashOutRepository } from './auto-cashout.repository';
 import { RoundCacheRepository } from './round-cache.repository';
-
-export const REDIS_CLIENT = 'REDIS_CLIENT';
 
 @Module({
   imports: [
