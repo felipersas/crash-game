@@ -27,6 +27,7 @@ function makeBet(overrides: {
   playerName?: string;
   amountCents?: bigint;
   status: BetStatus;
+  autoCashOutMultiplier?: number | null;
   cashOutMultiplier?: number | null;
   cashOutAmountCents?: bigint | null;
   cashedOutAt?: Date | null;
@@ -39,6 +40,7 @@ function makeBet(overrides: {
     overrides.playerName ?? PLAYER_NAME,
     overrides.amountCents ?? 1000n,
     overrides.status,
+    overrides.autoCashOutMultiplier ?? null,
     overrides.cashOutMultiplier ?? null,
     overrides.cashOutAmountCents ?? null,
     overrides.cashedOutAt ?? null,

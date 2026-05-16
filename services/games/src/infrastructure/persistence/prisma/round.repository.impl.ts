@@ -116,6 +116,7 @@ export class PrismaRoundRepository implements IRoundRepository {
       record.playerName,
       BigInt(record.amountCents),
       record.status as BetStatus,
+      record.autoCashOutMultiplier,
       record.cashOutMultiplier,
       record.cashOutAmount ? BigInt(record.cashOutAmount) : null,
       record.cashedOutAt,

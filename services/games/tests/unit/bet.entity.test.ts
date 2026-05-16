@@ -58,6 +58,7 @@ describe('Bet Entity', () => {
         persistenceData.playerName,
         persistenceData.amountCents,
         persistenceData.status,
+        persistenceData.autoCashOutMultiplier,
         persistenceData.cashOutMultiplier,
         persistenceData.cashOutAmount,
         persistenceData.cashedOutAt,
@@ -85,6 +86,7 @@ describe('Bet Entity', () => {
         persistenceData.playerName,
         persistenceData.amountCents,
         persistenceData.status,
+        persistenceData.autoCashOutMultiplier,
         persistenceData.cashOutMultiplier,
         persistenceData.cashOutAmount,
         persistenceData.cashedOutAt,
@@ -322,6 +324,51 @@ describe('Bet Entity', () => {
       const bet = Bet.create(roundId, playerId, playerName, amount);
 
       expect(bet.getStatus()).toBe(BetStatus.PENDING);
+    });
+  });
+
+  describe('Bet auto cash-out multiplier', () => {
+    test('should create bet with autoCashOutMultiplier', () => {
+      const bet = Bet.create(roundId, playerId, playerName, Money.fromCents(1000n), 2.5);
+      expect(bet.getAutoCashOutMultiplier()).toBe(2.5);
+    });
+
+    test('should create bet without autoCashOutMultiplier', () => {
+      const bet = Bet.create(roundId, playerId, playerName, Money.fromCents(1000n));
+      expect(bet.getAutoCashOutMultiplier()).toBeNull();
+    });
+
+    test('should throw if autoCashOutMultiplier is below 1.01', () => {
+      expect(() => {
+        Bet.create(roundId, playerId, playerName, Money.fromCents(1000n), 1.0);
+      }).toThrow();
+    });
+
+    test('should restore bet with autoCashOutMultiplier', () => {
+      const bet = Bet.restore(
+        'bet-1' as any, 'round-1' as any, 'player-1' as any, 'Player',
+        1000n, BetStatus.ACTIVE, 2.5, null, null, null,
+      );
+      expect(bet.getAutoCashOutMultiplier()).toBe(2.5);
+    });
+
+    test('should include autoCashOutMultiplier in toPersistence', () => {
+      const bet = Bet.create(roundId, playerId, playerName, Money.fromCents(1000n), 3.0);
+      const persisted = bet.toPersistence();
+      expect(persisted.autoCashOutMultiplier).toBe(3.0);
+    });
+
+    test('should return null autoCashOutMultiplier in toPersistence when not set', () => {
+      const bet = Bet.create(roundId, playerId, playerName, Money.fromCents(1000n));
+      const persisted = bet.toPersistence();
+      expect(persisted.autoCashOutMultiplier).toBeNull();
+    });
+
+    test('hasAutoCashOut should return correct boolean', () => {
+      const withAuto = Bet.create(roundId, playerId, playerName, Money.fromCents(1000n), 2.5);
+      const withoutAuto = Bet.create(roundId, playerId, playerName, Money.fromCents(1000n));
+      expect(withAuto.hasAutoCashOut()).toBe(true);
+      expect(withoutAuto.hasAutoCashOut()).toBe(false);
     });
   });
 });
