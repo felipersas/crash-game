@@ -58,7 +58,7 @@ jobs:
       - run: bun install
 
       - name: Run frontend tests
-        run: cd frontend && bunx vitest run
+        run: cd frontend && npx vitest run
 
   lint:
     name: Lint
