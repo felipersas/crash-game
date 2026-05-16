@@ -93,12 +93,25 @@ function createMockOutboxWriter() {
   };
 }
 
+function createMockAutoCashOutRepo() {
+  return {
+    addTarget: mockFn(() => Promise.resolve()),
+    removeTarget: mockFn(() => Promise.resolve()),
+    fetchAndRemoveEligible: mockFn(() => Promise.resolve([])),
+    acquireLock: mockFn(() => Promise.resolve(true)),
+    getCachedResult: mockFn(() => Promise.resolve(null)),
+    cacheResult: mockFn(() => Promise.resolve()),
+    clearRound: mockFn(() => Promise.resolve()),
+  };
+}
+
 describe('CancelBetUseCase', () => {
   let betRepository: ReturnType<typeof createMockBetRepository>;
   let gamesGateway: ReturnType<typeof createMockGamesGateway>;
   let metrics: ReturnType<typeof createMockMetrics>;
   let prisma: ReturnType<typeof createMockPrisma>;
   let outboxWriter: ReturnType<typeof createMockOutboxWriter>;
+  let autoCashOutRepo: ReturnType<typeof createMockAutoCashOutRepo>;
   let useCase: CancelBetUseCase;
 
   const roundId = RoundId.from('round-789');
@@ -113,12 +126,14 @@ describe('CancelBetUseCase', () => {
     metrics = createMockMetrics();
     prisma = createMockPrisma();
     outboxWriter = createMockOutboxWriter();
+    autoCashOutRepo = createMockAutoCashOutRepo();
     useCase = new CancelBetUseCase(
       betRepository as any,
       gamesGateway as any,
       metrics as any,
       prisma as any,
       outboxWriter as any,
+      autoCashOutRepo as any,
     );
   });
 
@@ -217,5 +232,17 @@ describe('CancelBetUseCase', () => {
     expect(args![3]).toBe(playerName);
     expect(args![4]).toBe(amount.toCents());
     expect(args![5]).toBe(cancelReason);
+  });
+
+  test('should remove auto cash-out target on cancel', async () => {
+    const bet = Bet.restore(
+      'bet-1' as any, 'round-1' as any, 'player-1' as any, 'Player',
+      1000n, BetStatus.PENDING, 2.5, null, null, null,
+    );
+    betRepository.findByPlayerAndRound.mockResolvedValue(bet);
+
+    await useCase.execute({ roundId: 'round-1' as any, betId: 'bet-1' as any, playerId: 'player-1' as any, reason: 'Wallet debit failed' });
+
+    expect(autoCashOutRepo.removeTarget.callCount).toBe(1);
   });
 });

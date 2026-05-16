@@ -9,6 +9,8 @@ import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 import { type BetId, type RoundId, type PlayerId } from '@crash/domain';
+import { AUTO_CASHOUT_REPOSITORY } from '@/application/di.tokens';
+import type { AutoCashOutRepository } from '@/infrastructure/redis/auto-cashout.repository';
 
 export interface CancelBetInput {
   roundId: RoundId;
@@ -43,6 +45,7 @@ export class CancelBetUseCase implements IUseCase<CancelBetInput, CancelBetOutpu
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
     private readonly prisma: PrismaService,
     private readonly outboxWriter: OutboxWriter,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: AutoCashOutRepository,
   ) {}
 
   async execute(input: CancelBetInput): Promise<CancelBetOutput> {
@@ -53,6 +56,12 @@ export class CancelBetUseCase implements IUseCase<CancelBetInput, CancelBetOutpu
     }
 
     bet.cancel(input.reason);
+
+    try {
+      await this.autoCashOutRepo.removeTarget(input.roundId, input.playerId);
+    } catch (error) {
+      this.logger.error('Failed to remove auto cash-out target on cancel', error);
+    }
 
     const event = createBetCancelledEvent(
       input.roundId,
