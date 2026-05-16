@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useGame } from "@/hooks/useGame";
@@ -12,6 +13,7 @@ import { BetStatusDisplay, CashOutButton } from "./BetStatusDisplay";
 import { useBetToast } from "./useBetToast";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { toast } from "sonner";
+import { betFormSchema, type BetFormValues } from "@/schemas/bet-form.schema";
 
 export default function BetControls() {
   const { placeBet, isPlacingBet, cashOut, isCashingOut } = useGame();
@@ -21,36 +23,36 @@ export default function BetControls() {
   const liveMultiplier = useGameStore((s) => s.liveMultiplier);
   const { data: session, status: authStatus } = useSession();
 
+  const { control, handleSubmit, formState: { errors } } = useForm<BetFormValues>({
+    resolver: zodResolver(betFormSchema),
+    defaultValues: { amountCents: 1000 },
+  });
+
   useBetToast();
   const { playBet } = useGameSounds();
 
   const isAuthenticated = authStatus === "authenticated";
-  const [amount, setAmount] = useState("10.00");
-
   const isBettingPhase = roundStatus === RoundStatus.BETTING;
   const isActivePhase = roundStatus === RoundStatus.ACTIVE;
   const isCrashed = roundStatus === RoundStatus.CRASHED;
 
-  const hasCashedOut = myActiveBet?.status === "CASHED_OUT";
   const canBet = isBettingPhase && !myActiveBet && isAuthenticated;
   const isBetActive = myActiveBet?.status === "ACTIVE";
   const canCashOut = isActivePhase && isBetActive;
   const showCashOut = isBetActive && !isCrashed;
 
-  const handlePlaceBet = () => {
-    const cents = Math.round(parseFloat(amount) * 100);
-    if (isNaN(cents) || cents <= 0) return;
+  const onSubmit = (data: BetFormValues) => {
     const balanceCents = Math.round(parseFloat(balance) * 100);
-    if (cents > balanceCents) {
+    if (data.amountCents > balanceCents) {
       toast.error("Insufficient balance");
       return;
     }
     playBet();
-    placeBet(cents);
+    placeBet(data.amountCents);
   };
 
   return (
-    <div className="panel-cyber rounded-lg p-6 space-y-4 h-full flex flex-col">
+    <form onSubmit={handleSubmit(onSubmit)} className="panel-cyber rounded-lg p-6 space-y-4 h-full flex flex-col">
       {isAuthenticated && (
         <div className="flex items-center gap-2 pb-3 border-b border-border">
           <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
@@ -80,10 +82,11 @@ export default function BetControls() {
         </div>
       )}
 
-      <BetInput amount={amount} onAmountChange={setAmount} disabled={!canBet} />
+      <BetInput control={control} disabled={!canBet} error={errors.amountCents?.message} />
+
       {canBet && (
         <button
-          onClick={handlePlaceBet}
+          type="submit"
           disabled={isPlacingBet}
           className="w-full btn-cyber-primary py-4 rounded-2xl text-lg font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -114,6 +117,6 @@ export default function BetControls() {
         isActivePhase={isActivePhase}
         liveMultiplier={liveMultiplier}
       />
-    </div>
+    </form>
   );
 }
