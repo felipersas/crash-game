@@ -4,9 +4,8 @@ import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useGameStore } from "@/store/game-store";
 import { useGameSounds } from "@/hooks/useGameSounds";
-import { calculatePayout, formatMoney } from "@/utils/money";
-import { RoundStatus } from "@/types/game.types";
-import type { Bet } from "@/types/game.types";
+import { calculatePayout, formatMoney } from "@/domain/money";
+import { RoundStatus, type Bet } from "@/types";
 
 export function useBetToast() {
   const myActiveBet = useGameStore((s) => s.myActiveBet);

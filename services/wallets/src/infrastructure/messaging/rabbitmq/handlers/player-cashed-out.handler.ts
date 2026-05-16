@@ -9,6 +9,7 @@
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { PlayerId } from '@crash/domain';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
 import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
@@ -91,7 +92,7 @@ export class PlayerCashedOutEventHandler {
 
     try {
       // 3. Resolve wallet using PlayerWalletResolver
-      const wallet = await this.playerWalletResolver.resolveWallet(event.playerId);
+      const wallet = await this.playerWalletResolver.resolveWallet(PlayerId.from(event.playerId));
 
       // 4. Process credit
       await this.creditWalletUseCase.execute({

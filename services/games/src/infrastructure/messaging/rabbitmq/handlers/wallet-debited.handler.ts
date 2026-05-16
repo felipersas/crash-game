@@ -13,6 +13,7 @@ import { ConfirmBetUseCase } from '@/application/use-cases/confirm-bet.use-case'
 import { INBOX_REPOSITORY } from '@/application/di.tokens';
 import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
 import type { WalletDebitedEvent } from '../../types/wallet.events';
+import { RoundId, BetId, PlayerId } from '@crash/domain';
 
 /**
  * Handler for WalletDebitedEvent.
@@ -84,9 +85,9 @@ export class WalletDebitedEventHandler {
     try {
       // 3. Process: confirm the bet
       await this.confirmBetUseCase.execute({
-        roundId: event.roundId,
-        betId: event.betId,
-        playerId: event.playerId,
+        roundId: RoundId.from(event.roundId),
+        betId: BetId.from(event.betId),
+        playerId: PlayerId.from(event.playerId),
       });
 
       // 4. Mark inbox as PROCESSED

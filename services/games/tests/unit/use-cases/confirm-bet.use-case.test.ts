@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ConfirmBetUseCase } from '../../../src/application/use-cases/confirm-bet.use-case';
 import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
-import { Money } from '@crash/domain';
+import { Money, RoundId, PlayerId, BetId } from '@crash/domain';
 import { BetNotFoundError } from '../../../src/domain/errors/domain.errors';
 
 // --- Mock helpers ---
@@ -101,8 +101,8 @@ describe('ConfirmBetUseCase', () => {
   let outboxWriter: ReturnType<typeof createMockOutboxWriter>;
   let useCase: ConfirmBetUseCase;
 
-  const roundId = 'round-123';
-  const playerId = 'player-456';
+  const roundId = RoundId.from('round-123');
+  const playerId = PlayerId.from('player-456');
   const playerName = 'Player 456';
   const amount = Money.fromDecimal('10.00');
 
@@ -141,7 +141,7 @@ describe('ConfirmBetUseCase', () => {
   test('should throw BetNotFoundError when bet not found', async () => {
     betRepository.findByPlayerAndRound.mockResolvedValue(null);
 
-    expect(useCase.execute({ roundId, betId: 'nonexistent', playerId })).rejects.toThrow(
+    expect(useCase.execute({ roundId, betId: BetId.from('nonexistent'), playerId })).rejects.toThrow(
       BetNotFoundError,
     );
   });

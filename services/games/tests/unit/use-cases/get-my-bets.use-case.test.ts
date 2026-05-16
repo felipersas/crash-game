@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { GetMyBetsUseCase } from '../../../src/application/use-cases/get-my-bets.use-case';
 import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
+import { PlayerId, BetId, RoundId } from '@crash/domain';
 
 function mockFn<T extends (...args: any[]) => any>(
   impl?: T,
@@ -16,7 +17,7 @@ function mockFn<T extends (...args: any[]) => any>(
   return fn;
 }
 
-const PLAYER_ID = 'player-1';
+const PLAYER_ID = PlayerId.from('player-1');
 const PLAYER_NAME = 'Player One';
 
 function makeBet(overrides: {
@@ -32,9 +33,9 @@ function makeBet(overrides: {
   createdAt?: Date;
 }): Bet {
   return Bet.restore(
-    overrides.id ?? crypto.randomUUID(),
-    overrides.roundId ?? crypto.randomUUID(),
-    overrides.playerId ?? PLAYER_ID,
+    BetId.from(overrides.id ?? crypto.randomUUID()),
+    RoundId.from(overrides.roundId ?? crypto.randomUUID()),
+    PlayerId.from(overrides.playerId ?? PLAYER_ID),
     overrides.playerName ?? PLAYER_NAME,
     overrides.amountCents ?? 1000n,
     overrides.status,

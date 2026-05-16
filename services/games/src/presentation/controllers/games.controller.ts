@@ -36,6 +36,7 @@ import { GetMyBetsResponseDto, MyBetOutputDto, BetsSummaryDto } from '../dtos/my
 import { HealthCheckResponseDto } from '../dtos/health-check-response.dto';
 import { BetStatusResponseDto } from '../dtos/bet-status.dto';
 import { centsToDecimal } from '../dtos/money.util';
+import { PlayerId, RoundId, BetId } from '@crash/domain';
 
 @ApiTags('Games')
 @Controller('games')
@@ -86,7 +87,7 @@ export class GamesController {
     @Body() dto: PlaceBetRequestDto,
   ): Promise<PlaceBetResponseDto> {
     const result = await this.placeBetUseCase.execute({
-      playerId: user.playerId,
+      playerId: PlayerId.from(user.playerId),
       playerName: user.username,
       amountCents: BigInt(dto.amount),
     });
@@ -112,7 +113,7 @@ export class GamesController {
     @Query() query: PaginationQueryDto,
   ): Promise<GetMyBetsResponseDto> {
     const result = await this.getMyBetsUseCase.execute({
-      playerId: user.playerId,
+      playerId: PlayerId.from(user.playerId),
       page: query.page,
       limit: query.limit,
     });
@@ -153,7 +154,7 @@ export class GamesController {
   @ApiResponse({ status: 200, description: 'Bet status', type: BetStatusResponseDto })
   @ApiResponse({ status: 404, description: 'Bet not found', type: ApiErrorResponseDto })
   async getBetStatus(@Param('betId') betId: string): Promise<BetStatusResponseDto> {
-    const result = await this.getBetStatusUseCase.execute({ betId });
+    const result = await this.getBetStatusUseCase.execute({ betId: BetId.from(betId) });
 
     const amountCents = Number(result.amountCents);
     const payoutCents = result.payoutCents ? Number(result.payoutCents) : null;
@@ -191,8 +192,8 @@ export class GamesController {
     @Body() dto: CashOutRequestDto,
   ): Promise<CashOutResponseDto> {
     const result = await this.cashOutUseCase.execute({
-      playerId: user.playerId,
-      roundId: dto.roundId,
+      playerId: PlayerId.from(user.playerId),
+      roundId: dto.roundId ? RoundId.from(dto.roundId) : undefined,
       idempotencyKey: dto.idempotencyKey,
     });
 
@@ -281,7 +282,7 @@ export class GamesController {
   @ApiResponse({ status: 400, description: 'Seed not available', type: ApiErrorResponseDto })
   @ApiResponse({ status: 404, description: 'Round not found', type: ApiErrorResponseDto })
   async verifyRound(@Param('roundId') roundId: string): Promise<VerifyRoundResponseDto> {
-    const result = await this.verifyRoundUseCase.execute({ roundId });
+    const result = await this.verifyRoundUseCase.execute({ roundId: RoundId.from(roundId) });
     return {
       roundId: result.roundId,
       seed: result.seed,

@@ -9,6 +9,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { type PlayerId } from '@crash/domain';
 import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
 import { WALLET_REPOSITORY } from '@/application/di.tokens';
@@ -25,7 +26,7 @@ export class PlayerWalletResolver {
    * @throws WalletNotFoundError if wallet not found
    */
   async resolveWallet(
-    playerId: string,
+    playerId: PlayerId,
   ): Promise<
     ReturnType<typeof this.walletRepository.findByPlayerId> extends Promise<infer T> ? T : never
   > {

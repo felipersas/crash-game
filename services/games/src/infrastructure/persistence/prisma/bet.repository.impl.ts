@@ -5,6 +5,7 @@ import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { Bet as BetRow } from '@prisma/client';
 import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
 import { DuplicateBetError } from '@/domain/errors/domain.errors';
+import { type BetId, type RoundId, type PlayerId, BetId as BetIdVO, RoundId as RoundIdVO, PlayerId as PlayerIdVO } from '@crash/domain';
 
 /**
  * Prisma-based implementation of Bet Repository.
@@ -48,7 +49,7 @@ export class PrismaBetRepository implements IBetRepository {
     });
   }
 
-  async findById(betId: string): Promise<Bet | null> {
+  async findById(betId: BetId): Promise<Bet | null> {
     const record = await this.prisma.bet.findUnique({
       where: { id: betId },
     });
@@ -57,7 +58,7 @@ export class PrismaBetRepository implements IBetRepository {
     return this.toDomain(record);
   }
 
-  async findByRound(roundId: string): Promise<Bet[]> {
+  async findByRound(roundId: RoundId): Promise<Bet[]> {
     const records = await this.prisma.bet.findMany({
       where: { roundId },
       orderBy: { createdAt: 'asc' },
@@ -66,7 +67,7 @@ export class PrismaBetRepository implements IBetRepository {
     return records.map((record) => this.toDomain(record));
   }
 
-  async findByPlayerAndRound(playerId: string, roundId: string): Promise<Bet | null> {
+  async findByPlayerAndRound(playerId: PlayerId, roundId: RoundId): Promise<Bet | null> {
     const record = await this.prisma.bet.findFirst({
       where: { playerId, roundId },
       orderBy: { createdAt: 'desc' },
@@ -76,7 +77,7 @@ export class PrismaBetRepository implements IBetRepository {
     return this.toDomain(record);
   }
 
-  async findByPlayer(playerId: string, limit?: number): Promise<Bet[]> {
+  async findByPlayer(playerId: PlayerId, limit?: number): Promise<Bet[]> {
     const records = await this.prisma.bet.findMany({
       where: { playerId },
       orderBy: { createdAt: 'desc' },
@@ -86,7 +87,7 @@ export class PrismaBetRepository implements IBetRepository {
     return records.map((record) => this.toDomain(record));
   }
 
-  async findByRoundAndStatus(roundId: string, status: BetStatus): Promise<Bet[]> {
+  async findByRoundAndStatus(roundId: RoundId, status: BetStatus): Promise<Bet[]> {
     const records = await this.prisma.bet.findMany({
       where: {
         roundId,
@@ -98,7 +99,7 @@ export class PrismaBetRepository implements IBetRepository {
     return records.map((record) => this.toDomain(record));
   }
 
-  async findByPlayerPaginated(playerId: string, limit: number, offset: number): Promise<Bet[]> {
+  async findByPlayerPaginated(playerId: PlayerId, limit: number, offset: number): Promise<Bet[]> {
     const records = await this.prisma.bet.findMany({
       where: { playerId },
       orderBy: { createdAt: 'desc' },
@@ -109,11 +110,11 @@ export class PrismaBetRepository implements IBetRepository {
     return records.map((record) => this.toDomain(record));
   }
 
-  async countByPlayer(playerId: string): Promise<number> {
+  async countByPlayer(playerId: PlayerId): Promise<number> {
     return this.prisma.bet.count({ where: { playerId } });
   }
 
-  async getSummaryByPlayer(playerId: string): Promise<{
+  async getSummaryByPlayer(playerId: PlayerId): Promise<{
     totalWageredCents: number;
     wins: number;
     losses: number;
@@ -168,9 +169,9 @@ export class PrismaBetRepository implements IBetRepository {
 
   private toDomain(record: BetRow): Bet {
     return Bet.restore(
-      record.id,
-      record.roundId,
-      record.playerId,
+      BetIdVO.from(record.id),
+      RoundIdVO.from(record.roundId),
+      PlayerIdVO.from(record.playerId),
       record.playerName,
       BigInt(record.amountCents),
       record.status as BetStatus,

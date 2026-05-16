@@ -4,12 +4,19 @@
  * useAuth - Authentication state and operations
  */
 
+import { useEffect } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
 
 const KEYCLOAK_PUBLIC_URL = process.env.NEXT_PUBLIC_KEYCLOAK_URL || 'http://localhost:8080';
 
 export function useAuth() {
   const { data: session, status } = useSession();
+
+  useEffect(() => {
+    if (session?.error === 'RefreshAccessTokenError') {
+      signOut({ callbackUrl: '/login' });
+    }
+  }, [session?.error]);
 
   return {
     session,
@@ -32,7 +39,10 @@ export function useAuth() {
       const keycloakLogoutUrl = `${KEYCLOAK_PUBLIC_URL}/realms/crash-game/protocol/openid-connect/logout?${params}`;
       signOut({ redirect: false })
         .then(() => { window.location.href = keycloakLogoutUrl; })
-        .catch(() => { window.location.href = keycloakLogoutUrl; });
+        .catch((error) => {
+          console.error('Failed to sign out:', error);
+          window.location.href = '/login';
+        });
     },
   };
 }

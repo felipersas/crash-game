@@ -9,7 +9,6 @@ import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import {
   RoundNotFoundError,
   NoActiveBetError,
-  InvalidIdempotencyKeyError,
 } from '@/domain/errors/domain.errors';
 import {
   ROUND_REPOSITORY,
@@ -23,6 +22,7 @@ import type { IRoundStateProvider } from '@/application/interfaces/round-state-p
 import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
+import { type PlayerId, type RoundId, PlayerId as PlayerIdVO, IdempotencyKey } from '@crash/domain';
 
 /**
  * Cash Out Use Case
@@ -32,8 +32,8 @@ import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
  */
 
 export interface CashOutInput {
-  playerId: string;
-  roundId?: string;
+  playerId: PlayerId;
+  roundId?: RoundId;
   idempotencyKey: string;
 }
 
@@ -61,7 +61,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
-    this.validateIdempotencyKey(input.idempotencyKey);
+    IdempotencyKey.from(input.idempotencyKey);
 
     const round = await this.loadRound(input.roundId);
     const bet = await this.loadBet(input.playerId, round.id);
@@ -111,7 +111,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     return this.mapToOutput(input.playerId, bet, round, payout);
   }
 
-  private async loadRound(roundId?: string): Promise<Round> {
+  private async loadRound(roundId?: RoundId): Promise<Round> {
     let round: Round | null = null;
 
     const liveRound = this.roundStateProvider.getCurrentRound();
@@ -131,7 +131,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     return round;
   }
 
-  private async loadBet(playerId: string, roundId: string) {
+  private async loadBet(playerId: PlayerId, roundId: RoundId) {
     const bet = await this.betRepository.findByPlayerAndRound(playerId, roundId);
 
     if (!bet) {
@@ -146,7 +146,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
       (e): e is PlayerCashedOutEvent => e.eventType === 'PlayerCashedOut',
     );
     if (cashedOut) {
-      const cashedOutBet = round.getBetByPlayer(cashedOut.playerId);
+      const cashedOutBet = round.getBetByPlayer(PlayerIdVO.from(cashedOut.playerId));
       if (!cashedOutBet) {
         this.logger.warn(
           `Bet not found for cashed out player ${cashedOut.playerId} in round ${cashedOut.roundId}`,
@@ -168,7 +168,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   }
 
   private mapToOutput(
-    playerId: string,
+    playerId: PlayerId,
     bet: { id: string },
     round: Round,
     payout: { toCents(): bigint },
@@ -182,11 +182,4 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     };
   }
 
-  private validateIdempotencyKey(key: string): void {
-    const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-    if (!UUID_V4_REGEX.test(key)) {
-      throw new InvalidIdempotencyKeyError();
-    }
-  }
 }

@@ -5,6 +5,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import { WalletId, PlayerId } from '@crash/domain';
 import { PrismaService } from './prisma.service';
 import { Wallet } from '@/domain/entities/wallet.entity';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
@@ -15,7 +16,7 @@ import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer
 export class PrismaWalletRepository implements IWalletRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByPlayerId(playerId: string): Promise<Wallet | null> {
+  async findByPlayerId(playerId: PlayerId): Promise<Wallet | null> {
     const record = await this.prisma.wallet.findUnique({
       where: { playerId },
     });
@@ -27,7 +28,7 @@ export class PrismaWalletRepository implements IWalletRepository {
     return this.toDomain(record);
   }
 
-  async findById(id: string): Promise<Wallet | null> {
+  async findById(id: WalletId): Promise<Wallet | null> {
     const record = await this.prisma.wallet.findUnique({
       where: { id },
     });
@@ -86,6 +87,11 @@ export class PrismaWalletRepository implements IWalletRepository {
     balanceCents: bigint;
     version: number;
   }): Wallet {
-    return Wallet.restore(record.id, record.playerId, record.balanceCents, record.version);
+    return Wallet.restore(
+      WalletId.from(record.id),
+      PlayerId.from(record.playerId),
+      record.balanceCents,
+      record.version,
+    );
   }
 }

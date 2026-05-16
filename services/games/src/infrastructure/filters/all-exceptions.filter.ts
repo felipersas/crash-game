@@ -19,8 +19,8 @@ import {
   InvalidBetStateError,
   InvalidRoundStateError,
   SeedNotAvailableError,
-  InvalidIdempotencyKeyError,
 } from '@/domain/errors/domain.errors';
+import { InvalidIdempotencyKeyError } from '@crash/domain';
 
 /**
  * Maps domain errors to appropriate HTTP status codes.

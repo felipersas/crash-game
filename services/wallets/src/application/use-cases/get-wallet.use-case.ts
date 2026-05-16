@@ -5,13 +5,14 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { type PlayerId } from '@crash/domain';
 import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 import { Wallet } from '@/domain/entities/wallet.entity';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
 import { WALLET_REPOSITORY } from '@/application/di.tokens';
 
 export interface GetWalletInput {
-  playerId: string;
+  playerId: PlayerId;
 }
 
 export interface GetWalletOutput {

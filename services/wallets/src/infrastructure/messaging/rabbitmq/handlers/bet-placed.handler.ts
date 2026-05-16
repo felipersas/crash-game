@@ -13,6 +13,7 @@
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { PlayerId } from '@crash/domain';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
 import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
@@ -110,7 +111,7 @@ export class BetPlacedEventHandler {
 
     try {
       // 3. Resolve wallet using PlayerWalletResolver
-      const wallet = await this.playerWalletResolver.resolveWallet(event.playerId);
+      const wallet = await this.playerWalletResolver.resolveWallet(PlayerId.from(event.playerId));
 
       // 4. Process debit
       await this.debitWalletUseCase.execute({

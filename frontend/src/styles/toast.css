@@ -1,0 +1,48 @@
+/* ============================================
+   SONNER TOAST OVERRIDES — Cyber Theme
+   ============================================ */
+
+.cyber-toast {
+    background: hsl(var(--surface)) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+    font-family: var(--font-sans) !important;
+}
+
+.cyber-toast[data-type="success"] {
+    border-color: hsl(var(--primary)) !important;
+}
+
+.cyber-toast[data-type="error"] {
+    border-color: hsl(var(--error)) !important;
+}
+
+.cyber-toast-title {
+    font-family: var(--font-sans) !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+}
+
+.cyber-toast-description {
+    font-family: var(--font-sans) !important;
+    color: hsl(var(--text-muted)) !important;
+}
+
+.cyber-toast-action {
+    background: hsl(var(--primary)) !important;
+    color: hsl(0 0% 0%) !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    border-radius: 8px !important;
+}
+
+.cyber-toast-action:hover {
+    opacity: 0.9;
+}
+
+/* Success toast icon */
+[data-sonner-toast] [data-icon] svg {
+    filter: none;
+}

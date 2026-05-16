@@ -6,7 +6,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { Money } from '@crash/domain';
+import { Money, type WalletId } from '@crash/domain';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
@@ -15,7 +15,7 @@ import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.servic
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 export interface DebitWalletInput {
-  walletId: string;
+  walletId: WalletId;
   amount: bigint;
   reason: string;
   idempotencyKey?: string;

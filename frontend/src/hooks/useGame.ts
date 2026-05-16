@@ -11,8 +11,9 @@ import {
   RoundStatus,
   type Round,
   type Bet,
-} from "@/types/game.types";
-import type { PlaceBetResponse, CashOutResponse } from "@/schemas/api-schemas";
+  type PlaceBetResponse,
+  type CashOutResponse,
+} from "@/types";
 import type { ApiError } from "@/libs/axios";
 import { getErrorMessage } from "@/constants/error-codes";
 

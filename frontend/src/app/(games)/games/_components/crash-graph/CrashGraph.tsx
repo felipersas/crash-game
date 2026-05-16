@@ -1,8 +1,8 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState, useRef } from "react";
-import { formatMultiplier } from "@/utils/money";
+import { useEffect, useState, useRef, memo } from "react";
+import { formatMultiplier } from "@/domain/money";
 import { useGameStore } from "@/store/game-store";
 import type { RoundHistoryItem } from "../round-history/RoundHistoryTable";
 import { useCurvePoints } from "./useCurvePoints";
@@ -41,21 +41,21 @@ const TEXT_CLASS: Record<ColorZone, string> = {
 };
 
 const CURVE_STROKE: Record<ColorZone, string> = {
-  error: "hsl(0, 100%, 60%)",
-  profit: "hsl(72, 98%, 48%)",
-  warning: "hsl(45, 100%, 55%)",
-  neutral: "hsl(0, 0%, 100%)",
+  error: "hsl(var(--curve-error))",
+  profit: "hsl(var(--curve-profit))",
+  warning: "hsl(var(--curve-warning))",
+  neutral: "hsl(var(--curve-neutral))",
 };
 
 const GLOW_SHADOW: Record<ColorZone, string> = {
   error:
-    "0 0 10px hsl(0 100% 60% / 0.7), 0 0 40px hsl(0 100% 60% / 0.3)",
+    "0 0 10px hsl(var(--curve-error) / 0.7), 0 0 40px hsl(var(--curve-error) / 0.3)",
   profit:
-    "0 0 10px hsl(72 98% 48% / 0.6), 0 0 30px hsl(72 98% 48% / 0.3), 0 0 60px hsl(72 98% 48% / 0.1)",
+    "0 0 10px hsl(var(--curve-profit) / 0.6), 0 0 30px hsl(var(--curve-profit) / 0.3), 0 0 60px hsl(var(--curve-profit) / 0.1)",
   warning:
-    "0 0 10px hsl(45 100% 55% / 0.6), 0 0 30px hsl(45 100% 55% / 0.3), 0 0 60px hsl(45 100% 55% / 0.1)",
+    "0 0 10px hsl(var(--curve-warning) / 0.6), 0 0 30px hsl(var(--curve-warning) / 0.3), 0 0 60px hsl(var(--curve-warning) / 0.1)",
   neutral:
-    "0 0 10px rgba(255,255,255,0.6), 0 0 30px rgba(255,255,255,0.3), 0 0 60px rgba(255,255,255,0.1)",
+    "0 0 10px hsl(var(--curve-neutral) / 0.6), 0 0 30px hsl(var(--curve-neutral) / 0.3), 0 0 60px hsl(var(--curve-neutral) / 0.1)",
 };
 
 function getStatusLabel(phase: Props["phase"], multiplier: number): string {
@@ -146,7 +146,7 @@ function BettingCountdown({ timeRemaining }: { timeRemaining: number }) {
 
 /* ── Main component ── */
 
-export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Props) {
+function CrashGraph({ multiplier, phase, recentRounds = [] }: Props) {
   const isCrashed = phase === "crashed";
   const isBetting = phase === "betting";
   const zone = getColorZone(multiplier, isCrashed);
@@ -226,6 +226,9 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
 
         <div className="relative z-10 text-center">
           <motion.div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
             className={`font-black font-terminal tracking-tighter ${TEXT_CLASS[zone]} ${isBetting ? "text-3xl md:text-4xl" : "text-7xl md:text-8xl"}`}
             style={(isCrashed || phase === "active") ? { textShadow: GLOW_SHADOW[zone] } : undefined}
           >
@@ -274,3 +277,5 @@ export default function CrashGraph({ multiplier, phase, recentRounds = [] }: Pro
     </motion.div>
   );
 }
+
+export default memo(CrashGraph);

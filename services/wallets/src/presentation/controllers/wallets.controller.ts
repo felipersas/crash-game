@@ -1,4 +1,5 @@
 import { Controller, Get, Post } from '@nestjs/common';
+import { PlayerId } from '@crash/domain';
 import {
   UserContext,
   type UserContext as UserContextType,
@@ -39,7 +40,7 @@ export class WalletsController {
   @ApiResponse({ status: 409, description: 'Wallet already exists', type: ApiErrorResponseDto })
   @Post()
   async createWallet(@UserContext() user: UserContextType): Promise<CreateWalletResponseDto> {
-    const result = await this.createWalletUseCase.execute({ playerId: user.playerId });
+    const result = await this.createWalletUseCase.execute({ playerId: PlayerId.from(user.playerId) });
     return {
       walletId: result.walletId,
       playerId: result.playerId,
@@ -57,7 +58,7 @@ export class WalletsController {
   @ApiResponse({ status: 404, description: 'Wallet not found', type: ApiErrorResponseDto })
   @Get('me')
   async getWallet(@UserContext() user: UserContextType): Promise<GetWalletResponseDto> {
-    const result = await this.getWalletUseCase.execute({ playerId: user.playerId });
+    const result = await this.getWalletUseCase.execute({ playerId: PlayerId.from(user.playerId) });
     return {
       walletId: result.walletId,
       playerId: result.playerId,

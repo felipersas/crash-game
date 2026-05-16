@@ -1,1 +1,6 @@
-export { DomainError, InvalidMoneyAmountError, NegativeMoneyError } from './domain.errors';
+export {
+  DomainError,
+  InvalidMoneyAmountError,
+  InvalidIdempotencyKeyError,
+  NegativeMoneyError,
+} from './domain.errors';

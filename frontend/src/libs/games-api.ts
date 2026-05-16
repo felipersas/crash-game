@@ -1,20 +1,15 @@
-/**
- * Games Service API
- *
- * Direct exports — uses shared apiClient with auto-auth.
- * No token passing needed.
- */
+'use client';
 
 import { get, post } from './axios';
 import { API_ENDPOINTS } from '@/constants/api';
-import type { Round } from '@/types/game.types';
 import type {
+  Round,
   PlaceBetResponse,
   CashOutResponse,
   RoundHistoryResponse,
   VerifyRoundResponse,
   MyBetsResponse,
-} from '@/schemas/api-schemas';
+} from '@/types';
 
 export function placeBet(amountCents: number): Promise<PlaceBetResponse> {
   return post(API_ENDPOINTS.GAMES.BET, { amount: amountCents });

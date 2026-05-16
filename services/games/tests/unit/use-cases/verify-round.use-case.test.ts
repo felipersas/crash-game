@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { VerifyRoundUseCase } from '../../../src/application/use-cases/verify-round.use-case';
 import { Round } from '../../../src/domain/entities/round.entity';
-import { Money } from '@crash/domain';
+import { Money, PlayerId, RoundId } from '@crash/domain';
 import {
   RoundNotFoundError,
   SeedNotAvailableError,
@@ -35,8 +35,9 @@ describe('VerifyRoundUseCase', () => {
   // Create a real crashed round using deterministic seed for reproducibility
   async function createCrashedRound(): Promise<Round> {
     const round = await Round.create(undefined, 'test-crash-2.00');
-    round.placeBet('player-1', 'Player One', Money.fromDecimal('10.00'));
-    round.getBetByPlayer('player-1')!.confirm();
+    const p1 = PlayerId.from('player-1');
+    round.placeBet(p1, 'Player One', Money.fromDecimal('10.00'));
+    round.getBetByPlayer(p1)!.confirm();
     await round.startRound();
     // Force crash
     round.updateMultiplier(1000);
@@ -61,7 +62,7 @@ describe('VerifyRoundUseCase', () => {
   test('Should throw RoundNotFoundError for non-existent round', async () => {
     mockRoundRepo.findById.mockResolvedValue(null);
 
-    expect(useCase.execute({ roundId: 'non-existent-id' })).rejects.toThrow(RoundNotFoundError);
+    expect(useCase.execute({ roundId: RoundId.from('non-existent-id') })).rejects.toThrow(RoundNotFoundError);
   });
 
   test('Should throw UnauthorizedException for non-crashed round', async () => {

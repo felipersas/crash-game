@@ -1,5 +1,6 @@
 import { type Bet, type BetStatus } from '@/domain/entities/bet.entity';
 import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
+import { type BetId, type RoundId, type PlayerId } from '@crash/domain';
 
 /**
  * Bet Repository Interface - Application Layer
@@ -24,45 +25,45 @@ export interface IBetRepository {
   /**
    * Find a bet by ID.
    */
-  findById(betId: string): Promise<Bet | null>;
+  findById(betId: BetId): Promise<Bet | null>;
 
   /**
    * Find all bets for a specific round.
    */
-  findByRound(roundId: string): Promise<Bet[]>;
+  findByRound(roundId: RoundId): Promise<Bet[]>;
 
   /**
    * Find a specific player's bet in a round.
    * Returns null if no bet exists for that player in the round.
    */
-  findByPlayerAndRound(playerId: string, roundId: string): Promise<Bet | null>;
+  findByPlayerAndRound(playerId: PlayerId, roundId: RoundId): Promise<Bet | null>;
 
   /**
    * Find all bets for a player (paginated).
    */
-  findByPlayer(playerId: string, limit?: number): Promise<Bet[]>;
+  findByPlayer(playerId: PlayerId, limit?: number): Promise<Bet[]>;
 
   /**
    * Find bets by status for a round.
    * Useful for finding PENDING bets that need confirmation/cancellation.
    */
-  findByRoundAndStatus(roundId: string, status: BetStatus): Promise<Bet[]>;
+  findByRoundAndStatus(roundId: RoundId, status: BetStatus): Promise<Bet[]>;
 
   /**
    * Find all bets for a player with pagination.
    */
-  findByPlayerPaginated(playerId: string, limit: number, offset: number): Promise<Bet[]>;
+  findByPlayerPaginated(playerId: PlayerId, limit: number, offset: number): Promise<Bet[]>;
 
   /**
    * Count total bets for a player.
    */
-  countByPlayer(playerId: string): Promise<number>;
+  countByPlayer(playerId: PlayerId): Promise<number>;
 
   /**
    * Compute aggregated summary for a player's bets.
    * Avoids loading all bets into memory.
    */
-  getSummaryByPlayer(playerId: string): Promise<{
+  getSummaryByPlayer(playerId: PlayerId): Promise<{
     totalWageredCents: number;
     wins: number;
     losses: number;

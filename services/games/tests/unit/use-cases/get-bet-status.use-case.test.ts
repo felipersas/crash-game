@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { GetBetStatusUseCase } from '../../../src/application/use-cases/get-bet-status.use-case';
 import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
-import { Money } from '@crash/domain';
+import { Money, RoundId, PlayerId, BetId } from '@crash/domain';
 import { Multiplier } from '../../../src/domain/value-objects/multiplier.value-object';
 import { BetNotFoundError } from '../../../src/domain/errors/domain.errors';
 
@@ -46,8 +46,8 @@ describe('GetBetStatusUseCase', () => {
   let betRepository: ReturnType<typeof createMockBetRepository>;
   let useCase: GetBetStatusUseCase;
 
-  const roundId = 'round-999';
-  const playerId = 'player-777';
+  const roundId = RoundId.from('round-999');
+  const playerId = PlayerId.from('player-777');
   const playerName = 'Player 777';
   const amount = Money.fromDecimal('50.00');
 
@@ -72,7 +72,7 @@ describe('GetBetStatusUseCase', () => {
   test('should throw BetNotFoundError when bet not found', async () => {
     betRepository.findById.mockResolvedValue(null);
 
-    expect(useCase.execute({ betId: 'nonexistent-bet-id' })).rejects.toThrow(BetNotFoundError);
+    expect(useCase.execute({ betId: BetId.from('nonexistent-bet-id') })).rejects.toThrow(BetNotFoundError);
   });
 
   test('should include cash out data for cashed out bet', async () => {

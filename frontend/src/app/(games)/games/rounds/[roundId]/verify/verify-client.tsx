@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { useVerifyRound } from "@/hooks/useVerifyRound";
 import { computeSHA256 } from "@/utils/crypto";
-import { formatMultiplier } from "@/utils/money";
+import { formatMultiplier } from "@/domain/money";
 import Link from "next/link";
 
 export function VerifyRoundClient({ roundId }: { roundId: string }) {

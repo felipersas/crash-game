@@ -11,6 +11,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { GetWalletUseCase } from '../../../src/application/use-cases/get-wallet.use-case';
 import { Wallet } from '../../../src/domain/entities/wallet.entity';
 import { WalletNotFoundError } from '../../../src/domain/errors/domain.errors';
+import { PlayerId, WalletId } from '@crash/domain';
 
 // --- Mock helpers ---
 
@@ -53,10 +54,10 @@ describe('GetWalletUseCase', () => {
   });
 
   test('should return wallet for existing player', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 1);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
     mockWalletRepo.findByPlayerId.mockResolvedValue(wallet);
 
-    const result = await useCase.execute({ playerId: 'player-1' });
+    const result = await useCase.execute({ playerId: PlayerId.from('player-1') });
 
     expect(result.walletId).toBe('wallet-1');
     expect(result.playerId).toBe('player-1');
@@ -65,24 +66,24 @@ describe('GetWalletUseCase', () => {
   test('should throw WalletNotFoundError when no wallet found', async () => {
     mockWalletRepo.findByPlayerId.mockResolvedValue(null);
 
-    expect(useCase.execute({ playerId: 'unknown-player' })).rejects.toThrow(WalletNotFoundError);
+    expect(useCase.execute({ playerId: PlayerId.from('unknown-player') })).rejects.toThrow(WalletNotFoundError);
   });
 
   test('should return balance as string (cents)', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 10000n, 1);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
     mockWalletRepo.findByPlayerId.mockResolvedValue(wallet);
 
-    const result = await useCase.execute({ playerId: 'player-1' });
+    const result = await useCase.execute({ playerId: PlayerId.from('player-1') });
 
     expect(result.balance).toBe('10000');
     expect(typeof result.balance).toBe('string');
   });
 
   test('should return correct version number', async () => {
-    const wallet = Wallet.restore('wallet-1', 'player-1', 5000n, 7);
+    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 5000n, 7);
     mockWalletRepo.findByPlayerId.mockResolvedValue(wallet);
 
-    const result = await useCase.execute({ playerId: 'player-1' });
+    const result = await useCase.execute({ playerId: PlayerId.from('player-1') });
 
     expect(result.version).toBe(7);
   });

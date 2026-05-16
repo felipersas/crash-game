@@ -10,9 +10,10 @@ import {
   SeedNotAvailableError,
   VerificationFailedError,
 } from '@/domain/errors/domain.errors';
+import { type RoundId } from '@crash/domain';
 
 export interface VerifyRoundInput {
-  roundId: string;
+  roundId: RoundId;
 }
 
 export interface VerifyRoundOutput {

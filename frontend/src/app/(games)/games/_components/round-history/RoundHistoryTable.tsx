@@ -1,7 +1,7 @@
 "use client";
 
 import { Hash } from 'lucide-react';
-import { formatMultiplier, formatMoney } from '@/utils/money';
+import { formatMultiplier, formatMoney } from '@/domain/money';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 
 export interface RoundHistoryItem {
@@ -31,6 +31,13 @@ function getCrashBg(cp: number | null): string {
   if (cp < 1.5) return 'bg-error/20';
   if (cp < 3) return 'bg-warning/20';
   return 'bg-primary/20';
+}
+
+function getCrashLabel(cp: number | null): string {
+  if (!cp) return '';
+  if (cp < 1.5) return 'low crash';
+  if (cp < 3) return 'medium crash';
+  return 'high multiplier';
 }
 
 export default function RoundHistoryTable({
@@ -82,8 +89,9 @@ export default function RoundHistoryTable({
             {round.totalWageredCents ? formatMoney(round.totalWageredCents) : '-'}
           </span>
           <span className={`font-terminal text-sm font-bold ${getCrashColor(round.crashPoint)}`}>
-            <span className={`inline-block px-2 py-0.5 rounded ${getCrashBg(round.crashPoint)}`}>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded ${getCrashBg(round.crashPoint)}`}>
               {formatMultiplier(round.crashPoint || 0)}
+              <span className="sr-only"> ({getCrashLabel(round.crashPoint)})</span>
             </span>
           </span>
           <span className="text-right">

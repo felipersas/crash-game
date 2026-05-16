@@ -5,7 +5,7 @@ import BetControls from "./_components/bet-controls/BetControls";
 import BetsList from "./_components/bets-list/BetsList";
 import RoundHistory from "./_components/round-history/RoundHistory";
 import { useGameStore } from "@/store/game-store";
-import { RoundStatus } from "@/types/game.types";
+import { RoundStatus } from "@/types";
 import { useGameWebSocket } from "@/hooks/useGameWebSocket";
 import { useRoundHistory } from "@/hooks/useRoundHistory";
 import { useSession } from "next-auth/react";

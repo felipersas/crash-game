@@ -8,11 +8,12 @@ import { createBetConfirmedEvent } from '@/domain/events/round.events';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
+import { type BetId, type RoundId, type PlayerId } from '@crash/domain';
 
 export interface ConfirmBetInput {
-  roundId: string;
-  betId: string;
-  playerId: string;
+  roundId: RoundId;
+  betId: BetId;
+  playerId: PlayerId;
 }
 
 export interface ConfirmBetOutput {

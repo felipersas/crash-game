@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { GetRoundHistoryUseCase } from '../../../src/application/use-cases/get-round-history.use-case';
 import { Round, RoundStatus } from '../../../src/domain/entities/round.entity';
 import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
-import { Money } from '@crash/domain';
+import { Money, PlayerId } from '@crash/domain';
 
 function mockFn<T extends (...args: any[]) => any>(
   impl?: T,
@@ -25,8 +25,9 @@ async function createCrashedRound(
   const round = await Round.create();
 
   for (const b of bets) {
-    round.placeBet(b.playerId, b.playerName, Money.fromDecimal(b.amount));
-    round.getBetByPlayer(b.playerId)!.confirm();
+    const pid = PlayerId.from(b.playerId);
+    round.placeBet(pid, b.playerName, Money.fromDecimal(b.amount));
+    round.getBetByPlayer(pid)!.confirm();
   }
 
   await round.startRound();
