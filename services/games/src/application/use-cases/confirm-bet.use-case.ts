@@ -9,6 +9,8 @@ import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 import { type BetId, type RoundId, type PlayerId } from '@crash/domain';
+import { AUTO_CASHOUT_REPOSITORY } from '@/application/di.tokens';
+import type { AutoCashOutRepository } from '@/infrastructure/redis/auto-cashout.repository';
 
 export interface ConfirmBetInput {
   roundId: RoundId;
@@ -41,6 +43,7 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
     private readonly prisma: PrismaService,
     private readonly outboxWriter: OutboxWriter,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: AutoCashOutRepository,
   ) {}
 
   async execute(input: ConfirmBetInput): Promise<ConfirmBetOutput> {
@@ -51,6 +54,14 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
     }
 
     bet.confirm();
+
+    if (bet.hasAutoCashOut()) {
+      try {
+        await this.autoCashOutRepo.addTarget(input.roundId, input.playerId, bet.getAutoCashOutMultiplier()!);
+      } catch (error) {
+        this.logger.error('Failed to register auto cash-out target', error);
+      }
+    }
 
     const event = createBetConfirmedEvent(
       input.roundId,
