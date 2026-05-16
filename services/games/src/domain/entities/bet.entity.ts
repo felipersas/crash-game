@@ -1,6 +1,6 @@
 import { Multiplier } from '../value-objects/multiplier.value-object';
 import { Money, type BetId, type RoundId, type PlayerId, BetId as BetIdVO } from '@crash/domain';
-import { InvalidBetStateError } from '../errors/domain.errors';
+import { InvalidBetStateError, InvalidAutoCashOutMultiplierError } from '../errors/domain.errors';
 
 /**
  * Bet lifecycle states (saga pattern).
@@ -24,6 +24,7 @@ export class Bet {
   private cashOutMultiplier: Multiplier | null;
   private cashOutAmount: Money | null;
   private cashedOutAt: Date | null;
+  private autoCashOutMultiplier: number | null;
   private cancelReason: string | null;
   private createdAt: Date;
 
@@ -45,6 +46,7 @@ export class Bet {
     this.cashOutAmount = null;
     this.cashedOutAt = null;
     this.cancelReason = null;
+    this.autoCashOutMultiplier = null;
     this.createdAt = new Date();
   }
 
@@ -52,9 +54,23 @@ export class Bet {
    * Factory method to create a new bet in PENDING state.
    * The bet will be confirmed once the wallet is debited.
    */
-  static create(roundId: RoundId, playerId: PlayerId, playerName: string, amount: Money): Bet {
+  static create(
+    roundId: RoundId,
+    playerId: PlayerId,
+    playerName: string,
+    amount: Money,
+    autoCashOutMultiplier?: number,
+  ): Bet {
+    if (autoCashOutMultiplier !== undefined && autoCashOutMultiplier < 1.01) {
+      throw new InvalidAutoCashOutMultiplierError(autoCashOutMultiplier, 'must be at least 1.01');
+    }
+    if (autoCashOutMultiplier !== undefined && autoCashOutMultiplier > 1000) {
+      throw new InvalidAutoCashOutMultiplierError(autoCashOutMultiplier, 'must be at most 1000');
+    }
     const betId = BetIdVO.create();
-    return new Bet(betId, roundId, playerId, playerName, amount, BetStatus.PENDING);
+    const bet = new Bet(betId, roundId, playerId, playerName, amount, BetStatus.PENDING);
+    bet.autoCashOutMultiplier = autoCashOutMultiplier ?? null;
+    return bet;
   }
 
   /**
@@ -67,6 +83,7 @@ export class Bet {
     playerName: string,
     amountCents: bigint,
     status: BetStatus,
+    autoCashOutMultiplier: number | null,
     cashOutMultiplier: number | null,
     cashOutAmountCents: bigint | null,
     cashedOutAt: Date | null,
@@ -75,6 +92,7 @@ export class Bet {
     const amount = Money.fromCents(amountCents);
     const bet = new Bet(id, roundId, playerId, playerName, amount, status);
 
+    bet.autoCashOutMultiplier = autoCashOutMultiplier;
     if (cashOutMultiplier !== null) {
       bet.cashOutMultiplier = Multiplier.fromValue(cashOutMultiplier);
     }
@@ -192,6 +210,20 @@ export class Bet {
   }
 
   /**
+   * Get the auto cash-out multiplier target (if set).
+   */
+  getAutoCashOutMultiplier(): number | null {
+    return this.autoCashOutMultiplier;
+  }
+
+  /**
+   * Check if auto cash-out is enabled for this bet.
+   */
+  hasAutoCashOut(): boolean {
+    return this.autoCashOutMultiplier !== null;
+  }
+
+  /**
    * Check if the bet is pending confirmation.
    */
   isPending(): boolean {
@@ -235,6 +267,7 @@ export class Bet {
       roundId: this.roundId,
       playerId: this.playerId,
       playerName: this.playerName,
+      autoCashOutMultiplier: this.autoCashOutMultiplier,
       amountCents: this.amount.toCents(),
       status: this.status,
       cashOutMultiplier: this.cashOutMultiplier?.getValue() ?? null,

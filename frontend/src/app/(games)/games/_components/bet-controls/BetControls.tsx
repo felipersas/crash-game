@@ -14,6 +14,7 @@ import { useBetToast } from "./useBetToast";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { toast } from "sonner";
 import { betFormSchema, type BetFormValues } from "@/schemas/bet-form.schema";
+import { AutoCashOut } from "./AutoCashOut";
 
 export default function BetControls() {
   const { placeBet, isPlacingBet, cashOut, isCashingOut } = useGame();
@@ -25,7 +26,7 @@ export default function BetControls() {
 
   const { control, handleSubmit, formState: { errors } } = useForm<BetFormValues>({
     resolver: zodResolver(betFormSchema),
-    defaultValues: { amountCents: 1000 },
+    defaultValues: { amountCents: 1000, targetMultiplier: undefined },
   });
 
   useBetToast();
@@ -48,7 +49,10 @@ export default function BetControls() {
       return;
     }
     playBet();
-    placeBet(data.amountCents);
+    placeBet({
+      amountCents: data.amountCents,
+      autoCashOutAt: data.targetMultiplier,
+    });
   };
 
   return (
@@ -83,6 +87,10 @@ export default function BetControls() {
       )}
 
       <BetInput control={control} disabled={!canBet} error={errors.amountCents?.message} />
+
+      {isAuthenticated && (
+        <AutoCashOut control={control} disabled={!canBet} roundStatus={roundStatus} />
+      )}
 
       {canBet && (
         <button

@@ -271,6 +271,22 @@ describe('PlaceBetUseCase', () => {
     expect(typeof result.status).toBe('string');
   });
 
+  test('should pass autoCashOutMultiplier to bet', async () => {
+    const round = await Round.create(DEFAULT_ROUND_CONFIG);
+    round.pullEvents();
+    roundRepository.findCurrentRound.mockResolvedValue(round);
+
+    const result = await useCase.execute({
+      playerId,
+      playerName,
+      amountCents: validAmountCents,
+      autoCashOutMultiplier: 2.5,
+    });
+
+    expect(result.roundId).toBe(round.id);
+    expect(result.autoCashOutMultiplier).toBe(2.5);
+  });
+
   describe('Bet replacement', () => {
     test('should handle bet replacement when player has PENDING bet', async () => {
       const round = await Round.create(DEFAULT_ROUND_CONFIG);

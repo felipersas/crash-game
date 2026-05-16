@@ -17,6 +17,7 @@ const mockBets: Bet[] = [
     payoutCents: null,
     payoutDecimal: null,
     cashedOutAt: null,
+    autoCashOutMultiplier: null,
   },
   {
     id: "bet-2",
@@ -30,6 +31,7 @@ const mockBets: Bet[] = [
     payoutCents: 1250,
     payoutDecimal: "12.50",
     cashedOutAt: new Date(),
+    autoCashOutMultiplier: null,
   },
 ];
 
@@ -98,6 +100,7 @@ describe("BetsList", () => {
       payoutCents: null,
       payoutDecimal: null,
       cashedOutAt: null,
+      autoCashOutMultiplier: null,
     };
     useGameStore.setState({ currentBets: [...mockBets, cancelledBet] });
     renderWithProviders(<BetsList />);

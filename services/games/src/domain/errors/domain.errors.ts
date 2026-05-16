@@ -111,6 +111,15 @@ export class InvalidRoundStateError extends DomainError {
   }
 }
 
+export class InvalidAutoCashOutMultiplierError extends DomainError {
+  constructor(value: number, reason: string) {
+    super(
+      `Auto cash-out multiplier ${value} is invalid: ${reason}`,
+      'INVALID_AUTO_CASHOUT_MULTIPLIER',
+    );
+  }
+}
+
 export class SeedNotAvailableError extends DomainError {
   constructor() {
     super('Results are not available until the round crashes', 'SEED_NOT_AVAILABLE');

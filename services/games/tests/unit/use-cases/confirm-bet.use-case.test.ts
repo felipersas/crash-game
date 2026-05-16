@@ -93,12 +93,25 @@ function createMockOutboxWriter() {
   };
 }
 
+function createMockAutoCashOutRepo() {
+  return {
+    addTarget: mockFn(() => Promise.resolve()),
+    removeTarget: mockFn(() => Promise.resolve()),
+    fetchAndRemoveEligible: mockFn(() => Promise.resolve([])),
+    acquireLock: mockFn(() => Promise.resolve(true)),
+    getCachedResult: mockFn(() => Promise.resolve(null)),
+    cacheResult: mockFn(() => Promise.resolve()),
+    clearRound: mockFn(() => Promise.resolve()),
+  };
+}
+
 describe('ConfirmBetUseCase', () => {
   let betRepository: ReturnType<typeof createMockBetRepository>;
   let gamesGateway: ReturnType<typeof createMockGamesGateway>;
   let metrics: ReturnType<typeof createMockMetrics>;
   let prisma: ReturnType<typeof createMockPrisma>;
   let outboxWriter: ReturnType<typeof createMockOutboxWriter>;
+  let autoCashOutRepo: ReturnType<typeof createMockAutoCashOutRepo>;
   let useCase: ConfirmBetUseCase;
 
   const roundId = RoundId.from('round-123');
@@ -112,12 +125,18 @@ describe('ConfirmBetUseCase', () => {
     metrics = createMockMetrics();
     prisma = createMockPrisma();
     outboxWriter = createMockOutboxWriter();
+    autoCashOutRepo = createMockAutoCashOutRepo();
+    const roundStateProvider = {
+      getCurrentRound: mockFn(() => null),
+    };
     useCase = new ConfirmBetUseCase(
       betRepository as any,
       gamesGateway as any,
       metrics as any,
       prisma as any,
       outboxWriter as any,
+      autoCashOutRepo as any,
+      roundStateProvider as any,
     );
   });
 
@@ -203,5 +222,53 @@ describe('ConfirmBetUseCase', () => {
     expect(args![2]).toBe(playerId);
     expect(args![3]).toBe(playerName);
     expect(args![4]).toBe(amount.toCents());
+  });
+
+  test('should register auto cash-out target when bet has autoCashOutMultiplier', async () => {
+    const bet = Bet.restore(
+      'bet-1' as any,
+      'round-1' as any,
+      'player-1' as any,
+      'Player',
+      1000n,
+      BetStatus.PENDING,
+      2.5,
+      null,
+      null,
+      null,
+    );
+    betRepository.findByPlayerAndRound.mockResolvedValue(bet);
+
+    await useCase.execute({
+      roundId: 'round-1' as any,
+      betId: 'bet-1' as any,
+      playerId: 'player-1' as any,
+    });
+
+    expect(autoCashOutRepo.addTarget.callCount).toBe(1);
+  });
+
+  test('should NOT register auto cash-out target when bet has no autoCashOutMultiplier', async () => {
+    const bet = Bet.restore(
+      'bet-1' as any,
+      'round-1' as any,
+      'player-1' as any,
+      'Player',
+      1000n,
+      BetStatus.PENDING,
+      null,
+      null,
+      null,
+      null,
+    );
+    betRepository.findByPlayerAndRound.mockResolvedValue(bet);
+
+    await useCase.execute({
+      roundId: 'round-1' as any,
+      betId: 'bet-1' as any,
+      playerId: 'player-1' as any,
+    });
+
+    expect(autoCashOutRepo.addTarget.callCount).toBe(0);
   });
 });

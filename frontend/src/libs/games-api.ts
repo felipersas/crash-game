@@ -11,8 +11,12 @@ import type {
   MyBetsResponse,
 } from '@/types';
 
-export function placeBet(amountCents: number): Promise<PlaceBetResponse> {
-  return post(API_ENDPOINTS.GAMES.BET, { amount: amountCents });
+export function placeBet(amountCents: number, autoCashOutAt?: number): Promise<PlaceBetResponse> {
+  const body: Record<string, number> = { amount: amountCents };
+  if (autoCashOutAt !== undefined) {
+    body.autoCashOutAt = autoCashOutAt;
+  }
+  return post(API_ENDPOINTS.GAMES.BET, body);
 }
 
 export function cashOut(idempotencyKey: string, roundId?: string): Promise<CashOutResponse> {

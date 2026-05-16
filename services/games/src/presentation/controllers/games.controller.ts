@@ -90,6 +90,7 @@ export class GamesController {
       playerId: PlayerId.from(user.playerId),
       playerName: user.username,
       amountCents: BigInt(dto.amount),
+      autoCashOutMultiplier: dto.autoCashOutAt,
     });
 
     return {
@@ -97,6 +98,7 @@ export class GamesController {
       betId: result.betId,
       amountCents: Number(result.amountCents),
       status: result.status,
+      autoCashOutMultiplier: result.autoCashOutMultiplier ?? undefined,
     };
   }
 
@@ -238,6 +240,7 @@ export class GamesController {
           bet.cashOutMultiplier,
           payoutCents,
           bet.cashedOutAt,
+          bet.autoCashOutMultiplier,
         );
       }),
     };

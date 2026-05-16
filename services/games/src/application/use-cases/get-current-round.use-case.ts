@@ -19,6 +19,7 @@ export interface BetOutput {
   cashOutMultiplier: number | null;
   cashOutAmountCents: bigint | null;
   cashedOutAt: Date | null;
+  autoCashOutMultiplier: number | null;
 }
 
 export interface GetCurrentRoundOutput {
@@ -73,6 +74,7 @@ export class GetCurrentRoundUseCase implements IUseCase<
       cashOutMultiplier: bet.getCashOutMultiplier()?.getValue() ?? null,
       cashOutAmountCents: bet.getCashOutAmount()?.toCents() ?? null,
       cashedOutAt: bet.getCashedOutAt(),
+      autoCashOutMultiplier: bet.getAutoCashOutMultiplier(),
     };
   }
 }

@@ -13,13 +13,16 @@ import {
   EVENT_PUBLISHER,
   GAME_BROADCASTER,
   ROUND_STATE_PROVIDER,
+  AUTO_CASHOUT_REPOSITORY,
 } from '@/application/di.tokens';
+import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 import { type PlayerId, type RoundId, PlayerId as PlayerIdVO, IdempotencyKey } from '@crash/domain';
+import { Multiplier } from '@/domain/value-objects/multiplier.value-object';
 
 /**
  * Cash Out Use Case
@@ -32,6 +35,7 @@ export interface CashOutInput {
   playerId: PlayerId;
   roundId?: RoundId;
   idempotencyKey: string;
+  targetMultiplier?: number;
 }
 
 export interface CashOutOutput {
@@ -53,11 +57,17 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     @Inject(ROUND_STATE_PROVIDER) private readonly roundStateProvider: IRoundStateProvider,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
     private readonly prisma: PrismaService,
     private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
+    const roundForCleanup = input.roundId ?? this.roundStateProvider.getCurrentRound()?.id;
+    if (roundForCleanup) {
+      this.autoCashOutRepo.removeTarget(roundForCleanup, input.playerId);
+    }
+
     IdempotencyKey.from(input.idempotencyKey);
 
     const round = await this.loadRound(input.roundId);
@@ -79,7 +89,10 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     }
 
     round.syncBet(bet);
-    const payout = round.cashOut(input.playerId);
+    const overrideMultiplier = input.targetMultiplier
+      ? Multiplier.fromValue(input.targetMultiplier)
+      : undefined;
+    const payout = round.cashOut(input.playerId, overrideMultiplier);
 
     // Persist updated bet status + round + outbox events atomically
     const cashedOutBet = round.getBetByPlayer(input.playerId);
@@ -105,7 +118,7 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
 
     await this.broadcastCashOut(round, events);
 
-    return this.mapToOutput(input.playerId, bet, round, payout);
+    return this.mapToOutput(input.playerId, bet, round, payout, overrideMultiplier);
   }
 
   private async loadRound(roundId?: RoundId): Promise<Round> {
@@ -169,12 +182,16 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     bet: { id: string },
     round: Round,
     payout: { toCents(): bigint },
+    overrideMultiplier?: Multiplier,
   ): CashOutOutput {
+    const effectiveMultiplier = overrideMultiplier
+      ? overrideMultiplier.getValue()
+      : round.getCurrentMultiplier();
     return {
       betId: bet.id,
       roundId: round.id,
       playerId,
-      cashOutMultiplier: round.getCurrentMultiplier(),
+      cashOutMultiplier: effectiveMultiplier,
       payoutCents: payout.toCents(),
     };
   }

@@ -174,7 +174,12 @@ export class Round {
    * Only allowed during BETTING phase.
    * Throws if player already has an active/cashed out/lost bet.
    */
-  placeBet(playerId: PlayerId, playerName: string, amount: Money): void {
+  placeBet(
+    playerId: PlayerId,
+    playerName: string,
+    amount: Money,
+    autoCashOutMultiplier?: number,
+  ): void {
     if (this.status !== RoundStatus.BETTING) {
       throw new RoundNotAcceptingBetsError();
     }
@@ -191,7 +196,7 @@ export class Round {
       throw new BetAboveMaximumError(amount.toCents());
     }
 
-    const bet = Bet.create(this.id, playerId, playerName, amount);
+    const bet = Bet.create(this.id, playerId, playerName, amount, autoCashOutMultiplier);
     this.bets.set(playerId, bet);
 
     this.addEvent(createBetPlacedEvent(this.id, bet.id, playerId, amount.toCents(), this.version));
@@ -207,6 +212,7 @@ export class Round {
     playerId: PlayerId,
     playerName: string,
     amount: Money,
+    autoCashOutMultiplier?: number,
   ): { bet: Bet; replacedBet: Bet | null } {
     if (this.status !== RoundStatus.BETTING) {
       throw new RoundNotAcceptingBetsError();
@@ -236,7 +242,7 @@ export class Round {
       throw new BetAboveMaximumError(amount.toCents());
     }
 
-    const bet = Bet.create(this.id, playerId, playerName, amount);
+    const bet = Bet.create(this.id, playerId, playerName, amount, autoCashOutMultiplier);
     this.bets.set(playerId, bet);
 
     this.addEvent(createBetPlacedEvent(this.id, bet.id, playerId, amount.toCents(), this.version));
@@ -248,7 +254,7 @@ export class Round {
    * Cash out a player's bet at the current multiplier.
    * Only allowed during ACTIVE phase.
    */
-  cashOut(playerId: PlayerId): Money {
+  cashOut(playerId: PlayerId, overrideMultiplier?: Multiplier): Money {
     if (this.status !== RoundStatus.ACTIVE) {
       throw new RoundAlreadyCrashedError(this.crashPoint?.getValue() || 0);
     }
@@ -258,7 +264,8 @@ export class Round {
       throw new NoActiveBetError();
     }
 
-    const payout = bet.cashOut(this.currentMultiplier);
+    const multiplier = overrideMultiplier ?? this.currentMultiplier;
+    const payout = bet.cashOut(multiplier);
 
     this.addEvent(
       createPlayerCashedOutEvent(
@@ -266,7 +273,7 @@ export class Round {
         bet.id,
         playerId,
         bet.getAmount().toCents(),
-        this.currentMultiplier.getValue(),
+        multiplier.getValue(),
         payout.toCents(),
         this.version,
       ),

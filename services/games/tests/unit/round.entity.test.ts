@@ -610,6 +610,80 @@ describe('Round Entity', () => {
     });
   });
 
+  describe('Round auto cash-out', () => {
+    test('should place bet with autoCashOutMultiplier', async () => {
+      const round = await Round.create(DEFAULT_ROUND_CONFIG);
+      round.pullEvents();
+
+      round.placeBet('p1' as any, 'Player 1', Money.fromCents(1000n), 2.5);
+
+      const bets = round.getBets();
+      const bet = bets.find((b) => b.playerId === 'p1');
+      expect(bet?.getAutoCashOutMultiplier()).toBe(2.5);
+    });
+
+    test('should placeOrReplaceBet with autoCashOutMultiplier', async () => {
+      const round = await Round.create(DEFAULT_ROUND_CONFIG);
+      round.pullEvents();
+
+      const { bet } = round.placeOrReplaceBet('p1' as any, 'Player 1', Money.fromCents(1000n), 2.5);
+
+      expect(bet.getAutoCashOutMultiplier()).toBe(2.5);
+    });
+
+    test('should cashOut with override multiplier', async () => {
+      const round = await Round.create(DEFAULT_ROUND_CONFIG);
+      round.pullEvents();
+      round.placeBet('p1' as any, 'Player 1', Money.fromCents(1000n));
+      round.pullEvents();
+
+      // Start round
+      await round.startRound();
+      round.pullEvents();
+
+      // Confirm the bet so it becomes ACTIVE
+      const betBefore = round.getBetByPlayer('p1' as any);
+      if (betBefore && betBefore.isPending()) {
+        (betBefore as any).confirm();
+      }
+
+      // Advance multiplier past 2.0
+      round.updateMultiplier(1);
+
+      // Cash out with override at exactly 2.0
+      const payout = round.cashOut('p1' as any, Multiplier.fromValue(2.0));
+
+      expect(payout.toCents()).toBe(2000n);
+      const bet = round.getBetByPlayer('p1' as any);
+      expect(bet?.getCashOutMultiplier()?.getValue()).toBe(2.0);
+    });
+
+    test('should cashOut without override uses current multiplier', async () => {
+      const round = await Round.create(DEFAULT_ROUND_CONFIG);
+      round.pullEvents();
+      round.placeBet('p1' as any, 'Player 1', Money.fromCents(1000n));
+      round.pullEvents();
+
+      await round.startRound();
+      round.pullEvents();
+
+      // Confirm the bet so it becomes ACTIVE
+      const betBefore = round.getBetByPlayer('p1' as any);
+      if (betBefore && betBefore.isPending()) {
+        (betBefore as any).confirm();
+      }
+
+      round.updateMultiplier(1);
+
+      const currentMultiplier = round.getCurrentMultiplier();
+      const payout = round.cashOut('p1' as any);
+
+      // Should use the current multiplier (not an override)
+      const bet = round.getBetByPlayer('p1' as any);
+      expect(bet?.getCashOutMultiplier()?.getValue()).toBe(currentMultiplier);
+    });
+  });
+
   describe('Configuration', () => {
     test('should use default config when not provided', async () => {
       const defaultRound = await Round.create();

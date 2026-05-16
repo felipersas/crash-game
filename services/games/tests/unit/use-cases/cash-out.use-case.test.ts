@@ -99,6 +99,10 @@ describe('CashOutUseCase', () => {
       tryImmediatePublish: mockFn(async () => {}),
     };
 
+    const mockAutoCashOutRepo = {
+      removeTarget: mockFn(async () => {}),
+    };
+
     useCase = new CashOutUseCase(
       mockRoundRepo,
       mockBetRepo,
@@ -106,6 +110,7 @@ describe('CashOutUseCase', () => {
       mockLifecycleManager,
       mockGateway,
       mockMetrics,
+      mockAutoCashOutRepo,
       mockPrisma as any,
       mockOutboxWriter as any,
     );
@@ -269,5 +274,22 @@ describe('CashOutUseCase', () => {
 
     expect(result.playerId).toBe(PLAYER_ID);
     expect(result.betId).toBe(bet.id);
+  });
+
+  test('Should use override multiplier when targetMultiplier is provided', async () => {
+    const { round, bet } = await createActiveRoundWithBet();
+
+    mockLifecycleManager.getCurrentRound.mockReturnValue(round);
+    mockBetRepo.findByPlayerAndRound.mockResolvedValue(bet);
+
+    const result = await useCase.execute({
+      playerId: PLAYER_ID,
+      roundId: round.id,
+      idempotencyKey: VALID_UUID,
+      targetMultiplier: 2.0,
+    });
+
+    expect(result.cashOutMultiplier).toBe(2.0);
+    expect(result.payoutCents).toBe(2000n);
   });
 });

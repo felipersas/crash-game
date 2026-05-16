@@ -29,6 +29,7 @@ const mockBet: Bet = {
   payoutCents: null,
   payoutDecimal: null,
   cashedOutAt: null,
+  autoCashOutMultiplier: null,
 };
 
 const mockBet2: Bet = {
@@ -43,6 +44,7 @@ const mockBet2: Bet = {
   payoutCents: null,
   payoutDecimal: null,
   cashedOutAt: null,
+  autoCashOutMultiplier: null,
 };
 
 beforeEach(() => {

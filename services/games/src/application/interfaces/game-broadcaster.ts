@@ -6,6 +6,9 @@
  */
 
 export interface IGameBroadcaster {
+  broadcastRoundStarted(roundId: string, seedHash: string, bettingEndTime: Date): void;
+  broadcastBettingEnded(roundId: string): void;
+  broadcastCrash(roundId: string, crashPoint: number, seed: string): void;
   broadcastBetPlaced(
     roundId: string,
     betId: string,

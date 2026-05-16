@@ -21,6 +21,7 @@ export interface PlaceBetInput {
   playerId: PlayerId;
   playerName: string;
   amountCents: bigint;
+  autoCashOutMultiplier?: number;
 }
 
 export interface PlaceBetOutput {
@@ -28,6 +29,7 @@ export interface PlaceBetOutput {
   betId: string;
   amountCents: bigint;
   status: RoundStatus;
+  autoCashOutMultiplier: number | null;
 }
 
 @Injectable()
@@ -63,7 +65,12 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
 
   private async placeBetOnRound(round: Round, input: PlaceBetInput): Promise<PlaceBetOutput> {
     const amount = Money.fromCents(input.amountCents);
-    const { bet, replacedBet } = round.placeOrReplaceBet(input.playerId, input.playerName, amount);
+    const { bet, replacedBet } = round.placeOrReplaceBet(
+      input.playerId,
+      input.playerName,
+      amount,
+      input.autoCashOutMultiplier,
+    );
 
     this.handleReplacement(round, replacedBet, input);
 
@@ -83,6 +90,7 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
       betId: bet.id,
       amountCents: input.amountCents,
       status: round.getStatus(),
+      autoCashOutMultiplier: bet.getAutoCashOutMultiplier(),
     };
   }
 
