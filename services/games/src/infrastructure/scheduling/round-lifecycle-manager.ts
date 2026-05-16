@@ -5,12 +5,16 @@ import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
-import { ROUND_REPOSITORY, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY } from '@/application/di.tokens';
+import { ROUND_REPOSITORY, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY, AUTO_CASHOUT_REPOSITORY, ROUND_CACHE_REPOSITORY } from '@/application/di.tokens';
+import type { AutoCashOutRepository } from '@/infrastructure/redis/auto-cashout.repository';
+import type { RoundCacheRepository } from '@/infrastructure/redis/round-cache.repository';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
 import { RoundCrashHandler } from './round-crash-handler';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
+import { CashOutUseCase } from '@/application/use-cases/cash-out.use-case';
+import { PlayerId } from '@crash/domain';
 
 /**
  * Round Lifecycle Manager - Infrastructure Layer
@@ -39,6 +43,9 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     private readonly crashHandler: RoundCrashHandler,
     private readonly prisma: PrismaService,
     private readonly outboxWriter: OutboxWriter,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: AutoCashOutRepository,
+    @Inject(ROUND_CACHE_REPOSITORY) private readonly roundCacheRepo: RoundCacheRepository,
+    private readonly cashOutUseCase: CashOutUseCase,
   ) {}
 
   /**
@@ -130,6 +137,16 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     }
 
     this.currentRound = newRound;
+
+    try {
+      await this.roundCacheRepo.setCurrentRound({
+        roundId: newRound.id,
+        status: 'betting',
+        multiplier: 1.0,
+      });
+    } catch (error) {
+      this.logger.error('Failed to set round cache on new round', error);
+    }
 
     const roundStarted = events.find((e) => e.eventType === 'RoundStarted');
     if (roundStarted && this.currentRound) {
@@ -290,19 +307,74 @@ export class RoundLifecycleManager implements IRoundStateProvider {
   /**
    * Update the multiplier based on elapsed time.
    */
-  private updateMultiplier() {
+  private async updateMultiplier() {
     if (!this.currentRound || !this.roundStartTime) return;
 
     const elapsedSeconds = (Date.now() - this.roundStartTime.getTime()) / 1000;
     this.currentRound.updateMultiplier(elapsedSeconds);
 
+    const currentMultiplier = this.currentRound.getCurrentMultiplier();
+
+    // Update Redis round cache
+    try {
+      await this.roundCacheRepo.setCurrentRound({
+        roundId: this.currentRound.id,
+        status: 'active',
+        multiplier: currentMultiplier,
+      });
+    } catch (error) {
+      this.logger.error('Failed to update round cache', error);
+    }
+
+    // Process auto cash-outs via Lua script
+    try {
+      const eligiblePlayers = await this.autoCashOutRepo.fetchAndRemoveEligible(
+        this.currentRound.id,
+        currentMultiplier,
+      );
+
+      if (eligiblePlayers.length > 0) {
+        await this.processAutoCashOuts(eligiblePlayers, currentMultiplier);
+      }
+    } catch (error) {
+      this.logger.error('Failed to process auto cash-outs', error);
+    }
+
     this.gamesGateway.broadcastMultiplierUpdate(
       this.currentRound.id,
-      this.currentRound.getCurrentMultiplier(),
+      currentMultiplier,
     );
 
     if (this.currentRound.getStatus() === RoundStatus.CRASHED) {
       this.handleRoundCrashed();
+    }
+  }
+
+  /**
+   * Process auto cash-outs for eligible players.
+   */
+  private async processAutoCashOuts(playerIds: string[], multiplier: number): Promise<void> {
+    if (!this.currentRound) return;
+
+    for (const playerId of playerIds) {
+      try {
+        const acquired = await this.autoCashOutRepo.acquireLock(this.currentRound.id, playerId);
+        if (!acquired) {
+          const cached = await this.autoCashOutRepo.getCachedResult(this.currentRound.id, playerId);
+          if (cached) continue;
+          this.logger.warn(`Lock not acquired for auto cash-out: ${playerId}, skipping`);
+          continue;
+        }
+
+        await this.cashOutUseCase.execute({
+          playerId: PlayerId.from(playerId),
+          roundId: this.currentRound.id,
+          idempotencyKey: `auto-${this.currentRound.id}-${playerId}`,
+          targetMultiplier: multiplier,
+        });
+      } catch (error) {
+        this.logger.error(`Auto cash-out failed for player ${playerId}: ${error}`);
+      }
     }
   }
 
@@ -318,6 +390,13 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     }
 
     this.currentRound = await this.crashHandler.handleRoundCrashed(this.currentRound);
+
+    try {
+      await this.autoCashOutRepo.clearRound(this.currentRound.id);
+      await this.roundCacheRepo.clearCurrentRound();
+    } catch (error) {
+      this.logger.error('Failed to clear Redis keys on crash', error);
+    }
 
     setTimeout(() => {
       this.createNewRound();
