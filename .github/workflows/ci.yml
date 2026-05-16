@@ -58,7 +58,7 @@ jobs:
       - run: bun install
 
       - name: Run frontend tests
-        run: bun run --cwd frontend test
+        run: cd frontend && bunx vitest run
 
   lint:
     name: Lint
