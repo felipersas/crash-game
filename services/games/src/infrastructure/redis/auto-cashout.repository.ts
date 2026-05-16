@@ -45,7 +45,7 @@ export class AutoCashOutRepository {
 
   async acquireLock(roundId: string, playerId: string): Promise<boolean> {
     const result = await this.redis.set(
-      `cashout:${roundId}:${playerId}`,
+      `cashout:lock:${roundId}:${playerId}`,
       '',
       'EX',
       300,
@@ -58,7 +58,7 @@ export class AutoCashOutRepository {
     roundId: string,
     playerId: string,
   ): Promise<{ multiplier: number; payoutCents: bigint } | null> {
-    const data = await this.redis.get(`cashout:${roundId}:${playerId}`);
+    const data = await this.redis.get(`cashout:result:${roundId}:${playerId}`);
     if (!data) return null;
     try {
       const parsed = JSON.parse(data);
@@ -77,7 +77,7 @@ export class AutoCashOutRepository {
     result: { multiplier: number; payoutCents: bigint },
   ): Promise<void> {
     await this.redis.set(
-      `cashout:${roundId}:${playerId}`,
+      `cashout:result:${roundId}:${playerId}`,
       JSON.stringify({ multiplier: result.multiplier, payoutCents: result.payoutCents.toString() }),
       'EX',
       300,

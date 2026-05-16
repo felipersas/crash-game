@@ -70,7 +70,7 @@ describe('AutoCashOutRepository', () => {
 
     const acquired = await repo.acquireLock('round-1', 'player-1');
     expect(acquired).toBe(true);
-    expect(redis.set._calls[0]).toEqual(['cashout:round-1:player-1', '', 'EX', 300, 'NX']);
+    expect(redis.set._calls[0]).toEqual(['cashout:lock:round-1:player-1', '', 'EX', 300, 'NX']);
   });
 
   test('should fail to acquire lock if already held', async () => {
@@ -85,7 +85,7 @@ describe('AutoCashOutRepository', () => {
     await repo.cacheResult('round-1', 'player-1', { multiplier: 2.5, payoutCents: 2500n });
     expect(redis.set._calls).toHaveLength(1);
     const [key, value, ...rest] = redis.set._calls[0];
-    expect(key).toBe('cashout:round-1:player-1');
+    expect(key).toBe('cashout:result:round-1:player-1');
     expect(JSON.parse(value)).toEqual({ multiplier: 2.5, payoutCents: '2500' });
   });
 
