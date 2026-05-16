@@ -146,7 +146,12 @@ describe('CancelBetUseCase', () => {
     betRepository.findByPlayerAndRound.mockResolvedValue(null);
 
     expect(
-      useCase.execute({ roundId, betId: BetId.from('nonexistent'), playerId, reason: cancelReason }),
+      useCase.execute({
+        roundId,
+        betId: BetId.from('nonexistent'),
+        playerId,
+        reason: cancelReason,
+      }),
     ).rejects.toThrow(BetNotFoundError);
   });
 

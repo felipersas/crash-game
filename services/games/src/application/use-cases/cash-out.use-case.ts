@@ -6,10 +6,7 @@ import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
-import {
-  RoundNotFoundError,
-  NoActiveBetError,
-} from '@/domain/errors/domain.errors';
+import { RoundNotFoundError, NoActiveBetError } from '@/domain/errors/domain.errors';
 import {
   ROUND_REPOSITORY,
   BET_REPOSITORY,
@@ -181,5 +178,4 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
       payoutCents: payout.toCents(),
     };
   }
-
 }

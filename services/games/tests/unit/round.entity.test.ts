@@ -631,8 +631,12 @@ describe('Round Entity', () => {
 
       const customRound = await Round.create(customConfig);
 
-      expect(() => customRound.placeBet(PlayerId.from('p1'), 'Player 1', Money.fromDecimal('5.00'))).not.toThrow();
-      expect(() => customRound.placeBet(PlayerId.from('p2'), 'Player 2', Money.fromDecimal('4.99'))).toThrow();
+      expect(() =>
+        customRound.placeBet(PlayerId.from('p1'), 'Player 1', Money.fromDecimal('5.00')),
+      ).not.toThrow();
+      expect(() =>
+        customRound.placeBet(PlayerId.from('p2'), 'Player 2', Money.fromDecimal('4.99')),
+      ).toThrow();
     });
   });
 });
