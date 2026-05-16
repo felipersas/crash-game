@@ -57,6 +57,8 @@ jobs:
 
       - run: bun install
 
+      - run: cd frontend && bun install
+
       - name: Run frontend tests
         run: cd frontend && bun run test
 
