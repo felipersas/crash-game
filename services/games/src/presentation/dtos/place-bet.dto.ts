@@ -1,4 +1,4 @@
-import { IsInt, Min, Max } from 'class-validator';
+import { IsInt, Min, Max, IsOptional, IsNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class PlaceBetRequestDto {
@@ -12,6 +12,17 @@ export class PlaceBetRequestDto {
   @Min(100)
   @Max(100000)
   amount!: number;
+
+  @ApiProperty({
+    description: 'Auto cash-out target multiplier (min 1.01)',
+    example: 2.5,
+    required: false,
+    minimum: 1.01,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1.01)
+  autoCashOutAt?: number;
 }
 
 export class PlaceBetResponseDto {
@@ -29,4 +40,7 @@ export class PlaceBetResponseDto {
     enum: ['PENDING', 'ACTIVE', 'CASHED_OUT', 'LOST', 'CANCELLED'],
   })
   status!: string;
+
+  @ApiProperty({ example: 2.5, nullable: true })
+  autoCashOutMultiplier?: number;
 }
