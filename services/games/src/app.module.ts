@@ -19,7 +19,6 @@ import { OutboxProcessor } from './infrastructure/messaging/rabbitmq/outbox-proc
 import { InboxProcessor } from './infrastructure/messaging/rabbitmq/inbox-processor';
 import { PrismaInboxRepository } from './infrastructure/persistence/prisma/inbox.repository.impl';
 import { RoundLifecycleManager } from './infrastructure/scheduling/round-lifecycle-manager';
-import { RoundCrashHandler } from './infrastructure/scheduling/round-crash-handler';
 import { MetricsInterceptor } from './infrastructure/interceptors/metrics.interceptor';
 import { PlaceBetUseCase } from './application/use-cases/place-bet.use-case';
 import { CashOutUseCase } from './application/use-cases/cash-out.use-case';
@@ -30,6 +29,9 @@ import { ConfirmBetUseCase } from './application/use-cases/confirm-bet.use-case'
 import { CancelBetUseCase } from './application/use-cases/cancel-bet.use-case';
 import { GetBetStatusUseCase } from './application/use-cases/get-bet-status.use-case';
 import { GetMyBetsUseCase } from './application/use-cases/get-my-bets.use-case';
+import { CreateRoundUseCase } from './application/use-cases/create-round.use-case';
+import { StartRoundUseCase } from './application/use-cases/start-round.use-case';
+import { CrashRoundUseCase } from './application/use-cases/crash-round.use-case';
 import { BetTimeoutHandler } from './infrastructure/scheduling/bet-timeout.handler';
 import {
   ROUND_REPOSITORY,
@@ -45,8 +47,10 @@ import {
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-chain.repository.impl';
+import { BullModule } from '@nestjs/bullmq';
 import { RedisModule } from './infrastructure/redis/redis.module';
-import { WorkersModule } from './infrastructure/workers/workers.module';
+import { AutoCashOutWorker } from './infrastructure/workers/auto-cashout.worker';
+import { CashoutDLQWorker } from './infrastructure/workers/cashout-dlq.worker';
 
 @Module({
   imports: [
@@ -57,7 +61,18 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     ObservabilityModule,
     PrismaModule,
     RedisModule,
-    WorkersModule,
+    BullModule.registerQueue(
+      {
+        name: 'cashout',
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 500 },
+          removeOnComplete: 100,
+          removeOnFail: 50,
+        },
+      },
+      { name: 'cashout-dlq' },
+    ),
     ClientsModule.register([
       {
         name: 'GAMES_EVENTS_CLIENT',
@@ -122,7 +137,6 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
       provide: INBOX_REPOSITORY,
       useClass: PrismaInboxRepository,
     },
-    RoundCrashHandler,
     RoundLifecycleManager,
     {
       provide: ROUND_STATE_PROVIDER,
@@ -130,9 +144,15 @@ import { WorkersModule } from './infrastructure/workers/workers.module';
     },
     // Scheduled Jobs
     BetTimeoutHandler,
+    // BullMQ Workers
+    AutoCashOutWorker,
+    CashoutDLQWorker,
     // Use Cases
     PlaceBetUseCase,
     CashOutUseCase,
+    CreateRoundUseCase,
+    StartRoundUseCase,
+    CrashRoundUseCase,
     GetCurrentRoundUseCase,
     GetRoundHistoryUseCase,
     VerifyRoundUseCase,

@@ -13,7 +13,9 @@ import {
   EVENT_PUBLISHER,
   GAME_BROADCASTER,
   ROUND_STATE_PROVIDER,
+  AUTO_CASHOUT_REPOSITORY,
 } from '@/application/di.tokens';
+import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
@@ -55,11 +57,17 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     @Inject(ROUND_STATE_PROVIDER) private readonly roundStateProvider: IRoundStateProvider,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
     private readonly prisma: PrismaService,
     private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
+    const roundForCleanup = input.roundId ?? this.roundStateProvider.getCurrentRound()?.id;
+    if (roundForCleanup) {
+      this.autoCashOutRepo.removeTarget(roundForCleanup, input.playerId);
+    }
+
     IdempotencyKey.from(input.idempotencyKey);
 
     const round = await this.loadRound(input.roundId);

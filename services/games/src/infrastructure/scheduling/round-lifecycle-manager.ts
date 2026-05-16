@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { Cron } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
@@ -7,24 +8,29 @@ import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
-import { ROUND_REPOSITORY, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY, AUTO_CASHOUT_REPOSITORY, ROUND_CACHE_REPOSITORY } from '@/application/di.tokens';
+import {
+  ROUND_REPOSITORY,
+  GAMES_GATEWAY,
+  SEED_CHAIN_REPOSITORY,
+  AUTO_CASHOUT_REPOSITORY,
+  ROUND_CACHE_REPOSITORY,
+} from '@/application/di.tokens';
 import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
 import type { RoundCacheRepository } from '@/infrastructure/redis/round-cache.repository';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
-import { OptimisticLockError } from '@/domain/errors/domain.errors';
-import { RoundCrashHandler } from './round-crash-handler';
-import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
-import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
+import { CreateRoundUseCase } from '@/application/use-cases/create-round.use-case';
+import { StartRoundUseCase } from '@/application/use-cases/start-round.use-case';
+import { CrashRoundUseCase } from '@/application/use-cases/crash-round.use-case';
 
 /**
  * Round Lifecycle Manager - Infrastructure Layer
  *
- * Orchestrates the round lifecycle:
- * 1. Creates new rounds when needed
- * 2. Transitions from BETTING to ACTIVE phase
+ * Thin orchestrator for the round lifecycle:
+ * 1. Creates new rounds (delegates persistence to CreateRoundUseCase)
+ * 2. Transitions BETTING → ACTIVE (delegates to StartRoundUseCase)
  * 3. Updates multiplier during ACTIVE phase
- * 4. Detects crash and delegates to RoundCrashHandler
- * 5. Broadcasts events via WebSocket
+ * 4. Detects crash and delegates to CrashRoundUseCase
+ * 5. Broadcasts multiplier updates via WebSocket
  */
 
 @Injectable()
@@ -40,9 +46,9 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(SEED_CHAIN_REPOSITORY) private readonly seedChainRepository: ISeedChainRepository,
     @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
-    private readonly crashHandler: RoundCrashHandler,
-    private readonly prisma: PrismaService,
-    private readonly outboxWriter: OutboxWriter,
+    private readonly createRoundUseCase: CreateRoundUseCase,
+    private readonly startRoundUseCase: StartRoundUseCase,
+    private readonly crashRoundUseCase: CrashRoundUseCase,
     @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
     @Inject(ROUND_CACHE_REPOSITORY) private readonly roundCacheRepo: RoundCacheRepository,
     @InjectQueue('cashout') private readonly cashoutQueue: Queue,
@@ -113,19 +119,7 @@ export class RoundLifecycleManager implements IRoundStateProvider {
 
     const newRound = await Round.createWithSeedChain(this.currentSeedChain, DEFAULT_ROUND_CONFIG);
 
-    const events = newRound.pullEvents();
-    let outboxIds: string[] = [];
-    await this.prisma.$transaction(async (tx) => {
-      await this.roundRepository.create(newRound, tx);
-      if (events.length > 0) {
-        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, newRound.id, events);
-      }
-    });
-
-    // Best-effort immediate publish for low latency
-    if (events.length > 0 && outboxIds.length > 0) {
-      await this.outboxWriter.tryImmediatePublish(events, outboxIds);
-    }
+    const { round } = await this.createRoundUseCase.execute({ round: newRound });
 
     try {
       this.currentSeedChain = this.currentSeedChain.advance();
@@ -136,11 +130,11 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       );
     }
 
-    this.currentRound = newRound;
+    this.currentRound = round;
 
     try {
       await this.roundCacheRepo.setCurrentRound({
-        roundId: newRound.id,
+        roundId: round.id,
         status: 'betting',
         multiplier: 1.0,
       });
@@ -148,18 +142,9 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       this.logger.error('Failed to set round cache on new round', error);
     }
 
-    const roundStarted = events.find((e) => e.eventType === 'RoundStarted');
-    if (roundStarted && this.currentRound) {
-      this.gamesGateway.broadcastRoundStarted(
-        this.currentRound.id,
-        this.currentRound.getSeedHash(),
-        this.currentRound.getBettingEndTime()!,
-      );
-    }
-
     this.scheduleBettingEnd();
 
-    this.logger.log(`Round ${this.currentRound.id} started in BETTING phase`);
+    this.logger.log(`Round ${round.id} started in BETTING phase`);
   }
 
   /**
@@ -209,83 +194,16 @@ export class RoundLifecycleManager implements IRoundStateProvider {
 
   /**
    * End the betting phase and start the round.
-   * Handles optimistic locking conflicts gracefully.
+   * Delegates to StartRoundUseCase which handles optimistic lock conflicts.
    */
   private async endBettingPhase() {
     if (!this.currentRound) return;
 
     this.logger.log(`Ending betting phase for round ${this.currentRound.id}`);
 
-    try {
-      await this.currentRound.startRound();
-      const events = this.currentRound.pullEvents();
-      let outboxIds: string[] = [];
-      await this.prisma.$transaction(async (tx) => {
-        await this.roundRepository.save(this.currentRound!, tx);
-        if (events.length > 0) {
-          outboxIds = await this.outboxWriter.writeWithinTransaction(
-            tx,
-            this.currentRound!.id,
-            events,
-          );
-        }
-      });
+    const result = await this.startRoundUseCase.execute({ round: this.currentRound });
 
-      // Best-effort immediate publish for low latency
-      if (events.length > 0 && outboxIds.length > 0) {
-        await this.outboxWriter.tryImmediatePublish(events, outboxIds);
-      }
-    } catch (error) {
-      if (error instanceof OptimisticLockError) {
-        this.logger.warn(
-          `Optimistic lock conflict for round ${this.currentRound.id}, reloading from database`,
-        );
-
-        const reloaded = await this.roundRepository.findById(this.currentRound.id);
-        if (!reloaded) {
-          this.logger.error(`Round ${this.currentRound.id} not found after conflict`);
-          return;
-        }
-
-        this.currentRound = reloaded;
-
-        if (reloaded.getStatus() === RoundStatus.ACTIVE) {
-          this.logger.log(`Round ${this.currentRound.id} already transitioned to ACTIVE`);
-          this.roundStartTime = reloaded.getStartedAt() || new Date();
-          this.startMultiplierUpdates();
-          return;
-        }
-
-        if (reloaded.getStatus() === RoundStatus.BETTING) {
-          this.logger.log(`Retrying transition for round ${this.currentRound.id}`);
-          await reloaded.startRound();
-          const retryEvents = reloaded.pullEvents();
-          let retryOutboxIds: string[] = [];
-          await this.prisma.$transaction(async (tx) => {
-            await this.roundRepository.save(reloaded, tx);
-            if (retryEvents.length > 0) {
-              retryOutboxIds = await this.outboxWriter.writeWithinTransaction(
-                tx,
-                reloaded.id,
-                retryEvents,
-              );
-            }
-          });
-
-          // Best-effort immediate publish for low latency
-          if (retryEvents.length > 0 && retryOutboxIds.length > 0) {
-            await this.outboxWriter.tryImmediatePublish(retryEvents, retryOutboxIds);
-          }
-
-          this.currentRound = reloaded;
-        }
-      } else {
-        throw error;
-      }
-    }
-
-    this.gamesGateway.broadcastBettingEnded(this.currentRound.id);
-
+    this.currentRound = result.round;
     this.roundStartTime = this.currentRound.getStartedAt() || new Date();
     this.startMultiplierUpdates();
   }
@@ -340,10 +258,7 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       this.logger.error('Failed to process auto cash-outs', error);
     }
 
-    this.gamesGateway.broadcastMultiplierUpdate(
-      this.currentRound.id,
-      currentMultiplier,
-    );
+    this.gamesGateway.broadcastMultiplierUpdate(this.currentRound.id, currentMultiplier);
 
     if (this.currentRound.getStatus() === RoundStatus.CRASHED) {
       this.handleRoundCrashed();
@@ -364,7 +279,7 @@ export class RoundLifecycleManager implements IRoundStateProvider {
         playerId,
         roundId: this.currentRound!.id,
         targetMultiplier,
-        idempotencyKey: `auto-${this.currentRound!.id}-${playerId}`,
+        idempotencyKey: this.deterministicUUID(this.currentRound!.id, playerId),
       },
       opts: {
         attempts: 3,
@@ -375,11 +290,13 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     }));
 
     await this.cashoutQueue.addBulk(jobs);
-    this.logger.log(`Dispatched ${jobs.length} auto cash-out job(s) for round ${this.currentRound.id}`);
+    this.logger.log(
+      `Dispatched ${jobs.length} auto cash-out job(s) for round ${this.currentRound.id}`,
+    );
   }
 
   /**
-   * Handle round crashed — delegates to RoundCrashHandler.
+   * Handle round crashed — delegates to CrashRoundUseCase.
    */
   private async handleRoundCrashed() {
     if (!this.currentRound) return;
@@ -389,10 +306,12 @@ export class RoundLifecycleManager implements IRoundStateProvider {
       this.updateInterval = null;
     }
 
-    this.currentRound = await this.crashHandler.handleRoundCrashed(this.currentRound);
+    const { round } = await this.crashRoundUseCase.execute({ round: this.currentRound });
+
+    this.currentRound = round;
 
     try {
-      await this.autoCashOutRepo.clearRound(this.currentRound.id);
+      await this.autoCashOutRepo.clearRound(round.id);
       await this.roundCacheRepo.clearCurrentRound();
     } catch (error) {
       this.logger.error('Failed to clear Redis keys on crash', error);
@@ -439,5 +358,20 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     if (this.bettingEndTimeout) {
       clearTimeout(this.bettingEndTimeout);
     }
+  }
+
+  /**
+   * Generate a deterministic UUID v4 from input strings.
+   * Same inputs always produce the same UUID.
+   */
+  private deterministicUUID(...inputs: string[]): string {
+    const hex = createHash('sha256').update(inputs.join(':')).digest('hex');
+    return [
+      hex.slice(0, 8),
+      hex.slice(8, 12),
+      '4' + hex.slice(13, 16),
+      ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16) + hex.slice(17, 20),
+      hex.slice(20, 32),
+    ].join('-');
   }
 }

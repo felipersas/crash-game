@@ -8,7 +8,6 @@ import {
   HttpCode,
   HttpStatus,
   Header,
-  Inject,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '../dtos/api-error.dto';
@@ -38,9 +37,6 @@ import { HealthCheckResponseDto } from '../dtos/health-check-response.dto';
 import { BetStatusResponseDto } from '../dtos/bet-status.dto';
 import { centsToDecimal } from '../dtos/money.util';
 import { PlayerId, RoundId, BetId } from '@crash/domain';
-import { AUTO_CASHOUT_REPOSITORY, ROUND_STATE_PROVIDER } from '@/application/di.tokens';
-import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
-import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 
 @ApiTags('Games')
 @Controller('games')
@@ -53,8 +49,6 @@ export class GamesController {
     private readonly verifyRoundUseCase: VerifyRoundUseCase,
     private readonly getBetStatusUseCase: GetBetStatusUseCase,
     private readonly getMyBetsUseCase: GetMyBetsUseCase,
-    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
-    @Inject(ROUND_STATE_PROVIDER) private readonly roundStateProvider: IRoundStateProvider,
   ) {}
 
   @Get('health')
@@ -199,16 +193,6 @@ export class GamesController {
     @UserContext() user: UserContextType,
     @Body() dto: CashOutRequestDto,
   ): Promise<CashOutResponseDto> {
-    // Remove auto cash-out target on manual cashout (best-effort)
-    try {
-      const roundId = dto.roundId ?? this.roundStateProvider.getCurrentRound()?.id;
-      if (roundId) {
-        await this.autoCashOutRepo.removeTarget(roundId, user.playerId);
-      }
-    } catch (error) {
-      // Best-effort — don't fail manual cashout if Redis is down
-    }
-
     const result = await this.cashOutUseCase.execute({
       playerId: PlayerId.from(user.playerId),
       roundId: dto.roundId ? RoundId.from(dto.roundId) : undefined,
@@ -256,6 +240,7 @@ export class GamesController {
           bet.cashOutMultiplier,
           payoutCents,
           bet.cashedOutAt,
+          bet.autoCashOutMultiplier,
         );
       }),
     };
