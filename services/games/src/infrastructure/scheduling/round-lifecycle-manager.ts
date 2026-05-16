@@ -1,5 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
 import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
@@ -13,8 +15,6 @@ import { OptimisticLockError } from '@/domain/errors/domain.errors';
 import { RoundCrashHandler } from './round-crash-handler';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
-import { CashOutUseCase } from '@/application/use-cases/cash-out.use-case';
-import { PlayerId } from '@crash/domain';
 
 /**
  * Round Lifecycle Manager - Infrastructure Layer
@@ -45,7 +45,7 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     private readonly outboxWriter: OutboxWriter,
     @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: AutoCashOutRepository,
     @Inject(ROUND_CACHE_REPOSITORY) private readonly roundCacheRepo: RoundCacheRepository,
-    private readonly cashOutUseCase: CashOutUseCase,
+    @InjectQueue('cashout') private readonly cashoutQueue: Queue,
   ) {}
 
   /**
@@ -351,31 +351,29 @@ export class RoundLifecycleManager implements IRoundStateProvider {
   }
 
   /**
-   * Process auto cash-outs for eligible players.
+   * Process auto cash-outs for eligible players by dispatching BullMQ jobs.
    */
   private async processAutoCashOuts(playerIds: string[], multiplier: number): Promise<void> {
     if (!this.currentRound) return;
 
-    for (const playerId of playerIds) {
-      try {
-        const acquired = await this.autoCashOutRepo.acquireLock(this.currentRound.id, playerId);
-        if (!acquired) {
-          const cached = await this.autoCashOutRepo.getCachedResult(this.currentRound.id, playerId);
-          if (cached) continue;
-          this.logger.warn(`Lock not acquired for auto cash-out: ${playerId}, skipping`);
-          continue;
-        }
+    const jobs = playerIds.map(playerId => ({
+      name: 'auto-cashout',
+      data: {
+        playerId,
+        roundId: this.currentRound!.id,
+        targetMultiplier: multiplier,
+        idempotencyKey: `auto-${this.currentRound!.id}-${playerId}`,
+      },
+      opts: {
+        attempts: 3,
+        backoff: { type: 'exponential' as const, delay: 500 },
+        removeOnComplete: 100,
+        removeOnFail: { age: 3600, count: 50 },
+      },
+    }));
 
-        await this.cashOutUseCase.execute({
-          playerId: PlayerId.from(playerId),
-          roundId: this.currentRound.id,
-          idempotencyKey: `auto-${this.currentRound.id}-${playerId}`,
-          targetMultiplier: multiplier,
-        });
-      } catch (error) {
-        this.logger.error(`Auto cash-out failed for player ${playerId}: ${error}`);
-      }
-    }
+    await this.cashoutQueue.addBulk(jobs);
+    this.logger.log(`Dispatched ${jobs.length} auto cash-out job(s) for round ${this.currentRound.id}`);
   }
 
   /**

@@ -46,6 +46,7 @@ import { GamesGateway } from './infrastructure/websocket/games.gateway';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-chain.repository.impl';
 import { RedisModule } from './infrastructure/redis/redis.module';
+import { WorkersModule } from './infrastructure/workers/workers.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { RedisModule } from './infrastructure/redis/redis.module';
     ObservabilityModule,
     PrismaModule,
     RedisModule,
+    WorkersModule,
     ClientsModule.register([
       {
         name: 'GAMES_EVENTS_CLIENT',

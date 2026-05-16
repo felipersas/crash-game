@@ -13,10 +13,6 @@ import { RoundCacheRepository } from './round-cache.repository';
         port: process.env.REDIS_URL ? parseInt(new URL(process.env.REDIS_URL).port || '6379') : 6379,
       },
     }),
-    BullModule.registerQueue(
-      { name: 'cashout' },
-      { name: 'cashout-dlq' },
-    ),
   ],
   providers: [
     {
