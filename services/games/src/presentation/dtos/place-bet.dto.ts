@@ -22,6 +22,7 @@ export class PlaceBetRequestDto {
   @IsOptional()
   @IsNumber()
   @Min(1.01)
+  @Max(1000)
   autoCashOutAt?: number;
 }
 

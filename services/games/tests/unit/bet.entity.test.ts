@@ -11,6 +11,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import { Bet, BetStatus } from '../../src/domain/entities/bet.entity';
+import { InvalidAutoCashOutMultiplierError } from '../../src/domain/errors/domain.errors';
 import { Money, RoundId, PlayerId } from '@crash/domain';
 import { Multiplier } from '../../src/domain/value-objects/multiplier.value-object';
 
@@ -338,10 +339,21 @@ describe('Bet Entity', () => {
       expect(bet.getAutoCashOutMultiplier()).toBeNull();
     });
 
-    test('should throw if autoCashOutMultiplier is below 1.01', () => {
+    test('should throw InvalidAutoCashOutMultiplierError if autoCashOutMultiplier is below 1.01', () => {
       expect(() => {
         Bet.create(roundId, playerId, playerName, Money.fromCents(1000n), 1.0);
-      }).toThrow();
+      }).toThrow(InvalidAutoCashOutMultiplierError);
+    });
+
+    test('should throw InvalidAutoCashOutMultiplierError if autoCashOutMultiplier exceeds 1000', () => {
+      expect(() => {
+        Bet.create(roundId, playerId, playerName, Money.fromCents(1000n), 1001);
+      }).toThrow(InvalidAutoCashOutMultiplierError);
+    });
+
+    test('should accept autoCashOutMultiplier of exactly 1000', () => {
+      const bet = Bet.create(roundId, playerId, playerName, Money.fromCents(1000n), 1000);
+      expect(bet.getAutoCashOutMultiplier()).toBe(1000);
     });
 
     test('should restore bet with autoCashOutMultiplier', () => {

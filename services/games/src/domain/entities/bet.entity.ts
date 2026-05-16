@@ -1,6 +1,6 @@
 import { Multiplier } from '../value-objects/multiplier.value-object';
 import { Money, type BetId, type RoundId, type PlayerId, BetId as BetIdVO } from '@crash/domain';
-import { InvalidBetStateError } from '../errors/domain.errors';
+import { InvalidBetStateError, InvalidAutoCashOutMultiplierError } from '../errors/domain.errors';
 
 /**
  * Bet lifecycle states (saga pattern).
@@ -62,7 +62,10 @@ export class Bet {
     autoCashOutMultiplier?: number,
   ): Bet {
     if (autoCashOutMultiplier !== undefined && autoCashOutMultiplier < 1.01) {
-      throw new Error('Auto cash-out multiplier must be at least 1.01');
+      throw new InvalidAutoCashOutMultiplierError(autoCashOutMultiplier, 'must be at least 1.01');
+    }
+    if (autoCashOutMultiplier !== undefined && autoCashOutMultiplier > 1000) {
+      throw new InvalidAutoCashOutMultiplierError(autoCashOutMultiplier, 'must be at most 1000');
     }
     const betId = BetIdVO.create();
     const bet = new Bet(betId, roundId, playerId, playerName, amount, BetStatus.PENDING);
