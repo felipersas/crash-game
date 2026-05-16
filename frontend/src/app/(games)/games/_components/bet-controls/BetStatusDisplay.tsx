@@ -119,6 +119,11 @@ export function CashOutButton({
           `CASH OUT @ ${liveMultiplier.toFixed(2)}x`
         )}
       </button>
+      {myActiveBet.autoCashOutMultiplier != null && (
+        <p className="text-center text-sm font-terminal text-primary tracking-wider">
+          AUTO @ {myActiveBet.autoCashOutMultiplier.toFixed(2)}x
+        </p>
+      )}
     </div>
   );
 }

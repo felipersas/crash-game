@@ -18,6 +18,7 @@ export interface Bet {
   payoutCents: number | null;
   payoutDecimal: string | null;
   cashedOutAt: Date | null;
+  autoCashOutMultiplier: number | null;
 }
 
 export interface MyBet {
@@ -49,6 +50,7 @@ export interface PlaceBetResponse {
   betId: string;
   amountCents: number;
   status: BetStatus;
+  autoCashOutMultiplier?: number;
 }
 
 export interface CashOutResponse {

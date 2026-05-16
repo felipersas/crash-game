@@ -42,6 +42,7 @@ export function useGameEvents(playerId?: string) {
         playerName: data.playerName ?? '', amountCents: data.amountCents,
         amountDecimal: (data.amountCents / 100).toFixed(2), status: BetStatus.PENDING,
         cashOutMultiplier: null, payoutCents: null, payoutDecimal: null, cashedOutAt: null,
+        autoCashOutMultiplier: null,
       };
       storeAddBet(bet);
     },
@@ -52,6 +53,14 @@ export function useGameEvents(playerId?: string) {
         payoutCents: data.payoutCents, payoutDecimal: (data.payoutCents / 100).toFixed(2),
         cashedOutAt: new Date(),
       });
+      const myBet = useGameStore.getState().myActiveBet;
+      if (myBet?.id === data.betId) {
+        useGameStore.getState().updateBetStatus(data.betId, BetStatus.CASHED_OUT, {
+          multiplier: data.multiplier,
+          payoutCents: data.payoutCents,
+          payoutDecimal: (data.payoutCents / 100).toFixed(2),
+        });
+      }
     },
     onBetConfirmed: (data: { roundId: string; betId: string; playerId: string; amountCents: number }) => {
       if (currentRoundIdRef.current && data.roundId !== currentRoundIdRef.current) return;

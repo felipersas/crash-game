@@ -51,15 +51,15 @@ export function useGame() {
   const placeBetMutation = useMutation<
     PlaceBetResponse,
     ApiError,
-    number,
+    { amountCents: number; autoCashOutAt?: number },
     { prev?: { balance: string } }
   >({
-    mutationFn: placeBet,
-    onMutate: async (amount: number) => {
+    mutationFn: ({ amountCents, autoCashOutAt }) => placeBet(amountCents, autoCashOutAt),
+    onMutate: async ({ amountCents }) => {
       await queryClient.cancelQueries({ queryKey: ["wallet"] });
       const prev = queryClient.getQueryData<{ balance: string }>(["wallet"]);
       if (prev?.balance) {
-        const newBalance = (Number(prev.balance) * 100 - amount * 100) / 100;
+        const newBalance = (Number(prev.balance) * 100 - amountCents * 100) / 100;
         queryClient.setQueryData(["wallet"], {
           ...prev,
           balance: newBalance.toFixed(2),
@@ -80,6 +80,7 @@ export function useGame() {
         payoutCents: null,
         payoutDecimal: null,
         cashedOutAt: null,
+        autoCashOutMultiplier: data.autoCashOutMultiplier ?? null,
       };
 
       setMyActiveBet(newBet);
