@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { useGame } from "@/hooks/useGame";
 import { useWallet } from "@/hooks/useWallet";
 import { useGameStore } from "@/store/game-store";
-import { RoundStatus } from "@/types/game.types";
+import { RoundStatus } from "@/types";
 import { BetInput } from "./BetInput";
 import { BetStatusDisplay, CashOutButton } from "./BetStatusDisplay";
 import { useBetToast } from "./useBetToast";

@@ -1,7 +1,7 @@
 "use client";
 
 import { formatMoney, calculatePayout } from "@/domain/money";
-import type { Bet } from "@/types/game.types";
+import type { Bet } from "@/types";
 
 interface BetStatusDisplayProps {
   myActiveBet: Bet | null;

@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { getMyBets } from '@/libs/games-api';
-import type { MyBetsResponse } from '@/schemas/api-schemas';
+import type { MyBetsResponse } from '@/types';
 import type { ApiError } from '@/libs/axios';
 import { getErrorMessage } from '@/constants/error-codes';
 import { toast } from 'sonner';

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useWallet } from '../useWallet';
 import { renderHookWithProviders, waitFor } from '../../../tests/helpers';
 import { get } from '@/libs/axios';
-import type { Wallet } from '@/types/game.types';
+import type { Wallet } from '@/types';
 import { toast } from 'sonner';
 
 vi.mock('@/libs/axios');

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getWallet } from "@/libs/wallets-api";
-import type { Wallet } from "@/types/game.types";
+import type { Wallet } from "@/types";
 import type { ApiError } from "@/libs/axios";
 import { getErrorMessage } from "@/constants/error-codes";
 import { toast } from "sonner";

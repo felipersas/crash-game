@@ -2,8 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useMyBets } from '../useMyBets';
 import { renderHookWithProviders, waitFor } from '../../../tests/helpers';
 import { get } from '@/libs/axios';
-import type { MyBetsResponse } from '@/schemas/api-schemas';
-import { BetStatus } from '@/types/game.types';
+import { BetStatus, type MyBetsResponse } from '@/types';
 import type { ApiError } from '@/libs/axios';
 import { toast } from 'sonner';
 

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { getCurrentRound } from "@/libs/games-api";
-import { RoundStatus, type Round } from "@/types/game.types";
+import { RoundStatus, type Round } from "@/types";
 import { useGameStore } from "@/store/game-store";
 
 export function useRoundSync(playerId?: string) {

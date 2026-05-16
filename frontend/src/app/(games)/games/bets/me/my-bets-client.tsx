@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useMyBets } from "@/hooks/useMyBets";
 import { formatMoney, formatMultiplier } from "@/domain/money";
-import { BetStatus } from "@/types/game.types";
+import { BetStatus } from "@/types";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 
 function statusBadge(status: string) {

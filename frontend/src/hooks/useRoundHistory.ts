@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { getRoundHistory } from '@/libs/games-api';
-import type { RoundHistoryResponse } from '@/schemas/api-schemas';
+import type { RoundHistoryResponse } from '@/types';
 
 export function useRoundHistory({ page = 1, limit = 20 }: { page?: number; limit?: number } = {}) {
   return useQuery<RoundHistoryResponse>({

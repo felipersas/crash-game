@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import { RoundStatus, Bet } from "@/types/game.types";
+import { RoundStatus, Bet } from "@/types";
 import type { ConnectionStatus } from "@/websocket/websocket.types";
 import { GAME_CONSTANTS } from "@/constants/game";
 

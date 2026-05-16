@@ -2,8 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHookWithProviders, waitFor } from '../../../tests/helpers';
 import { get } from '@/libs/axios';
 import { useRoundHistory } from '../useRoundHistory';
-import type { RoundHistoryResponse } from '@/schemas/api-schemas';
-import { RoundStatus } from '@/types/game.types';
+import { RoundStatus, type RoundHistoryResponse } from '@/types';
 
 vi.mock('@/libs/axios');
 

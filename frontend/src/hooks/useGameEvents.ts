@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { BetStatus, type Bet } from "@/types/game.types";
+import { BetStatus, type Bet } from "@/types";
 import { useGameStore } from "@/store/game-store";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { toast } from "sonner";

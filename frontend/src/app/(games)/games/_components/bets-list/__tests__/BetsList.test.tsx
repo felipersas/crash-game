@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderWithProviders, screen } from "@tests/helpers";
 import { useGameStore } from "@/store/game-store";
-import { BetStatus } from "@/types/game.types";
-import type { Bet } from "@/types/game.types";
+import { BetStatus, type Bet } from "@/types";
 import BetsList from "../BetsList";
 
 const mockBets: Bet[] = [

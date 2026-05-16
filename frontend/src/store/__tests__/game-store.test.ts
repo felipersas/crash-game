@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useGameStore } from '../game-store';
-import { RoundStatus, BetStatus } from '@/types/game.types';
-import type { Bet } from '@/types/game.types';
+import { RoundStatus, BetStatus, type Bet } from '@/types';
 import { GAME_CONSTANTS } from '@/constants/game';
 
 const initialState = {

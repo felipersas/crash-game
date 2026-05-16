@@ -4,7 +4,7 @@ import { useMemo, memo } from "react";
 import { useGameStore } from "@/store/game-store";
 import { formatMoney } from "@/domain/money";
 import { Users } from "lucide-react";
-import type { Bet } from "@/types/game.types";
+import type { Bet } from "@/types";
 
 const MAX_VISIBLE_BETS = 15;
 

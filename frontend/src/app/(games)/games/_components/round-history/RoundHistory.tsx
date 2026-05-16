@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Hash } from 'lucide-react';
 import { useRoundHistory } from '@/hooks/useRoundHistory';
 import { useGameStore } from '@/store/game-store';
-import { RoundStatus } from '@/types/game.types';
+import { RoundStatus } from '@/types';
 import RoundHistoryTable from './RoundHistoryTable';
 import VerificationModal from './VerificationModal';
 
