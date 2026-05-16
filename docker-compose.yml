@@ -112,6 +112,7 @@ services:
       DATABASE_PORT: 5432
       DATABASE_USER: admin
       DATABASE_PASSWORD: admin
+      REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
