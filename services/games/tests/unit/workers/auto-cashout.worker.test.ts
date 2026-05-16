@@ -21,7 +21,7 @@ function createMockAutoCashOutRepo() {
   return {
     addTarget: mockFn(() => Promise.resolve()),
     removeTarget: mockFn(() => Promise.resolve()),
-    fetchAndRemoveEligible: mockFn(() => Promise.resolve([])),
+    fetchAndRemoveEligible: mockFn(() => Promise.resolve([] as Array<{ playerId: string; targetMultiplier: number }>)),
     acquireLock: mockFn(() => Promise.resolve(true)),
     getCachedResult: mockFn(() => Promise.resolve(null)),
     cacheResult: mockFn(() => Promise.resolve()),

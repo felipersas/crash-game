@@ -44,12 +44,15 @@ describe('AutoCashOutRepository', () => {
     expect(redis.zrem._calls[0]).toEqual(['round:round-1:cashouts', 'player-1']);
   });
 
-  test('should fetch and remove eligible players via Lua', async () => {
-    redis = createMockRedis({ eval: mockFn(() => ['player-1', 'player-2']) });
+  test('should fetch and remove eligible players via Lua with scores', async () => {
+    redis = createMockRedis({ eval: mockFn(() => [['player-1', '2.5'], ['player-2', '3.0']]) });
     repo = new AutoCashOutRepository(redis as any);
 
-    const players = await repo.fetchAndRemoveEligible('round-1', 2.5);
-    expect(players).toEqual(['player-1', 'player-2']);
+    const eligible = await repo.fetchAndRemoveEligible('round-1', 3.0);
+    expect(eligible).toEqual([
+      { playerId: 'player-1', targetMultiplier: 2.5 },
+      { playerId: 'player-2', targetMultiplier: 3.0 },
+    ]);
     expect(redis.eval._calls).toHaveLength(1);
   });
 
@@ -57,8 +60,8 @@ describe('AutoCashOutRepository', () => {
     redis = createMockRedis({ eval: mockFn(() => []) });
     repo = new AutoCashOutRepository(redis as any);
 
-    const players = await repo.fetchAndRemoveEligible('round-1', 1.5);
-    expect(players).toEqual([]);
+    const eligible = await repo.fetchAndRemoveEligible('round-1', 1.5);
+    expect(eligible).toEqual([]);
   });
 
   test('should acquire idempotency lock', async () => {

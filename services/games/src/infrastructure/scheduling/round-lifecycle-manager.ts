@@ -328,13 +328,13 @@ export class RoundLifecycleManager implements IRoundStateProvider {
 
     // Process auto cash-outs via Lua script
     try {
-      const eligiblePlayers = await this.autoCashOutRepo.fetchAndRemoveEligible(
+      const eligible = await this.autoCashOutRepo.fetchAndRemoveEligible(
         this.currentRound.id,
         currentMultiplier,
       );
 
-      if (eligiblePlayers.length > 0) {
-        await this.processAutoCashOuts(eligiblePlayers, currentMultiplier);
+      if (eligible.length > 0) {
+        await this.processAutoCashOuts(eligible);
       }
     } catch (error) {
       this.logger.error('Failed to process auto cash-outs', error);
@@ -353,15 +353,17 @@ export class RoundLifecycleManager implements IRoundStateProvider {
   /**
    * Process auto cash-outs for eligible players by dispatching BullMQ jobs.
    */
-  private async processAutoCashOuts(playerIds: string[], multiplier: number): Promise<void> {
+  private async processAutoCashOuts(
+    eligible: Array<{ playerId: string; targetMultiplier: number }>,
+  ): Promise<void> {
     if (!this.currentRound) return;
 
-    const jobs = playerIds.map(playerId => ({
+    const jobs = eligible.map(({ playerId, targetMultiplier }) => ({
       name: 'auto-cashout',
       data: {
         playerId,
         roundId: this.currentRound!.id,
-        targetMultiplier: multiplier,
+        targetMultiplier,
         idempotencyKey: `auto-${this.currentRound!.id}-${playerId}`,
       },
       opts: {

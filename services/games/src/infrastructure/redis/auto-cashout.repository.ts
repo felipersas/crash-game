@@ -4,10 +4,15 @@ import { REDIS_CLIENT } from '@/application/di.tokens';
 
 const LUA_FETCH_AND_REMOVE = `
 local players = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+local results = {}
 if #players > 0 then
+  for i, player in ipairs(players) do
+    local score = redis.call('ZSCORE', KEYS[1], player)
+    table.insert(results, {player, score})
+  end
   redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
 end
-return players
+return results
 `;
 
 @Injectable()
@@ -24,14 +29,18 @@ export class AutoCashOutRepository {
     await this.redis.zrem(`round:${roundId}:cashouts`, playerId);
   }
 
-  async fetchAndRemoveEligible(roundId: string, currentMultiplier: number): Promise<string[]> {
-    const players = await this.redis.eval(
+  async fetchAndRemoveEligible(roundId: string, currentMultiplier: number): Promise<Array<{ playerId: string; targetMultiplier: number }>> {
+    const results = await this.redis.eval(
       LUA_FETCH_AND_REMOVE,
       1,
       `round:${roundId}:cashouts`,
       currentMultiplier.toString(),
-    );
-    return players as string[];
+    ) as Array<[string, string]>;
+
+    return results.map(([playerId, score]) => ({
+      playerId,
+      targetMultiplier: parseFloat(score),
+    }));
   }
 
   async acquireLock(roundId: string, playerId: string): Promise<boolean> {
