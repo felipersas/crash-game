@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { ObservabilityModule } from '@crash/observability';
 import { AutoCashOutWorker } from './auto-cashout.worker';
 import { CashoutDLQWorker } from './cashout-dlq.worker';
 import { CashOutUseCase } from '@/application/use-cases/cash-out.use-case';
 
 @Module({
   imports: [
+    ObservabilityModule,
     BullModule.registerQueue(
       {
         name: 'cashout',
