@@ -96,7 +96,12 @@ describe('CreateWalletUseCase', () => {
   });
 
   test('should return existing wallet when player already has one (idempotent)', async () => {
-    const existingWallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 5000n, 1);
+    const existingWallet = Wallet.restore(
+      WalletId.from('wallet-1'),
+      PlayerId.from('player-1'),
+      5000n,
+      1,
+    );
     mockWalletRepo.findByPlayerId.mockResolvedValue(existingWallet);
 
     const result = await useCase.execute({ playerId: PlayerId.from('player-1') });
@@ -119,7 +124,12 @@ describe('CreateWalletUseCase', () => {
   });
 
   test('should NOT write to outbox for existing wallet', async () => {
-    const existingWallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 5000n, 1);
+    const existingWallet = Wallet.restore(
+      WalletId.from('wallet-1'),
+      PlayerId.from('player-1'),
+      5000n,
+      1,
+    );
     mockWalletRepo.findByPlayerId.mockResolvedValue(existingWallet);
 
     await useCase.execute({ playerId: PlayerId.from('player-1') });

@@ -54,7 +54,12 @@ describe('PlayerWalletResolver', () => {
 
   describe('resolveWallet', () => {
     test('should return full wallet entity for existing player', async () => {
-      const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 3);
+      const wallet = Wallet.restore(
+        WalletId.from('wallet-1'),
+        PlayerId.from('player-1'),
+        10000n,
+        3,
+      );
       mockWalletRepo.findByPlayerId.mockResolvedValue(wallet);
 
       const result = await resolver.resolveWallet(PlayerId.from('player-1'));
@@ -69,7 +74,9 @@ describe('PlayerWalletResolver', () => {
     test('should throw WalletNotFoundError when no wallet', async () => {
       mockWalletRepo.findByPlayerId.mockResolvedValue(null);
 
-      expect(resolver.resolveWallet(PlayerId.from('unknown-player'))).rejects.toThrow(WalletNotFoundError);
+      expect(resolver.resolveWallet(PlayerId.from('unknown-player'))).rejects.toThrow(
+        WalletNotFoundError,
+      );
     });
   });
 });

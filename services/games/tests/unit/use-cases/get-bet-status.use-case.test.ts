@@ -72,7 +72,9 @@ describe('GetBetStatusUseCase', () => {
   test('should throw BetNotFoundError when bet not found', async () => {
     betRepository.findById.mockResolvedValue(null);
 
-    expect(useCase.execute({ betId: BetId.from('nonexistent-bet-id') })).rejects.toThrow(BetNotFoundError);
+    expect(useCase.execute({ betId: BetId.from('nonexistent-bet-id') })).rejects.toThrow(
+      BetNotFoundError,
+    );
   });
 
   test('should include cash out data for cashed out bet', async () => {

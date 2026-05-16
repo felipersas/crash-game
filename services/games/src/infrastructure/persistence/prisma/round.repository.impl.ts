@@ -7,7 +7,12 @@ import { OptimisticLockError } from '@/domain/errors/domain.errors';
 import type { Round as RoundRow } from '@prisma/client';
 import type { Bet as BetRow } from '@prisma/client';
 import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
-import { type RoundId, RoundId as RoundIdVO, BetId as BetIdVO, PlayerId as PlayerIdVO } from '@crash/domain';
+import {
+  type RoundId,
+  RoundId as RoundIdVO,
+  BetId as BetIdVO,
+  PlayerId as PlayerIdVO,
+} from '@crash/domain';
 
 @Injectable()
 export class PrismaRoundRepository implements IRoundRepository {

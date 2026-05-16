@@ -141,9 +141,9 @@ describe('ConfirmBetUseCase', () => {
   test('should throw BetNotFoundError when bet not found', async () => {
     betRepository.findByPlayerAndRound.mockResolvedValue(null);
 
-    expect(useCase.execute({ roundId, betId: BetId.from('nonexistent'), playerId })).rejects.toThrow(
-      BetNotFoundError,
-    );
+    expect(
+      useCase.execute({ roundId, betId: BetId.from('nonexistent'), playerId }),
+    ).rejects.toThrow(BetNotFoundError);
   });
 
   test('should save confirmed bet', async () => {

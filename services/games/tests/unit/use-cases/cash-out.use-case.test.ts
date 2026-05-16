@@ -3,10 +3,7 @@ import { CashOutUseCase } from '../../../src/application/use-cases/cash-out.use-
 import { Round, RoundStatus } from '../../../src/domain/entities/round.entity';
 import { type Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
 import { Money, InvalidIdempotencyKeyError, PlayerId } from '@crash/domain';
-import {
-  RoundNotFoundError,
-  NoActiveBetError,
-} from '../../../src/domain/errors/domain.errors';
+import { RoundNotFoundError, NoActiveBetError } from '../../../src/domain/errors/domain.errors';
 
 function mockFn<T extends (...args: any[]) => any>(
   impl?: T,

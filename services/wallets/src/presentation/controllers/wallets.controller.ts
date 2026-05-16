@@ -40,7 +40,9 @@ export class WalletsController {
   @ApiResponse({ status: 409, description: 'Wallet already exists', type: ApiErrorResponseDto })
   @Post()
   async createWallet(@UserContext() user: UserContextType): Promise<CreateWalletResponseDto> {
-    const result = await this.createWalletUseCase.execute({ playerId: PlayerId.from(user.playerId) });
+    const result = await this.createWalletUseCase.execute({
+      playerId: PlayerId.from(user.playerId),
+    });
     return {
       walletId: result.walletId,
       playerId: result.playerId,

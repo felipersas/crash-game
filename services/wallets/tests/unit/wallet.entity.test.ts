@@ -68,14 +68,24 @@ describe('Wallet Entity', () => {
     });
 
     test('should NOT emit events on restore', () => {
-      const wallet = Wallet.restore(WalletId.from('existing-id'), PlayerId.from('player-123'), 10000n, 1);
+      const wallet = Wallet.restore(
+        WalletId.from('existing-id'),
+        PlayerId.from('player-123'),
+        10000n,
+        1,
+      );
       const events = wallet.pullEvents();
 
       expect(events).toHaveLength(0);
     });
 
     test('should handle zero balance on restore', () => {
-      const wallet = Wallet.restore(WalletId.from('existing-id'), PlayerId.from('player-123'), 0n, 1);
+      const wallet = Wallet.restore(
+        WalletId.from('existing-id'),
+        PlayerId.from('player-123'),
+        0n,
+        1,
+      );
 
       expect(wallet.getBalance().isZero()).toBe(true);
     });

@@ -62,7 +62,9 @@ describe('VerifyRoundUseCase', () => {
   test('Should throw RoundNotFoundError for non-existent round', async () => {
     mockRoundRepo.findById.mockResolvedValue(null);
 
-    expect(useCase.execute({ roundId: RoundId.from('non-existent-id') })).rejects.toThrow(RoundNotFoundError);
+    expect(useCase.execute({ roundId: RoundId.from('non-existent-id') })).rejects.toThrow(
+      RoundNotFoundError,
+    );
   });
 
   test('Should throw UnauthorizedException for non-crashed round', async () => {

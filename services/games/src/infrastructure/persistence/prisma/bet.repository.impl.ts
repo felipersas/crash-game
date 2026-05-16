@@ -5,7 +5,14 @@ import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { Bet as BetRow } from '@prisma/client';
 import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
 import { DuplicateBetError } from '@/domain/errors/domain.errors';
-import { type BetId, type RoundId, type PlayerId, BetId as BetIdVO, RoundId as RoundIdVO, PlayerId as PlayerIdVO } from '@crash/domain';
+import {
+  type BetId,
+  type RoundId,
+  type PlayerId,
+  BetId as BetIdVO,
+  RoundId as RoundIdVO,
+  PlayerId as PlayerIdVO,
+} from '@crash/domain';
 
 /**
  * Prisma-based implementation of Bet Repository.
