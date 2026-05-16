@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Header,
+  Inject,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '../dtos/api-error.dto';
@@ -37,6 +38,8 @@ import { HealthCheckResponseDto } from '../dtos/health-check-response.dto';
 import { BetStatusResponseDto } from '../dtos/bet-status.dto';
 import { centsToDecimal } from '../dtos/money.util';
 import { PlayerId, RoundId, BetId } from '@crash/domain';
+import { AUTO_CASHOUT_REPOSITORY } from '@/application/di.tokens';
+import type { AutoCashOutRepository } from '@/infrastructure/redis/auto-cashout.repository';
 
 @ApiTags('Games')
 @Controller('games')
@@ -49,6 +52,7 @@ export class GamesController {
     private readonly verifyRoundUseCase: VerifyRoundUseCase,
     private readonly getBetStatusUseCase: GetBetStatusUseCase,
     private readonly getMyBetsUseCase: GetMyBetsUseCase,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: AutoCashOutRepository,
   ) {}
 
   @Get('health')
@@ -193,6 +197,15 @@ export class GamesController {
     @UserContext() user: UserContextType,
     @Body() dto: CashOutRequestDto,
   ): Promise<CashOutResponseDto> {
+    // Remove auto cash-out target on manual cashout (best-effort)
+    if (dto.roundId) {
+      try {
+        await this.autoCashOutRepo.removeTarget(dto.roundId, user.playerId);
+      } catch (error) {
+        // Best-effort — don't fail manual cashout if Redis is down
+      }
+    }
+
     const result = await this.cashOutUseCase.execute({
       playerId: PlayerId.from(user.playerId),
       roundId: dto.roundId ? RoundId.from(dto.roundId) : undefined,
