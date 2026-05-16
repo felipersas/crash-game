@@ -66,7 +66,9 @@ describe('GetWalletUseCase', () => {
   test('should throw WalletNotFoundError when no wallet found', async () => {
     mockWalletRepo.findByPlayerId.mockResolvedValue(null);
 
-    expect(useCase.execute({ playerId: PlayerId.from('unknown-player') })).rejects.toThrow(WalletNotFoundError);
+    expect(useCase.execute({ playerId: PlayerId.from('unknown-player') })).rejects.toThrow(
+      WalletNotFoundError,
+    );
   });
 
   test('should return balance as string (cents)', async () => {
