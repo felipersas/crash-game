@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import Redis from 'ioredis';
-import { AUTO_CASHOUT_REPOSITORY, ROUND_CACHE_REPOSITORY, REDIS_CLIENT } from '@/application/di.tokens';
+import {
+  AUTO_CASHOUT_REPOSITORY,
+  ROUND_CACHE_REPOSITORY,
+  REDIS_CLIENT,
+} from '@/application/di.tokens';
 import { AutoCashOutRepository } from './auto-cashout.repository';
 import { RoundCacheRepository } from './round-cache.repository';
 
@@ -10,7 +14,9 @@ import { RoundCacheRepository } from './round-cache.repository';
     BullModule.forRoot({
       connection: {
         host: process.env.REDIS_URL ? new URL(process.env.REDIS_URL).hostname : 'localhost',
-        port: process.env.REDIS_URL ? parseInt(new URL(process.env.REDIS_URL).port || '6379') : 6379,
+        port: process.env.REDIS_URL
+          ? parseInt(new URL(process.env.REDIS_URL).port || '6379')
+          : 6379,
       },
     }),
   ],
@@ -33,11 +39,6 @@ import { RoundCacheRepository } from './round-cache.repository';
     AutoCashOutRepository,
     RoundCacheRepository,
   ],
-  exports: [
-    AUTO_CASHOUT_REPOSITORY,
-    ROUND_CACHE_REPOSITORY,
-    REDIS_CLIENT,
-    BullModule,
-  ],
+  exports: [AUTO_CASHOUT_REPOSITORY, ROUND_CACHE_REPOSITORY, REDIS_CLIENT, BullModule],
 })
 export class RedisModule {}

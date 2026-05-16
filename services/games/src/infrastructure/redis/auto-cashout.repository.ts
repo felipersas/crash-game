@@ -29,13 +29,16 @@ export class AutoCashOutRepository {
     await this.redis.zrem(`round:${roundId}:cashouts`, playerId);
   }
 
-  async fetchAndRemoveEligible(roundId: string, currentMultiplier: number): Promise<Array<{ playerId: string; targetMultiplier: number }>> {
-    const results = await this.redis.eval(
+  async fetchAndRemoveEligible(
+    roundId: string,
+    currentMultiplier: number,
+  ): Promise<Array<{ playerId: string; targetMultiplier: number }>> {
+    const results = (await this.redis.eval(
       LUA_FETCH_AND_REMOVE,
       1,
       `round:${roundId}:cashouts`,
       currentMultiplier.toString(),
-    ) as Array<[string, string]>;
+    )) as Array<[string, string]>;
 
     return results.map(([playerId, score]) => ({
       playerId,
@@ -44,13 +47,7 @@ export class AutoCashOutRepository {
   }
 
   async acquireLock(roundId: string, playerId: string): Promise<boolean> {
-    const result = await this.redis.set(
-      `cashout:lock:${roundId}:${playerId}`,
-      '',
-      'EX',
-      300,
-      'NX',
-    );
+    const result = await this.redis.set(`cashout:lock:${roundId}:${playerId}`, '', 'EX', 300, 'NX');
     return result === 'OK';
   }
 

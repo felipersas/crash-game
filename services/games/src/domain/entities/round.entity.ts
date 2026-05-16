@@ -174,7 +174,12 @@ export class Round {
    * Only allowed during BETTING phase.
    * Throws if player already has an active/cashed out/lost bet.
    */
-  placeBet(playerId: PlayerId, playerName: string, amount: Money, autoCashOutMultiplier?: number): void {
+  placeBet(
+    playerId: PlayerId,
+    playerName: string,
+    amount: Money,
+    autoCashOutMultiplier?: number,
+  ): void {
     if (this.status !== RoundStatus.BETTING) {
       throw new RoundNotAcceptingBetsError();
     }

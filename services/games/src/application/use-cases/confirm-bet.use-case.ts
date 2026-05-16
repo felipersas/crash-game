@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
-import { BET_REPOSITORY, GAME_BROADCASTER } from '@/application/di.tokens';
+import { BET_REPOSITORY, GAME_BROADCASTER, ROUND_STATE_PROVIDER } from '@/application/di.tokens';
 import { BetNotFoundError } from '@/domain/errors/domain.errors';
 import { createBetConfirmedEvent } from '@/domain/events/round.events';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
@@ -11,6 +11,7 @@ import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 import { type BetId, type RoundId, type PlayerId } from '@crash/domain';
 import { AUTO_CASHOUT_REPOSITORY } from '@/application/di.tokens';
 import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
+import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 
 export interface ConfirmBetInput {
   roundId: RoundId;
@@ -44,6 +45,7 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
     private readonly prisma: PrismaService,
     private readonly outboxWriter: OutboxWriter,
     @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
+    @Inject(ROUND_STATE_PROVIDER) private readonly roundStateProvider: IRoundStateProvider,
   ) {}
 
   async execute(input: ConfirmBetInput): Promise<ConfirmBetOutput> {
@@ -55,9 +57,18 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
 
     bet.confirm();
 
+    const liveRound = this.roundStateProvider.getCurrentRound();
+    if (liveRound) {
+      liveRound.syncBet(bet);
+    }
+
     if (bet.hasAutoCashOut()) {
       try {
-        await this.autoCashOutRepo.addTarget(input.roundId, input.playerId, bet.getAutoCashOutMultiplier()!);
+        await this.autoCashOutRepo.addTarget(
+          input.roundId,
+          input.playerId,
+          bet.getAutoCashOutMultiplier()!,
+        );
       } catch (error) {
         this.logger.error('Failed to register auto cash-out target', error);
       }

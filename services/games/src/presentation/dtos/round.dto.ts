@@ -15,6 +15,7 @@ export class BetOutputDto {
   @ApiProperty({ example: 1225, nullable: true }) payoutCents!: number | null;
   @ApiProperty({ example: '12.25', nullable: true }) payoutDecimal!: string | null;
   @ApiProperty({ nullable: true }) cashedOutAt!: Date | null;
+  @ApiProperty({ example: 1.5, nullable: true }) autoCashOutMultiplier!: number | null;
 
   static fromCents(
     id: string,
@@ -25,6 +26,7 @@ export class BetOutputDto {
     cashOutMultiplier: number | null,
     payoutCents: number | null,
     cashedOutAt: Date | null,
+    autoCashOutMultiplier: number | null = null,
   ): BetOutputDto {
     return {
       id,
@@ -37,6 +39,7 @@ export class BetOutputDto {
       payoutCents,
       payoutDecimal: payoutCents !== null ? centsToDecimal(payoutCents) : null,
       cashedOutAt,
+      autoCashOutMultiplier,
     };
   }
 }

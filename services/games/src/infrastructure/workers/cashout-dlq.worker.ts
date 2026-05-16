@@ -7,9 +7,7 @@ import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 export class CashoutDLQWorker extends WorkerHost {
   private readonly logger = new Logger(CashoutDLQWorker.name);
 
-  constructor(
-    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
-  ) {
+  constructor(@Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService) {
     super();
   }
 

@@ -24,7 +24,9 @@ export class AutoCashOutWorker extends WorkerHost {
     super();
   }
 
-  async process(job: Job<AutoCashOutJobData>): Promise<{ cashOutMultiplier: number; payoutCents: bigint }> {
+  async process(
+    job: Job<AutoCashOutJobData>,
+  ): Promise<{ cashOutMultiplier: number; payoutCents: number }> {
     const { playerId, roundId, targetMultiplier, idempotencyKey } = job.data;
 
     this.logger.debug(`Processing auto cash-out for player ${playerId} in round ${roundId}`);
@@ -35,32 +37,40 @@ export class AutoCashOutWorker extends WorkerHost {
       const cached = await this.autoCashOutRepo.getCachedResult(roundId, playerId);
       if (cached) {
         this.logger.debug(`Returning cached result for player ${playerId}`);
-        return { cashOutMultiplier: cached.multiplier, payoutCents: cached.payoutCents };
+        return { cashOutMultiplier: cached.multiplier, payoutCents: Number(cached.payoutCents) };
       }
       throw new Error(`Lock not acquired for auto cash-out: ${playerId}, will retry`);
     }
 
     // Execute cash-out via use case (L2: domain check, L3: DB optimistic lock)
-    const result = await this.cashOutUseCase.execute({
-      playerId: PlayerId.from(playerId),
-      roundId,
-      idempotencyKey,
-      targetMultiplier,
-    });
+    try {
+      const result = await this.cashOutUseCase.execute({
+        playerId: PlayerId.from(playerId),
+        roundId,
+        idempotencyKey,
+        targetMultiplier,
+      });
 
-    // Cache result for future idempotency checks
-    await this.autoCashOutRepo.cacheResult(roundId, playerId, {
-      multiplier: result.cashOutMultiplier,
-      payoutCents: result.payoutCents,
-    });
+      // Cache result for future idempotency checks
+      await this.autoCashOutRepo.cacheResult(roundId, playerId, {
+        multiplier: result.cashOutMultiplier,
+        payoutCents: result.payoutCents,
+      });
 
-    this.logger.log(
-      `Auto cash-out completed for player ${playerId} at ${result.cashOutMultiplier}x (${result.payoutCents} cents)`,
-    );
+      this.logger.log(
+        `Auto cash-out completed for player ${playerId} at ${result.cashOutMultiplier}x (${result.payoutCents} cents)`,
+      );
 
-    return {
-      cashOutMultiplier: result.cashOutMultiplier,
-      payoutCents: result.payoutCents,
-    };
+      return {
+        cashOutMultiplier: result.cashOutMultiplier,
+        payoutCents: Number(result.payoutCents),
+      };
+    } catch (error) {
+      this.logger.error(
+        `Auto cash-out FAILED for player ${playerId} in round ${roundId}: ${error instanceof Error ? error.message : error}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw error;
+    }
   }
 }
