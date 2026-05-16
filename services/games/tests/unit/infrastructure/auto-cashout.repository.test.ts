@@ -45,7 +45,12 @@ describe('AutoCashOutRepository', () => {
   });
 
   test('should fetch and remove eligible players via Lua with scores', async () => {
-    redis = createMockRedis({ eval: mockFn(() => [['player-1', '2.5'], ['player-2', '3.0']]) });
+    redis = createMockRedis({
+      eval: mockFn(() => [
+        ['player-1', '2.5'],
+        ['player-2', '3.0'],
+      ]),
+    });
     repo = new AutoCashOutRepository(redis as any);
 
     const eligible = await repo.fetchAndRemoveEligible('round-1', 3.0);

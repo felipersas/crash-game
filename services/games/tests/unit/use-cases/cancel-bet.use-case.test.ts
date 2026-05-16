@@ -236,12 +236,25 @@ describe('CancelBetUseCase', () => {
 
   test('should remove auto cash-out target on cancel', async () => {
     const bet = Bet.restore(
-      'bet-1' as any, 'round-1' as any, 'player-1' as any, 'Player',
-      1000n, BetStatus.PENDING, 2.5, null, null, null,
+      'bet-1' as any,
+      'round-1' as any,
+      'player-1' as any,
+      'Player',
+      1000n,
+      BetStatus.PENDING,
+      2.5,
+      null,
+      null,
+      null,
     );
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
-    await useCase.execute({ roundId: 'round-1' as any, betId: 'bet-1' as any, playerId: 'player-1' as any, reason: 'Wallet debit failed' });
+    await useCase.execute({
+      roundId: 'round-1' as any,
+      betId: 'bet-1' as any,
+      playerId: 'player-1' as any,
+      reason: 'Wallet debit failed',
+    });
 
     expect(autoCashOutRepo.removeTarget.callCount).toBe(1);
   });

@@ -8,8 +8,12 @@ function mockFn<T extends (...args: any[]) => any>(impl?: T) {
   };
   fn._impl = impl || (() => {});
   fn.callCount = 0;
-  fn.mockReturnValue = (v: any) => { fn._impl = () => v; };
-  fn.mockResolvedValue = (v: any) => { fn._impl = () => Promise.resolve(v); };
+  fn.mockReturnValue = (v: any) => {
+    fn._impl = () => v;
+  };
+  fn.mockResolvedValue = (v: any) => {
+    fn._impl = () => Promise.resolve(v);
+  };
   return fn as T & {
     callCount: number;
     mockReturnValue: (v: any) => void;
@@ -21,7 +25,9 @@ function createMockAutoCashOutRepo() {
   return {
     addTarget: mockFn(() => Promise.resolve()),
     removeTarget: mockFn(() => Promise.resolve()),
-    fetchAndRemoveEligible: mockFn(() => Promise.resolve([] as Array<{ playerId: string; targetMultiplier: number }>)),
+    fetchAndRemoveEligible: mockFn(() =>
+      Promise.resolve([] as Array<{ playerId: string; targetMultiplier: number }>),
+    ),
     acquireLock: mockFn(() => Promise.resolve(true)),
     getCachedResult: mockFn(() => Promise.resolve(null)),
     cacheResult: mockFn(() => Promise.resolve()),
@@ -31,13 +37,15 @@ function createMockAutoCashOutRepo() {
 
 function createMockCashOutUseCase() {
   return {
-    execute: mockFn(() => Promise.resolve({
-      betId: 'bet-1',
-      roundId: 'round-1',
-      playerId: 'player-1',
-      cashOutMultiplier: 2.5,
-      payoutCents: 2500n,
-    })),
+    execute: mockFn(() =>
+      Promise.resolve({
+        betId: 'bet-1',
+        roundId: 'round-1',
+        playerId: 'player-1',
+        cashOutMultiplier: 2.5,
+        payoutCents: 2500n,
+      }),
+    ),
   };
 }
 
@@ -65,7 +73,7 @@ describe('AutoCashOutWorker', () => {
     const result = await worker.process(job);
 
     expect(result.cashOutMultiplier).toBe(2.5);
-    expect(result.payoutCents).toBe(2500n);
+    expect(result.payoutCents).toBe(2500);
     expect(autoCashOutRepo.acquireLock.callCount).toBe(1);
     expect(cashOutUseCase.execute.callCount).toBe(1);
     expect(autoCashOutRepo.cacheResult.callCount).toBe(1);
@@ -86,7 +94,7 @@ describe('AutoCashOutWorker', () => {
 
     const result = await worker.process(job);
 
-    expect(result).toEqual({ cashOutMultiplier: 2.5, payoutCents: 2500n });
+    expect(result).toEqual({ cashOutMultiplier: 2.5, payoutCents: 2500 });
     expect(cashOutUseCase.execute.callCount).toBe(0);
   });
 

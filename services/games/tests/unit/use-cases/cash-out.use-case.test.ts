@@ -99,6 +99,10 @@ describe('CashOutUseCase', () => {
       tryImmediatePublish: mockFn(async () => {}),
     };
 
+    const mockAutoCashOutRepo = {
+      removeTarget: mockFn(async () => {}),
+    };
+
     useCase = new CashOutUseCase(
       mockRoundRepo,
       mockBetRepo,
@@ -106,6 +110,7 @@ describe('CashOutUseCase', () => {
       mockLifecycleManager,
       mockGateway,
       mockMetrics,
+      mockAutoCashOutRepo,
       mockPrisma as any,
       mockOutboxWriter as any,
     );

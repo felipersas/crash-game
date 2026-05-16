@@ -618,7 +618,7 @@ describe('Round Entity', () => {
       round.placeBet('p1' as any, 'Player 1', Money.fromCents(1000n), 2.5);
 
       const bets = round.getBets();
-      const bet = bets.find(b => b.playerId === 'p1');
+      const bet = bets.find((b) => b.playerId === 'p1');
       expect(bet?.getAutoCashOutMultiplier()).toBe(2.5);
     });
 

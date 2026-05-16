@@ -126,6 +126,9 @@ describe('ConfirmBetUseCase', () => {
     prisma = createMockPrisma();
     outboxWriter = createMockOutboxWriter();
     autoCashOutRepo = createMockAutoCashOutRepo();
+    const roundStateProvider = {
+      getCurrentRound: mockFn(() => null),
+    };
     useCase = new ConfirmBetUseCase(
       betRepository as any,
       gamesGateway as any,
@@ -133,6 +136,7 @@ describe('ConfirmBetUseCase', () => {
       prisma as any,
       outboxWriter as any,
       autoCashOutRepo as any,
+      roundStateProvider as any,
     );
   });
 
@@ -222,24 +226,48 @@ describe('ConfirmBetUseCase', () => {
 
   test('should register auto cash-out target when bet has autoCashOutMultiplier', async () => {
     const bet = Bet.restore(
-      'bet-1' as any, 'round-1' as any, 'player-1' as any, 'Player',
-      1000n, BetStatus.PENDING, 2.5, null, null, null,
+      'bet-1' as any,
+      'round-1' as any,
+      'player-1' as any,
+      'Player',
+      1000n,
+      BetStatus.PENDING,
+      2.5,
+      null,
+      null,
+      null,
     );
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
-    await useCase.execute({ roundId: 'round-1' as any, betId: 'bet-1' as any, playerId: 'player-1' as any });
+    await useCase.execute({
+      roundId: 'round-1' as any,
+      betId: 'bet-1' as any,
+      playerId: 'player-1' as any,
+    });
 
     expect(autoCashOutRepo.addTarget.callCount).toBe(1);
   });
 
   test('should NOT register auto cash-out target when bet has no autoCashOutMultiplier', async () => {
     const bet = Bet.restore(
-      'bet-1' as any, 'round-1' as any, 'player-1' as any, 'Player',
-      1000n, BetStatus.PENDING, null, null, null, null,
+      'bet-1' as any,
+      'round-1' as any,
+      'player-1' as any,
+      'Player',
+      1000n,
+      BetStatus.PENDING,
+      null,
+      null,
+      null,
+      null,
     );
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);
 
-    await useCase.execute({ roundId: 'round-1' as any, betId: 'bet-1' as any, playerId: 'player-1' as any });
+    await useCase.execute({
+      roundId: 'round-1' as any,
+      betId: 'bet-1' as any,
+      playerId: 'player-1' as any,
+    });
 
     expect(autoCashOutRepo.addTarget.callCount).toBe(0);
   });

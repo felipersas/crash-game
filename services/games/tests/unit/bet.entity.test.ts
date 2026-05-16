@@ -358,8 +358,16 @@ describe('Bet Entity', () => {
 
     test('should restore bet with autoCashOutMultiplier', () => {
       const bet = Bet.restore(
-        'bet-1' as any, 'round-1' as any, 'player-1' as any, 'Player',
-        1000n, BetStatus.ACTIVE, 2.5, null, null, null,
+        'bet-1' as any,
+        'round-1' as any,
+        'player-1' as any,
+        'Player',
+        1000n,
+        BetStatus.ACTIVE,
+        2.5,
+        null,
+        null,
+        null,
       );
       expect(bet.getAutoCashOutMultiplier()).toBe(2.5);
     });
