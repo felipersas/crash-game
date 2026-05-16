@@ -3,7 +3,7 @@ import { Logger, Inject } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { CashOutUseCase } from '@/application/use-cases/cash-out.use-case';
 import { AUTO_CASHOUT_REPOSITORY } from '@/application/di.tokens';
-import type { AutoCashOutRepository } from '@/infrastructure/redis/auto-cashout.repository';
+import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
 import { PlayerId } from '@crash/domain';
 
 export interface AutoCashOutJobData {
@@ -18,7 +18,7 @@ export class AutoCashOutWorker extends WorkerHost {
   private readonly logger = new Logger(AutoCashOutWorker.name);
 
   constructor(
-    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: AutoCashOutRepository,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
     private readonly cashOutUseCase: CashOutUseCase,
   ) {
     super();

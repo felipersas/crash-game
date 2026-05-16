@@ -39,7 +39,7 @@ import { BetStatusResponseDto } from '../dtos/bet-status.dto';
 import { centsToDecimal } from '../dtos/money.util';
 import { PlayerId, RoundId, BetId } from '@crash/domain';
 import { AUTO_CASHOUT_REPOSITORY } from '@/application/di.tokens';
-import type { AutoCashOutRepository } from '@/infrastructure/redis/auto-cashout.repository';
+import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
 
 @ApiTags('Games')
 @Controller('games')
@@ -52,7 +52,7 @@ export class GamesController {
     private readonly verifyRoundUseCase: VerifyRoundUseCase,
     private readonly getBetStatusUseCase: GetBetStatusUseCase,
     private readonly getMyBetsUseCase: GetMyBetsUseCase,
-    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: AutoCashOutRepository,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
   ) {}
 
   @Get('health')

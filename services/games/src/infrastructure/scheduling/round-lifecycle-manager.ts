@@ -8,7 +8,7 @@ import type { IRoundRepository } from '@/application/interfaces/round.repository
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
 import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
 import { ROUND_REPOSITORY, GAMES_GATEWAY, SEED_CHAIN_REPOSITORY, AUTO_CASHOUT_REPOSITORY, ROUND_CACHE_REPOSITORY } from '@/application/di.tokens';
-import type { AutoCashOutRepository } from '@/infrastructure/redis/auto-cashout.repository';
+import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
 import type { RoundCacheRepository } from '@/infrastructure/redis/round-cache.repository';
 import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
@@ -43,7 +43,7 @@ export class RoundLifecycleManager implements IRoundStateProvider {
     private readonly crashHandler: RoundCrashHandler,
     private readonly prisma: PrismaService,
     private readonly outboxWriter: OutboxWriter,
-    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: AutoCashOutRepository,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
     @Inject(ROUND_CACHE_REPOSITORY) private readonly roundCacheRepo: RoundCacheRepository,
     @InjectQueue('cashout') private readonly cashoutQueue: Queue,
   ) {}

@@ -10,7 +10,7 @@ import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.servic
 import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 import { type BetId, type RoundId, type PlayerId } from '@crash/domain';
 import { AUTO_CASHOUT_REPOSITORY } from '@/application/di.tokens';
-import type { AutoCashOutRepository } from '@/infrastructure/redis/auto-cashout.repository';
+import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
 
 export interface ConfirmBetInput {
   roundId: RoundId;
@@ -43,7 +43,7 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
     private readonly prisma: PrismaService,
     private readonly outboxWriter: OutboxWriter,
-    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: AutoCashOutRepository,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
   ) {}
 
   async execute(input: ConfirmBetInput): Promise<ConfirmBetOutput> {
