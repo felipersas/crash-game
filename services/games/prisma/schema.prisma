@@ -35,6 +35,7 @@ model Bet {
   playerId          String       @map("player_id")
   playerName        String       @map("player_name") @default("")
   amountCents       BigInt       @map("amount_cents")
+  autoCashOutMultiplier Float?       @map("auto_cash_out_multiplier")
   status            BetStatus
   cashOutMultiplier Float?       @map("cash_out_multiplier")
   cashOutAmount     BigInt?      @map("cash_out_amount")
