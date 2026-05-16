@@ -98,7 +98,7 @@ export class GamesController {
       betId: result.betId,
       amountCents: Number(result.amountCents),
       status: result.status,
-      autoCashOutMultiplier: result.autoCashOutMultiplier,
+      autoCashOutMultiplier: result.autoCashOutMultiplier ?? undefined,
     };
   }
 
