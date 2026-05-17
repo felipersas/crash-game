@@ -4,7 +4,7 @@ import type { Job } from 'bullmq';
 import { CashOutUseCase } from '@/application/use-cases/cash-out.use-case';
 import { AUTO_CASHOUT_REPOSITORY } from '@/application/di.tokens';
 import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
-import { PlayerId } from '@crash/domain';
+import { PlayerId, RoundId } from '@crash/domain';
 
 export interface AutoCashOutJobData {
   playerId: string;
@@ -24,29 +24,18 @@ export class AutoCashOutWorker extends WorkerHost {
     super();
   }
 
-  async process(
-    job: Job<AutoCashOutJobData>,
-  ): Promise<{ cashOutMultiplier: number; payoutCents: number }> {
-    const { playerId, roundId, targetMultiplier, idempotencyKey } = job.data;
+  async process(job: Job): Promise<{ cashOutMultiplier: number; payoutCents: number }> {
+    const { playerId, roundId, targetMultiplier, idempotencyKey } = job.data as AutoCashOutJobData;
 
     this.logger.debug(`Processing auto cash-out for player ${playerId} in round ${roundId}`);
 
-    // L1: Redis idempotency lock
-    const acquired = await this.autoCashOutRepo.acquireLock(roundId, playerId);
-    if (!acquired) {
-      const cached = await this.autoCashOutRepo.getCachedResult(roundId, playerId);
-      if (cached) {
-        this.logger.debug(`Returning cached result for player ${playerId}`);
-        return { cashOutMultiplier: cached.multiplier, payoutCents: Number(cached.payoutCents) };
-      }
-      throw new Error(`Lock not acquired for auto cash-out: ${playerId}, will retry`);
-    }
+    const cached = await this.acquireOrCached(roundId, playerId);
+    if (cached) return cached;
 
-    // Execute cash-out via use case (L2: domain check, L3: DB optimistic lock)
     try {
       const result = await this.cashOutUseCase.execute({
         playerId: PlayerId.from(playerId),
-        roundId,
+        roundId: RoundId.from(roundId),
         idempotencyKey,
         targetMultiplier,
       });
@@ -72,5 +61,17 @@ export class AutoCashOutWorker extends WorkerHost {
       );
       throw error;
     }
+  }
+
+  private async acquireOrCached(
+    roundId: string,
+    playerId: string,
+  ): Promise<{ cashOutMultiplier: number; payoutCents: number } | null> {
+    const acquired = await this.autoCashOutRepo.acquireLock(roundId, playerId);
+    if (acquired) return null;
+    const cached = await this.autoCashOutRepo.getCachedResult(roundId, playerId);
+    if (cached)
+      return { cashOutMultiplier: cached.multiplier, payoutCents: Number(cached.payoutCents) };
+    throw new Error(`Lock not acquired for auto cash-out: ${playerId}, will retry`);
   }
 }

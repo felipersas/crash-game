@@ -192,21 +192,6 @@ describe('ConfirmBetUseCase', () => {
     expect(gamesGateway.broadcastBetConfirmed.callCount).toBe(1);
   });
 
-  test('should handle WebSocket broadcast failure gracefully', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
-    betRepository.findByPlayerAndRound.mockResolvedValue(bet);
-    gamesGateway.broadcastBetConfirmed = mockFn(() => {
-      throw new Error('WS error');
-    });
-
-    const result = await useCase.execute({ roundId, betId: bet.id, playerId });
-
-    // Should still succeed despite WS failure
-    expect(result.betId).toBe(bet.id);
-    expect(result.roundId).toBe(roundId);
-    expect(result.playerId).toBe(playerId);
-  });
-
   test('should pass correct data to WebSocket broadcast', async () => {
     const bet = Bet.create(roundId, playerId, playerName, amount);
     betRepository.findByPlayerAndRound.mockResolvedValue(bet);

@@ -45,6 +45,7 @@ import {
   INBOX_REPOSITORY,
 } from './application/di.tokens';
 import { GamesGateway } from './infrastructure/websocket/games.gateway';
+import { ResilientGameBroadcaster } from './infrastructure/websocket/resilient-game-broadcaster';
 import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
 import { FileSeedChainRepository } from './infrastructure/persistence/file/seed-chain.repository.impl';
 import { BullModule } from '@nestjs/bullmq';
@@ -106,7 +107,7 @@ import { CashoutDLQWorker } from './infrastructure/workers/cashout-dlq.worker';
     },
     {
       provide: GAME_BROADCASTER,
-      useExisting: GAMES_GATEWAY,
+      useClass: ResilientGameBroadcaster,
     },
     {
       provide: ROUND_REPOSITORY,

@@ -84,18 +84,14 @@ export class CancelBetUseCase implements IUseCase<CancelBetInput, CancelBetOutpu
 
     this.metrics.incrBet('cancelled', Number(bet.getAmount().toCents()));
 
-    try {
-      this.broadcaster.broadcastBetCancelled(
-        input.roundId,
-        input.betId,
-        input.playerId,
-        bet.playerName,
-        bet.getAmount().toCents(),
-        input.reason,
-      );
-    } catch (error) {
-      this.logger.error('Failed to broadcast bet cancelled event', error);
-    }
+    this.broadcaster.broadcastBetCancelled(
+      input.roundId,
+      input.betId,
+      input.playerId,
+      bet.playerName,
+      bet.getAmount().toCents(),
+      input.reason,
+    );
 
     return {
       betId: input.betId,

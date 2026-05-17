@@ -73,19 +73,14 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
     const round = await this.loadRound(input.roundId);
     const bet = await this.loadBet(input.playerId, round.id);
 
-    // Idempotency: if bet is already cashed out, return existing result
-    if (bet.getStatus() === BetStatus.CASHED_OUT) {
-      const multiplier = bet.getCashOutMultiplier();
-      const payoutAmount = bet.getCashOutAmount();
-      if (multiplier && payoutAmount) {
-        return {
-          betId: bet.id,
-          roundId: round.id,
-          playerId: input.playerId,
-          cashOutMultiplier: multiplier.getValue(),
-          payoutCents: payoutAmount.toCents(),
-        };
-      }
+    if (bet.isCashedOut()) {
+      return {
+        betId: bet.id,
+        roundId: round.id,
+        playerId: input.playerId,
+        cashOutMultiplier: bet.getAutoCashOutMultiplier()!,
+        payoutCents: bet.getCashOutAmount()!.toCents(),
+      };
     }
 
     round.syncBet(bet);
@@ -94,7 +89,6 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
       : undefined;
     const payout = round.cashOut(input.playerId, overrideMultiplier);
 
-    // Persist updated bet status + round + outbox events atomically
     const cashedOutBet = round.getBetByPlayer(input.playerId);
     const events = round.pullEvents();
 
@@ -162,18 +156,14 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
           `Bet not found for cashed out player ${cashedOut.playerId} in round ${cashedOut.roundId}`,
         );
       }
-      try {
-        this.broadcaster.broadcastPlayerCashedOut(
-          cashedOut.roundId,
-          cashedOut.betId,
-          cashedOut.playerId,
-          cashedOutBet?.playerName ?? '',
-          cashedOut.cashOutMultiplier,
-          cashedOut.winAmount,
-        );
-      } catch (error) {
-        this.logger.error('Failed to broadcast player cashed out event', error);
-      }
+      this.broadcaster.broadcastPlayerCashedOut(
+        cashedOut.roundId,
+        cashedOut.betId,
+        cashedOut.playerId,
+        cashedOutBet?.playerName ?? '',
+        cashedOut.cashOutMultiplier,
+        cashedOut.winAmount,
+      );
     }
   }
 

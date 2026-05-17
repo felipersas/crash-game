@@ -206,20 +206,6 @@ describe('PlaceBetUseCase', () => {
     expect(gamesGateway.broadcastBetPlaced.callCount).toBe(1);
   });
 
-  test('should handle WebSocket broadcast failure gracefully', async () => {
-    const round = await Round.create(DEFAULT_ROUND_CONFIG);
-    round.pullEvents();
-    roundRepository.findCurrentRound.mockResolvedValue(round);
-    gamesGateway.broadcastBetPlaced = mockFn(() => {
-      throw new Error('WS connection lost');
-    });
-
-    const result = await useCase.execute({ playerId, playerName, amountCents: validAmountCents });
-
-    expect(result.betId).toBeDefined();
-    expect(result.roundId).toBe(round.id);
-  });
-
   test('should throw on invalid bet amount below minimum', async () => {
     const round = await Round.create(DEFAULT_ROUND_CONFIG);
     round.pullEvents();
