@@ -95,11 +95,7 @@ export class StartRoundUseCase implements IUseCase<StartRoundInput, StartRoundOu
       }
     }
 
-    try {
-      this.broadcaster.broadcastBettingEnded(resultRound.id);
-    } catch (error) {
-      this.logger.error('Failed to broadcast betting ended event', error);
-    }
+    this.broadcaster.broadcastBettingEnded(resultRound.id);
 
     return { round: resultRound };
   }

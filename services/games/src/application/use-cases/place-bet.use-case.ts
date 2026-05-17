@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Round, type RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
 import type { Bet } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
@@ -34,8 +34,6 @@ export interface PlaceBetOutput {
 
 @Injectable()
 export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> {
-  private readonly logger = new Logger(PlaceBetUseCase.name);
-
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
@@ -99,18 +97,14 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
 
     this.metrics.incrBet('cancelled', Number(replacedBet.getAmount().toCents()));
 
-    try {
-      this.broadcaster.broadcastBetCancelled(
-        round.id,
-        replacedBet.id,
-        input.playerId,
-        replacedBet.playerName,
-        replacedBet.getAmount().toCents(),
-        'Replaced by new bet attempt',
-      );
-    } catch (error) {
-      this.logger.error('Failed to broadcast bet cancelled event (replaced)', error);
-    }
+    this.broadcaster.broadcastBetCancelled(
+      round.id,
+      replacedBet.id,
+      input.playerId,
+      replacedBet.playerName,
+      replacedBet.getAmount().toCents(),
+      'Replaced by new bet attempt',
+    );
   }
 
   private async persistWithOutbox(
@@ -133,16 +127,12 @@ export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> 
   }
 
   private broadcastBetPlaced(round: Round, bet: Bet, input: PlaceBetInput): void {
-    try {
-      this.broadcaster.broadcastBetPlaced(
-        round.id,
-        bet.id,
-        input.playerId,
-        input.playerName,
-        input.amountCents,
-      );
-    } catch (error) {
-      this.logger.error('Failed to broadcast bet placed event', error);
-    }
+    this.broadcaster.broadcastBetPlaced(
+      round.id,
+      bet.id,
+      input.playerId,
+      input.playerName,
+      input.amountCents,
+    );
   }
 }

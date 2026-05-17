@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { IBetRepository } from '../interfaces/bet.repository';
 import type { IUseCase } from '../interfaces/use-case';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
@@ -36,8 +36,6 @@ export interface ConfirmBetOutput {
  */
 @Injectable()
 export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOutput> {
-  private readonly logger = new Logger(ConfirmBetUseCase.name);
-
   constructor(
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
@@ -63,15 +61,11 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
     }
 
     if (bet.hasAutoCashOut()) {
-      try {
-        await this.autoCashOutRepo.addTarget(
-          input.roundId,
-          input.playerId,
-          bet.getAutoCashOutMultiplier()!,
-        );
-      } catch (error) {
-        this.logger.error('Failed to register auto cash-out target', error);
-      }
+      this.autoCashOutRepo.addTarget(
+        input.roundId,
+        input.playerId,
+        bet.getAutoCashOutMultiplier()!,
+      );
     }
 
     const event = createBetConfirmedEvent(
@@ -94,17 +88,13 @@ export class ConfirmBetUseCase implements IUseCase<ConfirmBetInput, ConfirmBetOu
 
     this.metrics.incrBet('confirmed', Number(bet.getAmount().toCents()));
 
-    try {
-      this.broadcaster.broadcastBetConfirmed(
-        input.roundId,
-        input.betId,
-        input.playerId,
-        bet.playerName,
-        bet.getAmount().toCents(),
-      );
-    } catch (error) {
-      this.logger.error('Failed to broadcast bet confirmed event', error);
-    }
+    this.broadcaster.broadcastBetConfirmed(
+      input.roundId,
+      input.betId,
+      input.playerId,
+      bet.playerName,
+      bet.getAmount().toCents(),
+    );
 
     return {
       betId: input.betId,

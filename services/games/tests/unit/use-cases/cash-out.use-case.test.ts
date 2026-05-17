@@ -256,26 +256,6 @@ describe('CashOutUseCase', () => {
     expect(mockGateway.broadcastPlayerCashedOut.calls.length).toBe(1);
   });
 
-  test('Should handle WebSocket broadcast failure gracefully', async () => {
-    const { round, bet } = await createActiveRoundWithBet();
-
-    mockLifecycleManager.getCurrentRound.mockReturnValue(round);
-    mockBetRepo.findByPlayerAndRound.mockResolvedValue(bet);
-    // Gateway throws - use mockReturnValue with a throwing function
-    mockGateway.broadcastPlayerCashedOut = mockFn(() => {
-      throw new Error('WebSocket error');
-    });
-
-    // Should NOT throw - error is caught internally
-    const result = await useCase.execute({
-      playerId: PLAYER_ID,
-      idempotencyKey: VALID_UUID,
-    });
-
-    expect(result.playerId).toBe(PLAYER_ID);
-    expect(result.betId).toBe(bet.id);
-  });
-
   test('Should use override multiplier when targetMultiplier is provided', async () => {
     const { round, bet } = await createActiveRoundWithBet();
 

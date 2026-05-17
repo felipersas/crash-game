@@ -122,15 +122,11 @@ export class CrashRoundUseCase implements IUseCase<CrashRoundInput, CrashRoundOu
     // Broadcast crash to connected clients (non-blocking)
     const crashEvent = events.find((e) => e.eventType === 'RoundCrashed');
     if (crashEvent && 'seed' in crashEvent) {
-      try {
-        this.broadcaster.broadcastCrash(
-          latestRound.id,
-          latestRound.getCrashPoint()!,
-          (crashEvent as { seed: string }).seed,
-        );
-      } catch (error) {
-        this.logger.error('Failed to broadcast crash event', error);
-      }
+      this.broadcaster.broadcastCrash(
+        latestRound.id,
+        latestRound.getCrashPoint()!,
+        (crashEvent as { seed: string }).seed,
+      );
     }
 
     return { round: latestRound };

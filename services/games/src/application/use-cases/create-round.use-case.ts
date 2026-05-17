@@ -1,4 +1,4 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import type { Round } from '@/domain/entities/round.entity';
 import type { IRoundRepository } from '../interfaces/round.repository';
 import type { IUseCase } from '../interfaces/use-case';
@@ -25,8 +25,6 @@ export interface CreateRoundOutput {
 
 @Injectable()
 export class CreateRoundUseCase implements IUseCase<CreateRoundInput, CreateRoundOutput> {
-  private readonly logger = new Logger(CreateRoundUseCase.name);
-
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
@@ -55,15 +53,11 @@ export class CreateRoundUseCase implements IUseCase<CreateRoundInput, CreateRoun
     // Broadcast RoundStarted event (non-blocking)
     const roundStarted = events.find((e) => e.eventType === 'RoundStarted');
     if (roundStarted) {
-      try {
-        this.broadcaster.broadcastRoundStarted(
-          round.id,
-          round.getSeedHash(),
-          round.getBettingEndTime()!,
-        );
-      } catch (error) {
-        this.logger.error('Failed to broadcast round started event', error);
-      }
+      this.broadcaster.broadcastRoundStarted(
+        round.id,
+        round.getSeedHash(),
+        round.getBettingEndTime()!,
+      );
     }
 
     return { round };
