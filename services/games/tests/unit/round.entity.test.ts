@@ -647,9 +647,6 @@ describe('Round Entity', () => {
         (betBefore as any).confirm();
       }
 
-      // Advance multiplier past 2.0
-      round.updateMultiplier(1);
-
       // Cash out with override at exactly 2.0
       const payout = round.cashOut('p1' as any, Multiplier.fromValue(2.0));
 
@@ -672,8 +669,6 @@ describe('Round Entity', () => {
       if (betBefore && betBefore.isPending()) {
         (betBefore as any).confirm();
       }
-
-      round.updateMultiplier(1);
 
       const currentMultiplier = round.getCurrentMultiplier();
       const payout = round.cashOut('p1' as any);
