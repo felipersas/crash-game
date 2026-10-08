@@ -1,18 +1,14 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import type { IEventPublisher } from '@crash/messaging';
 import type { WalletDomainEvent } from '@/domain/events/wallet.events';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import { RABBITMQ_PUBLISHER } from '@/application/di.tokens';
 
 /**
- * Prisma transaction handle type.
- * Excludes lifecycle and transaction methods from PrismaClient.
+ * Prisma interactive-transaction client.
  */
-export type PrismaTransaction = Omit<
-  PrismaClient,
-  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use'
->;
+export type PrismaTransaction = Prisma.TransactionClient;
 
 /**
  * OutboxWriter - Infrastructure Layer

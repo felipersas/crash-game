@@ -11,8 +11,8 @@ import type { IInboxRepository } from '@/application/interfaces/inbox.repository
 import { INBOX_REPOSITORY } from '@/application/di.tokens';
 import { BetPlacedEventHandler } from './handlers/bet-placed.handler';
 import { PlayerCashedOutEventHandler } from './handlers/player-cashed-out.handler';
-import type { BetPlacedEvent } from '../../types/games.events';
-import type { PlayerCashedOutEvent } from '../../types/games.events';
+import type { BetPlacedEvent } from '../types/games.events';
+import type { PlayerCashedOutEvent } from '../types/games.events';
 
 @Injectable()
 export class InboxProcessor {

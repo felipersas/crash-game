@@ -8,6 +8,7 @@
     "build": "NODE_ENV=production bun run scripts/build.ts",
     "test": "bun test tests/unit",
     "test:e2e": "bun test tests/e2e",
+    "typecheck": "tsc --noEmit -p .",
     "test:find-seeds": "bun run tests/helpers/find-deterministic-seeds.ts",
     "start:prod": "NODE_ENV=production bun dist/main.js",
     "lint": "eslint \"{src,tests}/**/*.ts\" --fix",

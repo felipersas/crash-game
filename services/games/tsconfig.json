@@ -29,26 +29,8 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "ignoreDeprecations": "6.0",
-    "baseUrl": "./",
     "paths": {
-      "@/*": ["./src/*"],
-      "@/domain": ["./src/domain"],
-      "@/domain/entities": ["./src/domain/entities"],
-      "@/domain/value-objects": ["./src/domain/value-objects"],
-      "@/domain/events": ["./src/domain/events"],
-      "@/domain/errors": ["./src/domain/errors"],
-      "@/application": ["./src/application"],
-      "@/application/use-cases": ["./src/application/use-cases"],
-      "@/application/interfaces": ["./src/application/interfaces"],
-      "@/infrastructure": ["./src/infrastructure"],
-      "@/infrastructure/persistence": ["./src/infrastructure/persistence"],
-      "@/infrastructure/messaging": ["./src/infrastructure/messaging"],
-      "@/infrastructure/di": ["./src/infrastructure/di"],
-      "@/presentation": ["./src/presentation"],
-      "@/presentation/controllers": ["./src/presentation/controllers"],
-      "@/presentation/dtos": ["./src/presentation/dtos"],
-      "@/presentation/decorators": ["./src/presentation/decorators"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src/**/*"],

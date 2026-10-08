@@ -74,7 +74,7 @@ export class AesCipher {
 
     return crypto.subtle.importKey(
       'raw',
-      rawKey,
+      rawKey as BufferSource,
       { name: AesCipher.ALGORITHM, length: 256 },
       false, // not extractable
       ['encrypt', 'decrypt'],

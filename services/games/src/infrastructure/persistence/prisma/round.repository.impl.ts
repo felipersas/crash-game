@@ -4,8 +4,7 @@ import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/roun
 import { Bet, type BetStatus } from '@/domain/entities/bet.entity';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
-import type { Round as RoundRow } from '@prisma/client';
-import type { Bet as BetRow } from '@prisma/client';
+import type { Prisma, Bet as BetRow } from '@prisma/client';
 import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
 import {
   type RoundId,
@@ -13,6 +12,8 @@ import {
   BetId as BetIdVO,
   PlayerId as PlayerIdVO,
 } from '@crash/domain';
+
+type RoundRow = Prisma.RoundGetPayload<{ include: { bets: true } }>;
 
 @Injectable()
 export class PrismaRoundRepository implements IRoundRepository {
@@ -90,7 +91,11 @@ export class PrismaRoundRepository implements IRoundRepository {
   }
 
   private toDomain(record: RoundRow): Round {
-    const bets = record.bets?.map((b) => this.betToDomain(b)) || [];
+    if (!record.seed) {
+      throw new Error(`Round ${record.id} was persisted without a seed`);
+    }
+
+    const bets = record.bets.map((b) => this.betToDomain(b));
 
     return Round.restore(
       RoundIdVO.from(record.id),
