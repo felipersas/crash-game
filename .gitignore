@@ -38,3 +38,6 @@ coverage/
 .next/
 
 .omc/
+
+# TypeScript incremental build info
+*.tsbuildinfo
