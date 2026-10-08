@@ -43,6 +43,19 @@ services:
       retries: 15
 
   # ---------------------------------------------------------------------------
+  # Redis (auto cash-out targets + BullMQ queues)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
   # Games Service (for E2E tests)
   # ---------------------------------------------------------------------------
   games:
@@ -62,6 +75,7 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: admin
       RABBITMQ_PASS: admin
+      REDIS_URL: redis://redis:6379
       NODE_ENV: test
       # Deterministic seed for predictable crash points in E2E tests
       # test-crash-2-94 produces ~1.98x crash (fast test execution)
@@ -70,6 +84,8 @@ services:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:4001/games/health || exit 1"]
@@ -98,6 +114,7 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: admin
       RABBITMQ_PASS: admin
+      REDIS_URL: redis://redis:6379
       NODE_ENV: test
       # Deterministic seed for predictable crash points in E2E tests
       # test-crash-2-94 produces ~1.98x crash (fast test execution)
