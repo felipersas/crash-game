@@ -1,46 +1,23 @@
+import { DomainError, formatCents } from '@crash/domain';
+
 /**
  * Domain-specific exceptions for the Wallet bounded context.
- * All domain errors extend this base class for consistent error handling.
  *
  * Each error carries a stable `code` string for frontend consumption
  * and a user-friendly `message` (no internal IDs/UUIDs).
  */
 
-export class DomainError extends Error {
-  public readonly code: string;
-
-  constructor(message: string, code: string) {
-    super(message);
-    this.name = this.constructor.name;
-    this.code = code;
-    Object.setPrototypeOf(this, new.target.prototype);
-  }
-}
+export { DomainError };
 
 export class InsufficientFundsError extends DomainError {
   constructor(
-    public readonly currentBalance: bigint,
-    public readonly attemptedAmount: bigint,
+    readonly currentBalance: bigint,
+    readonly attemptedAmount: bigint,
   ) {
-    const balance = Number(currentBalance) / 100;
-    const attempted = Number(attemptedAmount) / 100;
     super(
-      `Insufficient funds: balance is $${balance.toFixed(2)}, attempted $${attempted.toFixed(2)}`,
+      `Insufficient funds: balance is $${formatCents(currentBalance)}, attempted $${formatCents(attemptedAmount)}`,
       'INSUFFICIENT_FUNDS',
     );
-  }
-}
-
-export class InvalidMoneyAmountError extends DomainError {
-  constructor(amount: string | number) {
-    super(`Invalid amount: ${String(amount)}`, 'INVALID_MONEY_AMOUNT');
-  }
-}
-
-export class NegativeMoneyError extends DomainError {
-  constructor(amount: bigint) {
-    const cents = Number(amount) / 100;
-    super(`Negative amount not allowed: $${cents.toFixed(2)}`, 'NEGATIVE_MONEY');
   }
 }
 
@@ -51,14 +28,12 @@ export class WalletNotFoundError extends DomainError {
 }
 
 export class OptimisticLockError extends DomainError {
-  constructor(
-    public readonly aggregateId?: string,
-    public readonly expectedVersion?: number,
-    public readonly actualVersion?: number,
-  ) {
-    const detail = aggregateId
-      ? `Concurrent update conflict on ${aggregateId} (expected v${expectedVersion}, got v${actualVersion})`
-      : 'Concurrent update conflict, please try again';
-    super(detail, 'OPTIMISTIC_LOCK');
+  constructor(aggregateId?: string) {
+    super(
+      aggregateId
+        ? `Concurrent update conflict on wallet ${aggregateId}, please try again`
+        : 'Concurrent update conflict, please try again',
+      'OPTIMISTIC_LOCK',
+    );
   }
 }

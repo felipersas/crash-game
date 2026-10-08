@@ -1,161 +1,56 @@
 /**
- * Unit tests for CreateWalletUseCase
- *
- * Tests cover:
- * - Happy path: new wallet creation
- * - Idempotency: returning existing wallet
- * - Event publishing: WalletCreatedEvent written to outbox only for new wallets
- * - Output correctness: walletId, playerId, balance
+ * Unit tests for CreateWalletUseCase.
  */
-
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { PlayerId, WalletId } from '@crash/domain';
 import { CreateWalletUseCase } from '../../../src/application/use-cases/create-wallet.use-case';
 import { Wallet } from '../../../src/domain/entities/wallet.entity';
-import { PlayerId, WalletId } from '@crash/domain';
+import { FAKE_TX, createMockUnitOfWork, createMockWalletRepository } from '../../helpers/mocks';
 
-// --- Mock helpers ---
-
-function mockFn<T extends (...args: any[]) => any>(
-  impl?: T,
-): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
-  const calls: any[] = [];
-  const fn: any = (...args: any[]) => {
-    calls.push(args);
-    return (fn._impl as any)(...args);
-  };
-  fn._impl = impl || (() => {});
-  fn._calls = calls;
-  fn.mockReturnValue = (v: any) => {
-    fn._impl = () => v;
-  };
-  fn.mockResolvedValue = (v: any) => {
-    fn._impl = () => Promise.resolve(v);
-  };
-  return fn;
-}
-
-function createMockWalletRepository(overrides: Record<string, any> = {}) {
-  return {
-    findById: mockFn(() => Promise.resolve(null)),
-    findByPlayerId: mockFn(() => Promise.resolve(null)),
-    save: mockFn(() => Promise.resolve()),
-    create: mockFn(() => Promise.resolve()),
-    ...overrides,
-  };
-}
-
-function createMockPrisma() {
-  return {
-    $transaction: mockFn(async (fn: any) => {
-      const mockTx = {
-        outboxEvent: { create: mockFn(() => Promise.resolve()) },
-        wallet: {
-          create: mockFn(() => Promise.resolve()),
-          update: mockFn(() => Promise.resolve()),
-        },
-      };
-      return fn(mockTx);
-    }),
-    wallet: { create: mockFn(() => Promise.resolve()), update: mockFn(() => Promise.resolve()) },
-    outboxEvent: { create: mockFn(() => Promise.resolve()) },
-  };
-}
-
-function createMockOutboxWriter() {
-  return {
-    writeWithinTransaction: mockFn(() => Promise.resolve(['outbox-id-1'])),
-    tryImmediatePublish: mockFn(() => Promise.resolve()),
-  };
-}
+const PLAYER_ID = PlayerId.from('player-1');
 
 describe('CreateWalletUseCase', () => {
-  let mockWalletRepo: ReturnType<typeof createMockWalletRepository>;
-  let mockPrisma: ReturnType<typeof createMockPrisma>;
-  let mockOutboxWriter: ReturnType<typeof createMockOutboxWriter>;
+  let walletRepository: ReturnType<typeof createMockWalletRepository>;
+  let unitOfWork: ReturnType<typeof createMockUnitOfWork>;
   let useCase: CreateWalletUseCase;
 
   beforeEach(() => {
-    mockWalletRepo = createMockWalletRepository();
-    mockPrisma = createMockPrisma();
-    mockOutboxWriter = createMockOutboxWriter();
-    useCase = new CreateWalletUseCase(
-      mockWalletRepo as any,
-      mockPrisma as any,
-      mockOutboxWriter as any,
-    );
+    walletRepository = createMockWalletRepository();
+    unitOfWork = createMockUnitOfWork();
+    useCase = new CreateWalletUseCase(walletRepository as any, unitOfWork as any);
   });
 
-  test('should create new wallet for player without existing wallet', async () => {
-    mockWalletRepo.findByPlayerId.mockResolvedValue(null);
+  test('creates a zero-balance wallet for a player without one', async () => {
+    // Act
+    const result = await useCase.execute({ playerId: PLAYER_ID });
 
-    const result = await useCase.execute({ playerId: PlayerId.from('player-1') });
-
+    // Assert
+    expect(result.playerId).toBe(PLAYER_ID);
+    expect(result.balanceCents).toBe(0n);
     expect(result.walletId).toBeDefined();
-    expect(result.playerId).toBe('player-1');
-    expect(mockWalletRepo.create._calls.length).toBe(1);
+    expect(walletRepository.create.callCount).toBe(1);
+    expect(walletRepository.create.calls[0][1]).toBe(FAKE_TX);
   });
 
-  test('should return existing wallet when player already has one (idempotent)', async () => {
-    const existingWallet = Wallet.restore(
-      WalletId.from('wallet-1'),
-      PlayerId.from('player-1'),
-      5000n,
-      1,
-    );
-    mockWalletRepo.findByPlayerId.mockResolvedValue(existingWallet);
+  test('commits WalletCreated keyed by the new wallet', async () => {
+    const result = await useCase.execute({ playerId: PLAYER_ID });
 
-    const result = await useCase.execute({ playerId: PlayerId.from('player-1') });
-
-    expect(result.walletId).toBe('wallet-1');
-    expect(result.playerId).toBe('player-1');
-    expect(mockWalletRepo.create._calls.length).toBe(0);
+    expect(unitOfWork.commits).toHaveLength(1);
+    expect(unitOfWork.commits[0].aggregateId).toBe(result.walletId);
+    expect(unitOfWork.commits[0].events.map((e) => e.eventType)).toEqual(['WalletCreated']);
   });
 
-  test('should write WalletCreatedEvent to outbox for new wallet', async () => {
-    mockWalletRepo.findByPlayerId.mockResolvedValue(null);
+  test('returns the existing wallet without creating another (idempotent)', async () => {
+    // Arrange
+    const existing = Wallet.restore(WalletId.from('wallet-1'), PLAYER_ID, 2500n, 3);
+    walletRepository.findByPlayerId.mockResolvedValue(existing);
 
-    await useCase.execute({ playerId: PlayerId.from('player-1') });
+    // Act
+    const result = await useCase.execute({ playerId: PLAYER_ID });
 
-    expect(mockPrisma.$transaction._calls.length).toBe(1);
-    expect(mockOutboxWriter.writeWithinTransaction._calls.length).toBe(1);
-    const events = mockOutboxWriter.writeWithinTransaction._calls[0][2];
-    expect(events.length).toBeGreaterThan(0);
-    expect(events[0].eventType).toBe('WalletCreated');
-  });
-
-  test('should NOT write to outbox for existing wallet', async () => {
-    const existingWallet = Wallet.restore(
-      WalletId.from('wallet-1'),
-      PlayerId.from('player-1'),
-      5000n,
-      1,
-    );
-    mockWalletRepo.findByPlayerId.mockResolvedValue(existingWallet);
-
-    await useCase.execute({ playerId: PlayerId.from('player-1') });
-
-    expect(mockPrisma.$transaction._calls.length).toBe(0);
-    expect(mockOutboxWriter.writeWithinTransaction._calls.length).toBe(0);
-  });
-
-  test('should return correct output with walletId, playerId, balance', async () => {
-    mockWalletRepo.findByPlayerId.mockResolvedValue(null);
-
-    const result = await useCase.execute({ playerId: PlayerId.from('player-1') });
-
-    expect(result).toHaveProperty('walletId');
-    expect(result).toHaveProperty('playerId');
-    expect(result).toHaveProperty('balance');
-    expect(result.playerId).toBe('player-1');
-    expect(typeof result.walletId).toBe('string');
-    expect(result.walletId.length).toBeGreaterThan(0);
-  });
-
-  test('should initialize balance at "0.00"', async () => {
-    mockWalletRepo.findByPlayerId.mockResolvedValue(null);
-
-    const result = await useCase.execute({ playerId: PlayerId.from('player-1') });
-
-    expect(result.balance).toBe('0');
+    // Assert
+    expect(result).toEqual({ walletId: 'wallet-1', playerId: PLAYER_ID, balanceCents: 2500n });
+    expect(walletRepository.create.callCount).toBe(0);
+    expect(unitOfWork.commits).toHaveLength(0);
   });
 });

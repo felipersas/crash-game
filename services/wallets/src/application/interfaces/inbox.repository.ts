@@ -1,40 +1,6 @@
-/**
- * Defines the contract for inbox event persistence.
- * Implements idempotency by tracking processed events via unique idempotency key.
- */
-export interface IInboxRepository {
-  /**
-   * Try to create a new inbox event.
-   * Returns null if idempotency key already exists (duplicate event).
-   */
-  tryCreate(input: InboxEventCreateInput): Promise<InboxEvent | null>;
+import type { TransactionContext } from './unit-of-work';
 
-  /**
-   * Mark an inbox event as PROCESSED.
-   */
-  markAsProcessed(id: string, processedAt: Date): Promise<void>;
-
-  /**
-   * Mark an inbox event as FAILED with error message.
-   */
-  markAsFailed(id: string, errorMessage: string, retryCount: number): Promise<void>;
-
-  /**
-   * Find an inbox event by idempotency key.
-   */
-  findByIdempotencyKey(idempotencyKey: string): Promise<InboxEvent | null>;
-
-  /**
-   * Delete processed events older than specified days.
-   * Returns count of deleted events.
-   */
-  deleteOlderThan(days: number): Promise<number>;
-
-  /**
-   * Find FAILED events eligible for retry (retryCount < maxRetries).
-   */
-  findFailed(maxRetries: number): Promise<InboxEvent[]>;
-}
+export type InboxEventStatus = 'PENDING' | 'PROCESSED' | 'FAILED';
 
 export interface InboxEventCreateInput {
   idempotencyKey: string;
@@ -47,9 +13,42 @@ export interface InboxEvent {
   idempotencyKey: string;
   eventType: string;
   payload: unknown;
-  status: 'PENDING' | 'PROCESSED' | 'FAILED';
+  status: InboxEventStatus;
   processedAt: Date | null;
   errorMessage: string | null;
   retryCount: number;
   createdAt: Date;
+}
+
+/**
+ * Inbox persistence: tracks consumed events by idempotency key so that
+ * at-least-once delivery never applies the same event twice.
+ */
+export interface IInboxRepository {
+  /**
+   * Returns null when the idempotency key already exists (duplicate event).
+   */
+  tryCreate(input: InboxEventCreateInput): Promise<InboxEvent | null>;
+
+  findByIdempotencyKey(idempotencyKey: string): Promise<InboxEvent | null>;
+
+  /**
+   * Pass `tx` to mark the event processed atomically with its side effects.
+   */
+  markAsProcessed(id: string, tx?: TransactionContext): Promise<void>;
+
+  /**
+   * Marks the event FAILED and increments its retry count.
+   */
+  markAsFailed(id: string, errorMessage: string): Promise<void>;
+
+  /**
+   * FAILED events that still have retries left.
+   */
+  findFailed(maxRetries: number): Promise<InboxEvent[]>;
+
+  /**
+   * Deletes PROCESSED events older than the given number of days.
+   */
+  deleteProcessedOlderThan(days: number): Promise<number>;
 }

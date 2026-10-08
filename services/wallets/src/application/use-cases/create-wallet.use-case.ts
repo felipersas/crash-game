@@ -1,17 +1,10 @@
-/**
- * Create Wallet Use Case - Application Layer
- *
- * Handles the creation of a new wallet for a player.
- * Ensures one wallet per player (idempotent).
- */
-
 import { Inject, Injectable } from '@nestjs/common';
-import { type PlayerId } from '@crash/domain';
+import type { PlayerId } from '@crash/domain';
 import { Wallet } from '@/domain/entities/wallet.entity';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
-import { WALLET_REPOSITORY } from '@/application/di.tokens';
-import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
-import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
+import type { IUnitOfWork } from '@/application/interfaces/unit-of-work';
+import type { IUseCase } from '@/application/interfaces/use-case';
+import { WALLET_REPOSITORY, UNIT_OF_WORK } from '@/application/di.tokens';
 
 export interface CreateWalletInput {
   playerId: PlayerId;
@@ -20,50 +13,41 @@ export interface CreateWalletInput {
 export interface CreateWalletOutput {
   walletId: string;
   playerId: string;
-  balance: string;
+  balanceCents: bigint;
 }
 
+/**
+ * Create Wallet Use Case - Application Layer
+ *
+ * Creates the player's wallet with a zero balance. Idempotent: returns the
+ * existing wallet when the player already has one.
+ */
 @Injectable()
-export class CreateWalletUseCase {
+export class CreateWalletUseCase implements IUseCase<CreateWalletInput, CreateWalletOutput> {
   constructor(
-    @Inject(WALLET_REPOSITORY)
-    private readonly walletRepository: IWalletRepository & {
-      create(wallet: Wallet): Promise<void>;
-    },
-    private readonly prisma: PrismaService,
-    private readonly outboxWriter: OutboxWriter,
+    @Inject(WALLET_REPOSITORY) private readonly walletRepository: IWalletRepository,
+    @Inject(UNIT_OF_WORK) private readonly unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(input: CreateWalletInput): Promise<CreateWalletOutput> {
     const existing = await this.walletRepository.findByPlayerId(input.playerId);
     if (existing) {
-      return this.toOutput(existing);
+      return toOutput(existing);
     }
 
     const wallet = Wallet.create(input.playerId);
-    const events = wallet.pullEvents();
+    await this.unitOfWork.commit(wallet.id, wallet.pullEvents(), (tx) =>
+      this.walletRepository.create(wallet, tx),
+    );
 
-    let outboxIds: string[] = [];
-    await this.prisma.$transaction(async (tx) => {
-      await this.walletRepository.create(wallet, tx);
-      if (events.length > 0) {
-        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, wallet.id, events);
-      }
-    });
-
-    // Best-effort immediate publish for low latency
-    if (events.length > 0 && outboxIds.length > 0) {
-      await this.outboxWriter.tryImmediatePublish(events, outboxIds);
-    }
-
-    return this.toOutput(wallet);
+    return toOutput(wallet);
   }
+}
 
-  private toOutput(wallet: Wallet): CreateWalletOutput {
-    return {
-      walletId: wallet.id,
-      playerId: wallet.playerId,
-      balance: wallet.getBalance().toCents().toString(),
-    };
-  }
+function toOutput(wallet: Wallet): CreateWalletOutput {
+  return {
+    walletId: wallet.id,
+    playerId: wallet.playerId,
+    balanceCents: wallet.getBalance().toCents(),
+  };
 }
