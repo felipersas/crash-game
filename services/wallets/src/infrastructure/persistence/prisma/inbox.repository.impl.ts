@@ -1,28 +1,21 @@
-/**
- * Inbox Repository Implementation - Infrastructure Layer
- *
- * Prisma-based implementation of IInboxRepository.
- * Provides idempotency by tracking processed events via unique idempotency key.
- */
-
-import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from './prisma.service';
+import { Injectable } from '@nestjs/common';
+import { Prisma, type InboxEvent as InboxEventRow } from '@prisma/client';
 import type {
   IInboxRepository,
   InboxEvent,
   InboxEventCreateInput,
 } from '@/application/interfaces/inbox.repository';
+import type { TransactionContext } from '@/application/interfaces/unit-of-work';
+import { PrismaService } from './prisma.service';
+import { prismaClient } from './transaction-context';
 
 @Injectable()
 export class PrismaInboxRepository implements IInboxRepository {
-  private readonly logger = new Logger(PrismaInboxRepository.name);
-
   constructor(private readonly prisma: PrismaService) {}
 
   async tryCreate(input: InboxEventCreateInput): Promise<InboxEvent | null> {
     try {
-      const event = await this.prisma.inboxEvent.create({
+      const row = await this.prisma.inboxEvent.create({
         data: {
           idempotencyKey: input.idempotencyKey,
           eventType: input.eventType,
@@ -30,99 +23,63 @@ export class PrismaInboxRepository implements IInboxRepository {
           status: 'PENDING',
         },
       });
-
-      return this.toDomain(event);
+      return this.toDomain(row);
     } catch (error: unknown) {
-      // Unique constraint violation means event already exists
-      if (error instanceof Error && 'code' in error && error.code === 'P2002') {
-        this.logger.debug(`Duplicate inbox event: ${input.idempotencyKey}`);
+      // Unique constraint on idempotencyKey: the event was already received
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         return null;
       }
       throw error;
     }
   }
 
-  async markAsProcessed(id: string, processedAt: Date): Promise<void> {
-    await this.prisma.inboxEvent.update({
-      where: { id },
-      data: {
-        status: 'PROCESSED',
-        processedAt,
-      },
-    });
-  }
-
-  async markAsFailed(id: string, errorMessage: string, retryCount: number): Promise<void> {
-    await this.prisma.inboxEvent.update({
-      where: { id },
-      data: {
-        status: 'FAILED',
-        errorMessage,
-        retryCount,
-      },
-    });
-  }
-
   async findByIdempotencyKey(idempotencyKey: string): Promise<InboxEvent | null> {
-    const event = await this.prisma.inboxEvent.findUnique({
-      where: { idempotencyKey },
-    });
-
-    if (!event) {
-      return null;
-    }
-
-    return this.toDomain(event);
+    const row = await this.prisma.inboxEvent.findUnique({ where: { idempotencyKey } });
+    return row ? this.toDomain(row) : null;
   }
 
-  async deleteOlderThan(days: number): Promise<number> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-
-    const result = await this.prisma.inboxEvent.deleteMany({
-      where: {
-        status: 'PROCESSED',
-        processedAt: { lt: cutoffDate },
-      },
+  async markAsProcessed(id: string, tx?: TransactionContext): Promise<void> {
+    await prismaClient(this.prisma, tx).inboxEvent.update({
+      where: { id },
+      data: { status: 'PROCESSED', processedAt: new Date(), errorMessage: null },
     });
+  }
 
-    return result.count;
+  async markAsFailed(id: string, errorMessage: string): Promise<void> {
+    await this.prisma.inboxEvent.update({
+      where: { id },
+      data: { status: 'FAILED', errorMessage, retryCount: { increment: 1 } },
+    });
   }
 
   async findFailed(maxRetries: number): Promise<InboxEvent[]> {
-    const records = await this.prisma.inboxEvent.findMany({
-      where: {
-        status: 'FAILED',
-        retryCount: { lt: maxRetries },
-      },
+    const rows = await this.prisma.inboxEvent.findMany({
+      where: { status: 'FAILED', retryCount: { lt: maxRetries } },
       orderBy: { createdAt: 'asc' },
       take: 50,
     });
-
-    return records.map((r) => this.toDomain(r));
+    return rows.map((row) => this.toDomain(row));
   }
 
-  private toDomain(record: {
-    id: string;
-    idempotencyKey: string;
-    eventType: string;
-    payload: Prisma.JsonValue;
-    status: 'PENDING' | 'PROCESSED' | 'FAILED';
-    processedAt: Date | null;
-    errorMessage: string | null;
-    retryCount: number | null;
-    createdAt: Date;
-  }): InboxEvent {
+  async deleteProcessedOlderThan(days: number): Promise<number> {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const { count } = await this.prisma.inboxEvent.deleteMany({
+      where: { status: 'PROCESSED', processedAt: { lt: cutoff } },
+    });
+    return count;
+  }
+
+  private toDomain(row: InboxEventRow): InboxEvent {
     return {
-      id: record.id,
-      idempotencyKey: record.idempotencyKey,
-      eventType: record.eventType,
-      payload: record.payload as Record<string, unknown>,
-      status: record.status,
-      processedAt: record.processedAt,
-      errorMessage: record.errorMessage,
-      retryCount: record.retryCount ?? 0,
-      createdAt: record.createdAt,
+      id: row.id,
+      idempotencyKey: row.idempotencyKey,
+      eventType: row.eventType,
+      payload: row.payload,
+      status: row.status,
+      processedAt: row.processedAt,
+      errorMessage: row.errorMessage,
+      retryCount: row.retryCount ?? 0,
+      createdAt: row.createdAt,
     };
   }
 }

@@ -1,48 +1,33 @@
 /**
- * External Game Events - Types consumed from Games service
- *
- * These types define the structure of events that the Wallets service
- * consumes from the Games service via RabbitMQ.
- *
- * Note: These are read-only types for consumption. The source of truth
- * for these events is in the Games service.
+ * Games events consumed by the Wallets service, as they arrive on the wire
+ * (bigint amounts serialized as decimal strings, dates as ISO strings).
+ * The source of truth for these events is the Games service.
  */
 
-interface BaseDomainEvent {
+interface GamesMessage {
   readonly aggregateId: string;
-  readonly occurredAt: Date;
+  readonly occurredAt: string;
   readonly version: number;
+  readonly roundId: string;
+  readonly betId: string;
+  readonly playerId: string;
 }
 
 /**
- * Emitted when a player places a bet in the Games service.
- * The Wallets service debits the bet amount from the player's wallet.
+ * A player placed a bet → debit the stake.
  */
-export interface BetPlacedEvent extends BaseDomainEvent {
+export interface BetPlacedMessage extends GamesMessage {
   readonly eventType: 'BetPlaced';
-  readonly roundId: string;
-  readonly betId: string;
-  readonly playerId: string;
-  readonly amount: bigint;
-  timestamp: Date;
+  readonly amount: string;
 }
 
 /**
- * Emitted when a player cashes out in the Games service.
- * The Wallets service credits the winnings to the player's wallet.
+ * A player cashed out → credit the payout.
  */
-export interface PlayerCashedOutEvent extends BaseDomainEvent {
+export interface PlayerCashedOutMessage extends GamesMessage {
   readonly eventType: 'PlayerCashedOut';
-  readonly roundId: string;
-  readonly betId: string;
-  readonly playerId: string;
-  readonly betAmount: bigint;
-  readonly cashOutMultiplier: number; // The multiplier at which they cashed out
-  readonly winAmount: bigint; // The amount won
-  timestamp: Date;
+  readonly betAmount: string;
+  readonly cashOutMultiplier: number;
+  /** Total payout (stake + profit) in cents. */
+  readonly winAmount: string;
 }
-
-/**
- * Union type of all game events consumed by Wallets service.
- */
-export type GameDomainEvent = BetPlacedEvent | PlayerCashedOutEvent;

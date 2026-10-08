@@ -33,6 +33,9 @@ async function bootstrap(): Promise<void> {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     }),
   );
 
@@ -45,15 +48,19 @@ async function bootstrap(): Promise<void> {
       'bearer',
     )
     .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api-docs', app, document, {
-    useGlobalPrefix: false,
-  });
+  try {
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api-docs', app, document, {
+      useGlobalPrefix: false,
+    });
+  } catch (e) {
+    console.warn('Swagger setup failed:', (e as Error).message);
+  }
 
   await app.startAllMicroservices();
 
-  const port = process.env.PORT || '4002';
+  const port = process.env.PORT ?? '4002';
   await app.listen(port, '0.0.0.0');
 }
 
-bootstrap();
+void bootstrap();

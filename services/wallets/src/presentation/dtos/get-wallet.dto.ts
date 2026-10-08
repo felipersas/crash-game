@@ -1,12 +1,19 @@
-import { IsString, IsNotEmpty, IsUUID, IsNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import type { GetWalletOutput } from '@/application/use-cases/get-wallet.use-case';
 
 export class GetWalletResponseDto {
-  @ApiProperty() @IsUUID() walletId!: string;
-  @ApiProperty() @IsUUID() playerId!: string;
+  @ApiProperty() walletId!: string;
+  @ApiProperty() playerId!: string;
   @ApiProperty({ description: 'Balance in cents as string', example: '50000' })
-  @IsString()
-  @IsNotEmpty()
   balance!: string;
-  @ApiProperty({ description: 'Optimistic lock version', example: 3 }) @IsNumber() version!: number;
+  @ApiProperty({ description: 'Optimistic lock version', example: 3 }) version!: number;
+
+  static from(wallet: GetWalletOutput): GetWalletResponseDto {
+    return {
+      walletId: wallet.walletId,
+      playerId: wallet.playerId,
+      balance: wallet.balanceCents.toString(),
+      version: wallet.version,
+    };
+  }
 }

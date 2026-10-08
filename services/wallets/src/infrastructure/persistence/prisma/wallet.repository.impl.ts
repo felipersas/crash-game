@@ -1,77 +1,47 @@
-/**
- * Wallet Repository Implementation - Infrastructure Layer
- *
- * Prisma-based implementation of IWalletRepository.
- */
-
 import { Injectable } from '@nestjs/common';
+import { Prisma, type Wallet as WalletRow } from '@prisma/client';
 import { WalletId, PlayerId } from '@crash/domain';
-import { PrismaService } from './prisma.service';
 import { Wallet } from '@/domain/entities/wallet.entity';
-import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
 import { OptimisticLockError } from '@/domain/errors/domain.errors';
-import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
+import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
+import type { TransactionContext } from '@/application/interfaces/unit-of-work';
+import { PrismaService } from './prisma.service';
+import { prismaClient } from './transaction-context';
 
 @Injectable()
 export class PrismaWalletRepository implements IWalletRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findByPlayerId(playerId: PlayerId): Promise<Wallet | null> {
-    const record = await this.prisma.wallet.findUnique({
-      where: { playerId },
-    });
-
-    if (!record) {
-      return null;
-    }
-
-    return this.toDomain(record);
+    const row = await this.prisma.wallet.findUnique({ where: { playerId } });
+    return row ? this.toDomain(row) : null;
   }
 
   async findById(id: WalletId): Promise<Wallet | null> {
-    const record = await this.prisma.wallet.findUnique({
-      where: { id },
-    });
-
-    if (!record) {
-      return null;
-    }
-
-    return this.toDomain(record);
+    const row = await this.prisma.wallet.findUnique({ where: { id } });
+    return row ? this.toDomain(row) : null;
   }
 
-  async save(wallet: Wallet, tx?: PrismaTransaction): Promise<void> {
+  async save(wallet: Wallet, tx?: TransactionContext): Promise<void> {
     const data = wallet.toPersistence();
-    const client = tx ?? this.prisma;
 
     try {
-      await client.wallet.update({
-        where: {
-          id: data.id,
-          version: data.version - 1, // Optimistic locking
-        },
-        data: {
-          balanceCents: data.balance,
-          version: data.version,
-        },
+      await prismaClient(this.prisma, tx).wallet.update({
+        // Optimistic locking: only update the version this instance was loaded at
+        where: { id: data.id, version: data.version - 1 },
+        data: { balanceCents: data.balance, version: data.version },
       });
     } catch (error: unknown) {
-      // Prisma P2025 = record not found (version WHERE matched zero rows)
-      if (error instanceof Error && 'code' in error && (error as any).code === 'P2025') {
-        throw new OptimisticLockError(data.id, data.version, data.version - 1);
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new OptimisticLockError(data.id);
       }
       throw error;
     }
   }
 
-  /**
-   * Create a new wallet in the database.
-   * Used internally by CreateWalletUseCase.
-   */
-  async create(wallet: Wallet, tx?: PrismaTransaction): Promise<void> {
+  async create(wallet: Wallet, tx?: TransactionContext): Promise<void> {
     const data = wallet.toPersistence();
-    const client = tx ?? this.prisma;
-    await client.wallet.create({
+    await prismaClient(this.prisma, tx).wallet.create({
       data: {
         id: data.id,
         playerId: data.playerId,
@@ -81,17 +51,12 @@ export class PrismaWalletRepository implements IWalletRepository {
     });
   }
 
-  private toDomain(record: {
-    id: string;
-    playerId: string;
-    balanceCents: bigint;
-    version: number;
-  }): Wallet {
+  private toDomain(row: WalletRow): Wallet {
     return Wallet.restore(
-      WalletId.from(record.id),
-      PlayerId.from(record.playerId),
-      record.balanceCents,
-      record.version,
+      WalletId.from(row.id),
+      PlayerId.from(row.playerId),
+      row.balanceCents,
+      row.version,
     );
   }
 }

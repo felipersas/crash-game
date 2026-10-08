@@ -1,42 +1,24 @@
-/**
- * RabbitMQ Event Publisher Implementation - Infrastructure Layer
- *
- * Publishes wallet domain events via NestJS Microservices ClientProxy.
- */
-
-import { Injectable, Inject, Logger } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
+import { Injectable, Inject } from '@nestjs/common';
+import type { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
-import type { WalletDomainEvent } from '@/domain/events/wallet.events';
-import type { IEventPublisher } from '@crash/messaging';
+import type { IEventPublisher, SerializedEvent } from '@crash/messaging';
+import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
+import { WALLET_EVENTS_CLIENT } from '@/infrastructure/di.tokens';
 
+const EXCHANGE = 'wallet.events';
+
+/**
+ * Publishes serialized wallet events to the `wallet.events` fanout exchange.
+ */
 @Injectable()
 export class RabbitMQEventPublisher implements IEventPublisher {
-  private readonly logger = new Logger(RabbitMQEventPublisher.name);
+  constructor(
+    @Inject(WALLET_EVENTS_CLIENT) private readonly client: ClientProxy,
+    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
+  ) {}
 
-  constructor(@Inject('WALLET_EVENTS_CLIENT') private readonly client: ClientProxy) {}
-
-  async publish(event: WalletDomainEvent): Promise<void> {
-    const serialized = JSON.parse(
-      JSON.stringify(event, (_key, value) =>
-        typeof value === 'bigint' ? value.toString() : value,
-      ),
-    );
-
-    await firstValueFrom(this.client.emit(event.eventType, serialized), {
-      defaultValue: undefined,
-    });
-
-    this.logger.debug(`Published event: ${event.eventType} (${event.aggregateId})`);
-  }
-
-  async publishBatch(events: WalletDomainEvent[]): Promise<void> {
-    for (const event of events) {
-      await this.publish(event);
-    }
-  }
-
-  isConnected(): boolean {
-    return true;
+  async publish(event: SerializedEvent): Promise<void> {
+    await firstValueFrom(this.client.emit(event.eventType, event), { defaultValue: undefined });
+    this.metrics.incrRabbitPublished(EXCHANGE, event.eventType);
   }
 }
