@@ -11,7 +11,7 @@ vi.mock('sonner');
 const mockWallet: Wallet = {
   walletId: 'wallet-1',
   playerId: 'player-1',
-  balance: '100.00',
+  balance: '10000',
   version: 1,
 };
 
@@ -33,7 +33,7 @@ describe('useWallet', () => {
 
       expect(result.current.isLoading).toBe(true);
       expect(result.current.wallet).toBeUndefined();
-      expect(result.current.balance).toBe('0.00');
+      expect(result.current.balanceCents).toBe('0');
       expect(result.current.isError).toBe(false);
     });
   });
@@ -49,12 +49,12 @@ describe('useWallet', () => {
       });
 
       expect(result.current.wallet).toEqual(mockWallet);
-      expect(result.current.balance).toBe('100.00');
+      expect(result.current.balanceCents).toBe('10000');
       expect(result.current.isError).toBe(false);
       expect(result.current.error).toBeNull();
     });
 
-    it('returns balance string from wallet data', async () => {
+    it('returns balance in cents from wallet data', async () => {
       vi.mocked(get).mockResolvedValueOnce(mockWallet);
 
       const { result } = renderHookWithProviders(() => useWallet());
@@ -63,10 +63,10 @@ describe('useWallet', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(result.current.balance).toBe('100.00');
+      expect(result.current.balanceCents).toBe('10000');
     });
 
-    it('returns default balance "0.00" when no wallet data', async () => {
+    it('returns default balance "0" cents when no wallet data', async () => {
       vi.mocked(get).mockResolvedValueOnce(null as unknown as Wallet);
 
       const { result } = renderHookWithProviders(() => useWallet());
@@ -75,7 +75,7 @@ describe('useWallet', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(result.current.balance).toBe('0.00');
+      expect(result.current.balanceCents).toBe('0');
     });
   });
 
@@ -97,7 +97,7 @@ describe('useWallet', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.wallet).toBeUndefined();
-      expect(result.current.balance).toBe('0.00');
+      expect(result.current.balanceCents).toBe('0');
       expect(result.current.error).toEqual(mockError);
       expect(toast.error).toHaveBeenCalledWith('Wallet not found');
     });
@@ -153,7 +153,7 @@ describe('useWallet', () => {
         .mockResolvedValueOnce(mockWallet)
         .mockResolvedValueOnce({
           ...mockWallet,
-          balance: '150.00',
+          balance: '15000',
         });
 
       const { result } = renderHookWithProviders(() => useWallet());
@@ -162,12 +162,12 @@ describe('useWallet', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(result.current.balance).toBe('100.00');
+      expect(result.current.balanceCents).toBe('10000');
 
       await result.current.refetch();
 
       await waitFor(() => {
-        expect(result.current.balance).toBe('150.00');
+        expect(result.current.balanceCents).toBe('15000');
       });
     });
   });
@@ -176,7 +176,7 @@ describe('useWallet', () => {
     it('enables query only when session has accessToken', async () => {
       vi.mocked(get).mockResolvedValueOnce(mockWallet);
 
-      const { result } = renderHookWithProviders(() => useWallet());
+      renderHookWithProviders(() => useWallet());
 
       // The test helpers provide a session with accessToken
       // So the query should be enabled and fetch data

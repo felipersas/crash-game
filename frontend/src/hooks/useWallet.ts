@@ -9,12 +9,14 @@ import { getErrorMessage } from "@/constants/error-codes";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 
+export const WALLET_QUERY_KEY = ["wallet"] as const;
+
 export function useWallet() {
   const { data: session } = useSession();
   const hasShownError = useRef(false);
 
-  const query = useQuery<Wallet>({
-    queryKey: ["wallet"],
+  const query = useQuery<Wallet, ApiError>({
+    queryKey: WALLET_QUERY_KEY,
     queryFn: getWallet,
     enabled: !!session?.accessToken,
     staleTime: 5000,
@@ -23,8 +25,7 @@ export function useWallet() {
 
   useEffect(() => {
     if (query.isError && !hasShownError.current) {
-      const error = query.error as unknown as ApiError;
-      toast.error(getErrorMessage(error.code, "Failed to load wallet"));
+      toast.error(getErrorMessage(query.error.code, "Failed to load wallet"));
       hasShownError.current = true;
     }
     if (!query.isError) {
@@ -34,7 +35,8 @@ export function useWallet() {
 
   return {
     wallet: query.data,
-    balance: query.data?.balance ?? "0.00",
+    /** Balance in integer cents as a string (e.g. "50000" = $500.00). */
+    balanceCents: query.data?.balance ?? "0",
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

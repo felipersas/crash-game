@@ -109,6 +109,34 @@ describe('useGameStore', () => {
       expect(state.roundStatus).toBe(RoundStatus.CRASHED);
       expect(state.liveMultiplier).toBe(3.14);
     });
+
+    it('marks ACTIVE bets LOST and PENDING bets CANCELLED, like the server', () => {
+      const pending: Bet = { ...mockBet2, id: 'bet-3', status: BetStatus.PENDING };
+      const cashedOut: Bet = { ...mockBet2, id: 'bet-4', status: BetStatus.CASHED_OUT };
+      useGameStore.setState({
+        myActiveBet: mockBet,
+        currentBets: [mockBet, pending, cashedOut],
+      });
+
+      useGameStore.getState().setCrash(1.5);
+
+      const state = useGameStore.getState();
+      expect(state.currentBets.map((b) => b.status)).toEqual([
+        BetStatus.LOST,
+        BetStatus.CANCELLED,
+        BetStatus.CASHED_OUT,
+      ]);
+      expect(state.myActiveBet?.status).toBe(BetStatus.LOST);
+    });
+
+    it('keeps a cashed-out active bet as CASHED_OUT', () => {
+      const cashedOut: Bet = { ...mockBet, status: BetStatus.CASHED_OUT };
+      useGameStore.setState({ myActiveBet: cashedOut, currentBets: [cashedOut] });
+
+      useGameStore.getState().setCrash(2);
+
+      expect(useGameStore.getState().myActiveBet?.status).toBe(BetStatus.CASHED_OUT);
+    });
   });
 
   describe('setBettingEnded', () => {

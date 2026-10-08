@@ -35,9 +35,13 @@ export interface PaginationMeta {
   totalPages: number;
 }
 
+/** UI phase of the current round (lower-case view of RoundStatus). */
+export type Phase = 'betting' | 'active' | 'crashed';
+
 export interface Wallet {
   walletId: string;
   playerId: string;
+  /** Balance in integer CENTS, serialized as a string (e.g. "50000" = $500.00). */
   balance: string;
   version: number;
 }
