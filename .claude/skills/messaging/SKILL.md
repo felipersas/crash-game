@@ -92,17 +92,18 @@ export interface XxxEvent extends DomainEvent {
 ## Inbox/Outbox Pattern
 
 ### Outbox (publishing side)
-```typescript
-// infrastructure/messaging/rabbitmq/outbox-processor.ts
-// Ensures events are reliably published even if broker is temporarily down
-```
+- Use cases call `unitOfWork.commit(aggregateId, events, work)`: aggregate changes and
+  outbox rows are written in ONE transaction (`PrismaUnitOfWork` + `OutboxWriter`)
+- After commit `OutboxWriter.publishNow()` publishes best-effort; `OutboxProcessor` polls
+  PENDING rows, marks them FAILED after max retries and purges old SENT rows
+- Events are serialized with `serializeEvent` from `@crash/messaging` (bigint → string)
 
 ### Inbox (consuming side)
-```typescript
-// infrastructure/messaging/rabbitmq/inbox-processor.ts
-// Deduplicates incoming events to handle at-least-once delivery
-// IInboxRepository tracks processed message IDs
-```
+- `IdempotentInbox.process(idempotencyKey, eventType, payload, handler)`:
+  first delivery runs the handler; duplicates of PROCESSED/in-flight events are skipped;
+  FAILED or stale PENDING events are retried; failures increment `retryCount`
+- Money movements (wallets) mark the inbox event PROCESSED inside their own commit
+- `InboxProcessor` retries FAILED events every minute (bounded) and purges old rows
 
 ## Handler Pattern
 
@@ -111,20 +112,26 @@ export interface XxxEvent extends DomainEvent {
 @Injectable()
 export class WalletDebitedEventHandler {
   constructor(
-    @Inject(BET_REPOSITORY) private readonly betRepo: IBetRepository,
     private readonly confirmBetUseCase: ConfirmBetUseCase,
+    private readonly inbox: IdempotentInbox,
   ) {}
 
-  @RabbitSubscribe({ exchange: 'games.events', queue: 'games.wallet-debited' })
-  async handle(event: WalletDebitedEvent): Promise<void> {
-    await this.confirmBetUseCase.execute({
-      betId: event.betId,
-      playerId: event.playerId,
-      amountCents: event.amount,
+  async handle(event: WalletDebitedMessage): Promise<void> {
+    await this.inbox.process(`wallet-debit-${event.betId}`, 'WalletDebited', event, async () => {
+      await this.confirmBetUseCase.execute({
+        roundId: RoundId.from(event.roundId),
+        betId: BetId.from(event.betId),
+        playerId: PlayerId.from(event.playerId),
+      });
     });
   }
 }
 ```
+
+Consumers are NestJS `@EventPattern` controllers (`WalletEventsController`,
+`GamesEventsController`) that ack on success and reject (or re-queue transient errors).
+Consumed payloads are typed as wire messages (`*Message` in `messaging/types`), where
+bigint amounts arrive as strings — convert with `BigInt(...)`.
 
 ## RabbitMQ Configuration
 
@@ -136,7 +143,8 @@ export class WalletDebitedEventHandler {
 ## Validation
 - [ ] Events follow `DomainEvent` interface from `@crash/messaging`
 - [ ] Event factory functions include version for optimistic locking
-- [ ] Handlers idempotent (inbox pattern) — safe to replay
+- [ ] Handlers wrapped in `IdempotentInbox` — safe to replay
+- [ ] Events written through `unitOfWork.commit`, never published directly from use cases
 - [ ] WS broadcast non-blocking (try/catch, log error)
 - [ ] Saga states: PENDING → ACTIVE/CANCELLED for bets
 - [ ] Money in events always `bigint` cents, never `number`

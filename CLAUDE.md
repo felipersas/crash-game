@@ -29,6 +29,7 @@ bun run docker:prune   # Remove everything (volumes, images, orphans)
 cd services/games
 bun run dev            # Watch mode
 bun run start          # Production
+bun run typecheck      # tsc --noEmit
 bun run test           # Unit tests (tests/unit)
 bun run test:e2e       # E2E tests (requires docker:up)
 ```
@@ -38,6 +39,7 @@ bun run test:e2e       # E2E tests (requires docker:up)
 cd services/wallets
 bun run dev            # Watch mode
 bun run start          # Production
+bun run typecheck      # tsc --noEmit
 bun run test           # Unit tests (tests/unit)
 bun run test:e2e       # E2E tests (requires docker:up)
 ```
@@ -49,7 +51,7 @@ bun run test:e2e       # E2E tests (requires docker:up)
 services/
 ├── games/       # Game service (rounds, bets, crash logic)
 ├── wallets/     # Wallet service (balance, credit/debit)
-packages/        # Shared packages (e.g., @crash/eslint)
+packages/        # Shared packages: @crash/domain, @crash/messaging, @crash/http, @crash/observability
 frontend/        # Frontend (to be implemented)
 ```
 

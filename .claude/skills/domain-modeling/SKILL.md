@@ -25,10 +25,13 @@ Ensure all domain code follows consistent DDD patterns with proper encapsulation
 
 ```
 packages/
-├── domain/        # Money value object
-├── messaging/     # DomainEvent interface, IEventPublisher
-├── observability/ # MetricsRecorderService, METRICS_RECORDER token
-└── eslint/        # Shared ESLint config
+├── domain/           # Shared kernel: Money, formatCents, typed ids, IdempotencyKey,
+│                     # Pagination, DomainError base + shared errors
+├── messaging/        # DomainEvent, serializeEvent, IEventPublisher
+├── http/             # AllExceptionsFilter (status by error code), @UserContext
+├── observability/    # MetricsRecorderService, METRICS_RECORDER, MetricsInterceptor
+├── eslint-config/    # Shared ESLint config
+└── prettier-config/  # Shared Prettier config
 ```
 
 ### Money Value Object (`@crash/domain`)
@@ -45,6 +48,9 @@ money.subtract(other)        // Money
 money.isGreaterThan(other)   // boolean
 money.isLessThan(other)      // boolean
 money.equals(other)          // boolean
+money.toDecimal()            // "10.00" (bigint arithmetic)
+
+formatCents(-50n)            // "-0.50" — signed values such as profit
 ```
 
 **CRITICAL**: Never use `number` for money. Always `bigint` cents or `Money`.
@@ -67,9 +73,9 @@ export class XxxEntity {
     return entity;
   }
 
-  // Factory: restore from DB (no events)
-  static restore(id: string, ...): XxxEntity {
-    return new XxxEntity(id, ...);
+  // Factory: restore from DB (no events) — takes the same snapshot toPersistence() returns
+  static restore(snapshot: XxxSnapshot): XxxEntity {
+    return new XxxEntity(snapshot.id, ...);
   }
 
   // Business methods mutate state + emit events
@@ -91,7 +97,7 @@ export class XxxEntity {
   }
 
   // For persistence
-  toPersistence() { return { ... }; }
+  toPersistence(): XxxSnapshot { return { ... }; }
 
   private addEvent(event: XxxDomainEvent): void { this.events.push(event); }
 }
@@ -148,15 +154,22 @@ export type XxxDomainEvent = XxxHappenedEvent | YyyHappenedEvent | ...;
 
 ```typescript
 // domain/errors/domain.errors.ts
-export class XxxError extends Error {
-  constructor(...) {
-    super(`Descriptive message with ${context}`);
-    this.name = 'XxxError';
+import { DomainError } from '@crash/domain';
+
+export class XxxError extends DomainError {
+  constructor(context: Money) {
+    super(`Descriptive, user-facing message with $${context.toDecimal()}`, 'XXX_CODE');
   }
 }
 ```
 
-Project errors: `RoundNotAcceptingBetsError`, `DuplicateBetError`, `InsufficientFundsError`, `BetBelowMinimumError`, `OptimisticLockError`, etc.
+- Every error extends the shared `DomainError` (one base for all contexts) and has a
+  stable `code`; map the code to an HTTP status in `infrastructure/http/error-status.ts`
+- Value objects throw domain errors too — never `throw new Error(...)` in `domain/`
+- Messages never contain internal ids; money is formatted with `toDecimal`/`formatCents`
+
+Project errors: `RoundNotAcceptingBetsError`, `DuplicateBetError`, `InsufficientFundsError`,
+`BetBelowMinimumError`, `InvalidMultiplierError`, `OptimisticLockError`, etc.
 
 ## Validation
 - [ ] Private constructor + static factories only
@@ -164,5 +177,7 @@ Project errors: `RoundNotAcceptingBetsError`, `DuplicateBetError`, `Insufficient
 - [ ] `version` incremented on every mutation
 - [ ] Events emitted for all state changes
 - [ ] `toPersistence()` returns plain object (no methods)
-- [ ] Domain errors include contextual information in message
+- [ ] Domain errors extend `DomainError` with a stable code and contextual message
+- [ ] Validate all inputs before mutating any state
+- [ ] Child entities record their own events; the aggregate root drains them in `pullEvents()`
 - [ ] Money never represented as `number`
