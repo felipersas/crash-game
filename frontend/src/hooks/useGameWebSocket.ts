@@ -5,22 +5,27 @@
  * - useConnection: manages WS connection lifecycle (connect/disconnect/reconnect)
  * - useRoundSync: syncs current round state via REST on connect
  * - useGameEvents: creates event handler functions for game events
+ *
+ * The connection is (re)opened whenever `enabled`, `token` or `playerId`
+ * change, so handlers never run with a stale identity.
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useConnection } from "./useConnection";
 import { useRoundSync } from "./useRoundSync";
 import { useGameEvents } from "./useGameEvents";
+import type { ConnectionStatus } from "@/websocket/websocket.types";
 
 export interface UseGameWebSocketOptions {
   token?: string;
   playerId?: string;
+  /** Connect only once the auth session is resolved. */
   enabled?: boolean;
 }
 
 export interface UseGameWebSocketReturn {
   isConnected: boolean;
-  connectionStatus: "connecting" | "connected" | "disconnected" | "error";
+  connectionStatus: ConnectionStatus;
   reconnectAttempt: number;
   connect: () => void;
   disconnect: () => void;
@@ -34,35 +39,24 @@ export function useGameWebSocket(
 
   const syncCurrentRound = useRoundSync(playerId);
   const createEventHandlers = useGameEvents(playerId);
-
   const { isConnected, connectionStatus, reconnectAttempt, connect, disconnect } =
-    useConnection({
+    useConnection();
+
+  const open = useCallback(() => {
+    connect({
       token,
-      enabled,
+      handlers: createEventHandlers(currentRoundIdRef),
       onConnect: () => {
-        syncCurrentRound(currentRoundIdRef);
+        void syncCurrentRound(currentRoundIdRef);
       },
     });
-
-  // Hold latest functions in refs so the effect only re-runs on `enabled` changes
-  const connectRef = useRef(connect);
-  connectRef.current = connect;
-  const disconnectRef = useRef(disconnect);
-  disconnectRef.current = disconnect;
-  const createEventHandlersRef = useRef(createEventHandlers);
-  createEventHandlersRef.current = createEventHandlers;
+  }, [connect, token, createEventHandlers, syncCurrentRound]);
 
   useEffect(() => {
     if (!enabled) return;
+    open();
+    return disconnect;
+  }, [enabled, open, disconnect]);
 
-    const eventHandlers = createEventHandlersRef.current(currentRoundIdRef);
-    connectRef.current(eventHandlers);
-
-    return () => {
-      disconnectRef.current();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
-
-  return { isConnected, connectionStatus, reconnectAttempt, connect: () => connectRef.current(createEventHandlersRef.current(currentRoundIdRef)), disconnect };
+  return { isConnected, connectionStatus, reconnectAttempt, connect: open, disconnect };
 }

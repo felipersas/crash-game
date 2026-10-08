@@ -12,20 +12,30 @@ const INITIAL_RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_DELAY = 30000;
 const MAX_RECONNECT_ATTEMPTS = 20;
 
-interface GamesWebSocketConfig {
-  token?: string;
+type EventPayload<E extends keyof ServerToClientEvents> = Parameters<ServerToClientEvents[E]>[0];
+
+/** Game event callbacks (server → client push). */
+export interface GameEventHandlers {
+  onRoundStarted?: (data: EventPayload<'roundStarted'>) => void;
+  onBettingEnded?: (data: EventPayload<'bettingEnded'>) => void;
+  onMultiplierUpdate?: (data: EventPayload<'multiplierUpdate'>) => void;
+  onCrash?: (data: EventPayload<'crash'>) => void;
+  onBetPlaced?: (data: EventPayload<'betPlaced'>) => void;
+  onBetConfirmed?: (data: EventPayload<'betConfirmed'>) => void;
+  onBetCancelled?: (data: EventPayload<'betCancelled'>) => void;
+  onPlayerCashedOut?: (data: EventPayload<'playerCashedOut'>) => void;
+}
+
+/** Connection lifecycle callbacks. */
+export interface ConnectionHandlers {
   onConnect?: () => void;
   onDisconnect?: (reason: string) => void;
   onConnectError?: (error: Error) => void;
   onReconnecting?: (attempt: number) => void;
-  onRoundStarted?: (data: Parameters<ServerToClientEvents['roundStarted']>[0]) => void;
-  onBettingEnded?: (data: Parameters<ServerToClientEvents['bettingEnded']>[0]) => void;
-  onMultiplierUpdate?: (data: Parameters<ServerToClientEvents['multiplierUpdate']>[0]) => void;
-  onCrash?: (data: Parameters<ServerToClientEvents['crash']>[0]) => void;
-  onBetPlaced?: (data: Parameters<ServerToClientEvents['betPlaced']>[0]) => void;
-  onBetConfirmed?: (data: Parameters<ServerToClientEvents['betConfirmed']>[0]) => void;
-  onBetCancelled?: (data: Parameters<ServerToClientEvents['betCancelled']>[0]) => void;
-  onPlayerCashedOut?: (data: Parameters<ServerToClientEvents['playerCashedOut']>[0]) => void;
+}
+
+export interface GamesWebSocketConfig extends GameEventHandlers, ConnectionHandlers {
+  token?: string;
 }
 
 /**
@@ -33,7 +43,6 @@ interface GamesWebSocketConfig {
  */
 export class GamesWebSocket {
   private socket: Socket<ServerToClientEvents> | null = null;
-  private reconnectAttempts = 0;
 
   constructor(private config: GamesWebSocketConfig) {}
 
@@ -68,7 +77,6 @@ export class GamesWebSocket {
     if (!this.socket) return;
 
     this.socket.on('connect', () => {
-      this.reconnectAttempts = 0;
       this.config.onConnect?.();
     });
 
@@ -78,7 +86,6 @@ export class GamesWebSocket {
 
     this.socket.on('connect_error', (error) => {
       console.error('WebSocket connection error:', error);
-      this.reconnectAttempts++;
       this.config.onConnectError?.(error);
     });
 
@@ -125,14 +132,6 @@ export class GamesWebSocket {
   disconnect(): void {
     this.socket?.disconnect();
     this.socket = null;
-  }
-
-  get isConnected(): boolean {
-    return this.socket?.connected ?? false;
-  }
-
-  get id(): string | undefined {
-    return this.socket?.id;
   }
 }
 

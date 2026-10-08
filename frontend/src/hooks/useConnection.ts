@@ -1,105 +1,79 @@
 /**
- * useConnection - Manages WebSocket connection lifecycle
+ * useConnection - Manages the WebSocket connection lifecycle
  *
- * Extracted from useGameWebSocket to isolate connection management
- * (connect/disconnect/reconnect) from game event handling.
+ * Owns a single GamesWebSocket instance. Connection status is written to the
+ * game store (single source of truth) so any component can read it.
  */
 
 import { useRef, useState, useCallback } from "react";
-import { createGamesWebSocket, GamesWebSocket } from "@/websocket/games-websocket";
+import {
+  createGamesWebSocket,
+  type GamesWebSocket,
+  type GameEventHandlers,
+} from "@/websocket/games-websocket";
+import type { ConnectionStatus } from "@/websocket/websocket.types";
 import { useGameStore } from "@/store/game-store";
 
-interface UseConnectionOptions {
+export interface ConnectOptions {
   token?: string;
-  enabled?: boolean;
+  handlers: GameEventHandlers;
   onConnect?: () => void;
-  onDisconnect?: () => void;
-  onConnectError?: (error: Error) => void;
-  onReconnecting?: (attempt: number) => void;
 }
 
-export function useConnection(options: UseConnectionOptions) {
-  const {
-    token,
-    enabled = true,
-    onConnect,
-    onDisconnect,
-    onConnectError,
-    onReconnecting,
-  } = options;
+export function useConnection() {
   const wsRef = useRef<GamesWebSocket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<
-    "connecting" | "connected" | "disconnected" | "error"
-  >("disconnected");
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
 
+  const connectionStatus = useGameStore((s) => s.connectionStatus);
+  const isConnected = useGameStore((s) => s.isConnected);
   const setStoreConnectionStatus = useGameStore((s) => s.setConnectionStatus);
   const setStoreConnected = useGameStore((s) => s.setConnected);
 
+  const updateStatus = useCallback(
+    (status: ConnectionStatus) => {
+      setStoreConnectionStatus(status);
+      setStoreConnected(status === "connected");
+    },
+    [setStoreConnectionStatus, setStoreConnected],
+  );
+
   const connect = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (eventConfig: Record<string, any> = {}) => {
-      if (!enabled || wsRef.current?.isConnected) return;
+    ({ token, handlers, onConnect }: ConnectOptions) => {
+      // Guard on the instance, not on `connected`: a socket that is still
+      // handshaking must not be replaced (that would leak it).
+      if (wsRef.current) return;
 
-      setConnectionStatus("connecting");
-      setStoreConnectionStatus("connecting");
+      updateStatus("connecting");
 
-      wsRef.current = createGamesWebSocket({
+      const ws = createGamesWebSocket({
+        ...handlers,
         token,
         onConnect: () => {
-          setIsConnected(true);
-          setStoreConnected(true);
-          setConnectionStatus("connected");
-          setStoreConnectionStatus("connected");
           setReconnectAttempt(0);
+          updateStatus("connected");
           onConnect?.();
         },
-        onDisconnect: () => {
-          setIsConnected(false);
-          setStoreConnected(false);
-          setConnectionStatus("disconnected");
-          setStoreConnectionStatus("disconnected");
-          onDisconnect?.();
-        },
-        onConnectError: (error) => {
-          setConnectionStatus("error");
-          setStoreConnectionStatus("error");
-          onConnectError?.(error);
-        },
+        onDisconnect: () => updateStatus("disconnected"),
+        onConnectError: () => updateStatus("error"),
         onReconnecting: (attempt) => {
           setReconnectAttempt(attempt);
-          setConnectionStatus("connecting");
-          setStoreConnectionStatus("connecting");
-          onReconnecting?.(attempt);
+          updateStatus("connecting");
         },
-        ...eventConfig,
       });
 
-      wsRef.current.connect();
+      wsRef.current = ws;
+      ws.connect();
     },
-    [
-      enabled,
-      token,
-      setStoreConnectionStatus,
-      setStoreConnected,
-      onConnect,
-      onDisconnect,
-      onConnectError,
-      onReconnecting,
-    ],
+    [updateStatus],
   );
 
   const disconnect = useCallback(() => {
     wsRef.current?.disconnect();
-    setIsConnected(false);
-    setStoreConnected(false);
-    setConnectionStatus("disconnected");
-    setStoreConnectionStatus("disconnected");
-  }, [setStoreConnected, setStoreConnectionStatus]);
+    wsRef.current = null;
+    updateStatus("disconnected");
+  }, [updateStatus]);
 
   return {
-    wsRef,
     isConnected,
     connectionStatus,
     reconnectAttempt,
