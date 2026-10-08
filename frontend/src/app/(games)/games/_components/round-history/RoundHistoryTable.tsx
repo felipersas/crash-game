@@ -3,17 +3,10 @@
 import { Hash } from 'lucide-react';
 import { formatMultiplier, formatMoney } from '@/domain/money';
 import { TableSkeleton } from '@/components/ui/Skeleton';
-
-export interface RoundHistoryItem {
-  roundId: string;
-  crashPoint: number | null;
-  crashedAt: Date | string | null;
-  totalBets: number;
-  totalWageredCents?: number;
-}
+import type { RoundSummary } from '@/types';
 
 interface RoundHistoryTableProps {
-  rounds: RoundHistoryItem[];
+  rounds: RoundSummary[];
   isLoading?: boolean;
   onVerify?: (roundId: string) => void;
   emptyMessage?: string;
@@ -96,6 +89,7 @@ export default function RoundHistoryTable({
           </span>
           <span className="text-right">
             <button
+              type="button"
               onClick={() => onVerify?.(round.roundId)}
               className="inline-flex items-center gap-1 text-xs font-terminal text-primary hover:text-primary/80 transition-colors"
             >

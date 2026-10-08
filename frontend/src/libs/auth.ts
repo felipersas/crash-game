@@ -92,8 +92,7 @@ export const authOptions: NextAuthOptions = {
   providers: [KeycloakProvider],
 
   callbacks: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async jwt({ token, account, profile, user }: any) {
+    async jwt({ token, account, profile, user }) {
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
@@ -101,7 +100,7 @@ export const authOptions: NextAuthOptions = {
         token.idToken = account.id_token;
       }
 
-      if (profile) {
+      if (profile?.sub) {
         token.playerId = profile.sub;
       }
 
@@ -111,12 +110,13 @@ export const authOptions: NextAuthOptions = {
 
       if (!token.expiresAt) return token;
 
-      const remaining =
-        (token.expiresAt as number) - Math.floor(Date.now() / 1000);
+      const remaining = token.expiresAt - Math.floor(Date.now() / 1000);
       if (remaining > 30) return token;
 
+      if (!token.refreshToken) return { ...token, error: 'RefreshAccessTokenError' };
+
       try {
-        const fresh = await refreshAccessToken(token.refreshToken as string);
+        const fresh = await refreshAccessToken(token.refreshToken);
         return { ...token, ...fresh, error: undefined };
       } catch {
         return { ...token, error: 'RefreshAccessTokenError' };
@@ -124,12 +124,12 @@ export const authOptions: NextAuthOptions = {
     },
 
     async session({ session, token }) {
-      session.accessToken = token.accessToken as string;
-      session.playerId = token.playerId as string;
-      session.idToken = token.idToken as string;
-      session.error = token.error as string | undefined;
-      session.user.username = token.username as string | undefined;
-      session.user.playerId = token.playerId as string | undefined;
+      session.accessToken = token.accessToken;
+      session.playerId = token.playerId;
+      session.idToken = token.idToken;
+      session.error = token.error;
+      session.user.username = token.username;
+      session.user.playerId = token.playerId;
       return session;
     },
   },

@@ -195,7 +195,7 @@ describe('useMyBets', () => {
     it('enables query only when session has accessToken', async () => {
       vi.mocked(get).mockResolvedValueOnce(mockResponse);
 
-      const { result } = renderHookWithProviders(() => useMyBets());
+      renderHookWithProviders(() => useMyBets());
 
       // The test helpers provide a session with accessToken
       // So the query should be enabled and fetch data

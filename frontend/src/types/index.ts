@@ -1,5 +1,6 @@
 export {
   RoundStatus,
+  type Phase,
   type Round,
   type RoundSummary,
   type PaginationMeta,

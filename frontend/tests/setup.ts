@@ -93,8 +93,6 @@ vi.stubGlobal('ResizeObserver', vi.fn().mockImplementation(() => ({
 vi.mock('@/libs/axios', () => ({
   get: vi.fn(),
   post: vi.fn(),
-  put: vi.fn(),
-  del: vi.fn(),
   apiClient: {
     interceptors: {
       request: { use: vi.fn(), eject: vi.fn() },
