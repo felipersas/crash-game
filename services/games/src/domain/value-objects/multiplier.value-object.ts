@@ -1,3 +1,5 @@
+import { InvalidMultiplierError } from '../errors/domain.errors';
+
 /**
  * Multiplier Value Object - Represents the current game multiplier.
  *
@@ -25,7 +27,7 @@ export class Multiplier {
    */
   static fromValue(value: number): Multiplier {
     if (value < Multiplier.MIN_VALUE) {
-      throw new Error(`Multiplier must be at least ${Multiplier.MIN_VALUE}`);
+      throw new InvalidMultiplierError(value, Multiplier.MIN_VALUE);
     }
     return new Multiplier(value);
   }
@@ -44,8 +46,7 @@ export class Multiplier {
    * - 10.00x at t=39s
    */
   static afterDuration(seconds: number, growthRate: number = 0.06): Multiplier {
-    const value = Math.exp(growthRate * seconds);
-    return new Multiplier(value);
+    return new Multiplier(Math.exp(growthRate * Math.max(0, seconds)));
   }
 
   /**
@@ -70,19 +71,27 @@ export class Multiplier {
   }
 
   /**
-   * Calculate potential winnings for a bet amount.
+   * Calculate total payout (bet + winning), truncated to whole cents.
+   * The multiplier is truncated to hundredths first (2.019x pays as 2.01x).
    */
-  calculateWinning(betCents: bigint): bigint {
-    // Integer arithmetic: profit = floor(bet * (multiplier - 1))
-    const profitMultiplier = Math.floor((this.value - 1) * 100);
-    return (betCents * BigInt(profitMultiplier)) / 100n;
+  calculatePayout(betCents: bigint): bigint {
+    return (betCents * this.toHundredths()) / 100n;
   }
 
   /**
-   * Calculate total payout (bet + winning).
+   * Calculate the profit portion of the payout.
    */
-  calculatePayout(betCents: bigint): bigint {
-    return betCents + this.calculateWinning(betCents);
+  calculateWinning(betCents: bigint): bigint {
+    return this.calculatePayout(betCents) - betCents;
+  }
+
+  /**
+   * Multiplier truncated to whole hundredths as an integer (2.019 → 201).
+   * Rounds at 1e-6 first so float representation error (2.01 * 100 = 200.999…)
+   * cannot drop a hundredth.
+   */
+  private toHundredths(): bigint {
+    return BigInt(Math.floor(Math.round(this.value * 1_000_000) / 10_000));
   }
 
   /**

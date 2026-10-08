@@ -1,35 +1,29 @@
-import { type BetStatus } from '@/domain/entities/bet.entity';
+import { DomainError, type Money } from '@crash/domain';
 
 /**
  * Domain-specific exceptions for the Games bounded context.
- * All domain errors extend this base class for consistent error handling.
  *
  * Each error carries a stable `code` string for frontend consumption
  * and a user-friendly `message` (no internal IDs/UUIDs).
  */
 
-export class DomainError extends Error {
-  public readonly code: string;
-
-  constructor(message: string, code: string) {
-    super(message);
-    this.name = this.constructor.name;
-    this.code = code;
-    Object.setPrototypeOf(this, new.target.prototype);
-  }
-}
+export { DomainError };
 
 export class BetBelowMinimumError extends DomainError {
-  constructor(amount: bigint) {
-    const cents = Number(amount) / 100;
-    super(`Bet amount $${cents.toFixed(2)} is below minimum of $1.00`, 'BET_BELOW_MINIMUM');
+  constructor(amount: Money, minimum: Money) {
+    super(
+      `Bet amount $${amount.toDecimal()} is below minimum of $${minimum.toDecimal()}`,
+      'BET_BELOW_MINIMUM',
+    );
   }
 }
 
 export class BetAboveMaximumError extends DomainError {
-  constructor(amount: bigint) {
-    const cents = Number(amount) / 100;
-    super(`Bet amount $${cents.toFixed(2)} exceeds maximum of $1,000.00`, 'BET_ABOVE_MAXIMUM');
+  constructor(amount: Money, maximum: Money) {
+    super(
+      `Bet amount $${amount.toDecimal()} exceeds maximum of $${maximum.toDecimal()}`,
+      'BET_ABOVE_MAXIMUM',
+    );
   }
 }
 
@@ -57,12 +51,6 @@ export class RoundAlreadyCrashedError extends DomainError {
   }
 }
 
-export class BetAlreadyCashedOutError extends DomainError {
-  constructor() {
-    super('This bet has already been cashed out', 'BET_ALREADY_CASHED_OUT');
-  }
-}
-
 export class RoundNotFoundError extends DomainError {
   constructor() {
     super('Round not found', 'ROUND_NOT_FOUND');
@@ -75,21 +63,27 @@ export class BetNotFoundError extends DomainError {
   }
 }
 
-export class RoundAlreadyExistsError extends DomainError {
-  constructor() {
-    super('Round already exists', 'ROUND_ALREADY_EXISTS');
-  }
-}
-
 export class InvalidSeedError extends DomainError {
   constructor(seed: string) {
     super(`Invalid seed: ${seed}`, 'INVALID_SEED');
   }
 }
 
-export class VerificationFailedError extends DomainError {
+export class SeedChainExhaustedError extends DomainError {
   constructor() {
-    super('Verification failed for this round', 'VERIFICATION_FAILED');
+    super('Seed chain exhausted - generate a new chain', 'SEED_CHAIN_EXHAUSTED');
+  }
+}
+
+export class InvalidMultiplierError extends DomainError {
+  constructor(value: number, minimum: number) {
+    super(`Multiplier ${value} must be at least ${minimum}`, 'INVALID_MULTIPLIER');
+  }
+}
+
+export class InvalidCrashPointError extends DomainError {
+  constructor(value: number, minimum: number) {
+    super(`Crash point ${value} must be at least ${minimum}`, 'INVALID_CRASH_POINT');
   }
 }
 
@@ -100,7 +94,7 @@ export class OptimisticLockError extends DomainError {
 }
 
 export class InvalidBetStateError extends DomainError {
-  constructor(currentState: BetStatus, attemptedAction: string) {
+  constructor(currentState: string, attemptedAction: string) {
     super(`Cannot ${attemptedAction} a bet in ${currentState} state`, 'INVALID_BET_STATE');
   }
 }

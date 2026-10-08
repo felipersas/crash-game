@@ -10,6 +10,8 @@
 
 import { describe, test, expect } from 'bun:test';
 import { SeedChain } from '../../src/domain/value-objects/seed-chain.value-object';
+import { SeedChainExhaustedError } from '../../src/domain/errors/domain.errors';
+import { bytesToHex, hexToBytes, sha256, sha256Hex } from '../../src/domain/crypto/sha256';
 
 describe('SeedChain Value Object', () => {
   describe('Generation', () => {
@@ -43,6 +45,25 @@ describe('SeedChain Value Object', () => {
 
       expect(chain1.getSeed()).toBe(chain2.getSeed());
       expect(chain1.getCurrentSeedHash()).toBe(chain2.getCurrentSeedHash());
+    });
+
+    test('should derive the oldest seed as SHA-256 of the deterministic string', async () => {
+      const chain = await SeedChain.generateDeterministic('test-seed', 3);
+      const { seeds } = chain.toPersistence();
+
+      const expected = bytesToHex(await sha256(new TextEncoder().encode('test-seed')));
+      expect(seeds[seeds.length - 1]).toBe(expected);
+    });
+
+    test('should link every seed to the next one: seeds[i] = H(seeds[i + 1])', async () => {
+      const chain = await SeedChain.generate(5);
+      const { seeds, commitment } = chain.toPersistence();
+
+      expect(seeds).toHaveLength(5);
+      for (let i = 0; i < seeds.length - 1; i++) {
+        expect(await sha256Hex(seeds[i + 1])).toBe(seeds[i]);
+      }
+      expect(commitment).toBe(await sha256Hex(seeds[0]));
     });
 
     test('should produce different chains for different seed strings', async () => {
@@ -94,6 +115,41 @@ describe('SeedChain Value Object', () => {
       expect(chain1.getSeed()).not.toBe(chain3.getSeed());
     });
 
+    test('should commit to each seed before it is used', async () => {
+      let chain = await SeedChain.generate(4);
+
+      for (let i = 0; i < 4; i++) {
+        expect(await SeedChain.verifySeed(chain.getSeed(), chain.getCurrentSeedHash())).toBe(true);
+        if (i < 3) chain = chain.advance();
+      }
+    });
+
+    test('should not mutate the original chain on advance', async () => {
+      const chain = await SeedChain.generate(3);
+      const seed = chain.getSeed();
+
+      chain.advance();
+
+      expect(chain.getSeed()).toBe(seed);
+      expect(chain.getCurrentPosition()).toBe(0);
+    });
+
+    test('should throw SeedChainExhaustedError when advancing past the last seed', async () => {
+      const last = (await SeedChain.generate(2)).advance();
+
+      expect(() => last.advance()).toThrow(SeedChainExhaustedError);
+    });
+
+    test('should throw SeedChainExhaustedError when the position is past the end', () => {
+      const chain = SeedChain.fromPersistence({
+        seeds: ['a'.repeat(64)],
+        current: 1,
+        commitment: 'b'.repeat(64),
+      });
+
+      expect(() => chain.getSeed()).toThrow(SeedChainExhaustedError);
+    });
+
     test('should decrease remaining count on advance', async () => {
       const chain = await SeedChain.generate(10);
       const remaining1 = chain.getRemainingCount();
@@ -118,7 +174,7 @@ describe('SeedChain Value Object', () => {
     test('should restore from persistence data', async () => {
       const original = await SeedChain.generate();
       const data = original.toPersistence();
-      const restored = SeedChain.fromPersistence(data);
+      const restored = SeedChain.fromPersistence({ ...data, seeds: [...data.seeds] });
 
       expect(restored.getSeed()).toBe(original.getSeed());
       expect(restored.getCurrentSeedHash()).toBe(original.getCurrentSeedHash());
@@ -172,16 +228,50 @@ describe('SeedChain Value Object', () => {
       expect(advanced.getCurrentPosition()).toBe(1);
     });
 
-    test('should report needs regeneration when low', async () => {
-      // Create chain with 2 seeds and advance once
-      const chain = await SeedChain.generate(2);
+    test('should report needs regeneration when less than 10% of seeds remain', async () => {
+      let chain = await SeedChain.generate(10);
+      for (let i = 0; i < 8; i++) chain = chain.advance();
+      expect(chain.getRemainingCount()).toBe(2);
       expect(chain.needsRegeneration()).toBe(false);
 
-      // Advance to last seed
-      const advanced = chain.advance();
-      // Remaining is 1 out of 2 = 50% remaining. With threshold at 10%, not needed yet
-      // But we can test the method works
-      expect(typeof advanced.needsRegeneration()).toBe('boolean');
+      chain = chain.advance();
+      expect(chain.getRemainingCount()).toBe(1);
+      expect(chain.needsRegeneration()).toBe(true);
+    });
+
+    test('should summarize without exposing seeds', async () => {
+      const chain = await SeedChain.generate(10);
+
+      const summary = chain.getSummary();
+
+      expect(summary).toEqual({
+        currentPosition: 0,
+        remaining: 10,
+        total: 10,
+        commitment: chain.getCommitment(),
+        needsRegeneration: false,
+      });
+      expect(JSON.stringify(summary)).not.toContain(chain.getSeed());
+    });
+  });
+
+  describe('sha256 helpers', () => {
+    test('should round-trip hex and bytes', () => {
+      const hex = '00ff10ab';
+
+      expect(Array.from(hexToBytes(hex))).toEqual([0x00, 0xff, 0x10, 0xab]);
+      expect(bytesToHex(hexToBytes(hex))).toBe(hex);
+    });
+
+    test('should hash the bytes of a hex value (not its text)', async () => {
+      // SHA-256 of the empty byte string
+      expect(await sha256Hex('')).toBe(
+        'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      );
+      // SHA-256 of the single byte 0x00
+      expect(await sha256Hex('00')).toBe(
+        '6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d',
+      );
     });
   });
 });
