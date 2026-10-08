@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { AutoCashOutRepository } from '../../../src/infrastructure/redis/auto-cashout.repository';
+import { RedisAutoCashOutRepository } from '../../../src/infrastructure/redis/auto-cashout.repository';
 
 function mockFn<T extends (...args: any[]) => any>(impl?: T) {
   const fn: any = (...args: any[]) => {
@@ -23,13 +23,13 @@ function createMockRedis(overrides: Record<string, any> = {}) {
   };
 }
 
-describe('AutoCashOutRepository', () => {
+describe('RedisAutoCashOutRepository', () => {
   let redis: ReturnType<typeof createMockRedis>;
-  let repo: AutoCashOutRepository;
+  let repo: RedisAutoCashOutRepository;
 
   beforeEach(() => {
     redis = createMockRedis();
-    repo = new AutoCashOutRepository(redis as any);
+    repo = new RedisAutoCashOutRepository(redis as any);
   });
 
   test('should add player to sorted set', async () => {
@@ -51,7 +51,7 @@ describe('AutoCashOutRepository', () => {
         ['player-2', '3.0'],
       ]),
     });
-    repo = new AutoCashOutRepository(redis as any);
+    repo = new RedisAutoCashOutRepository(redis as any);
 
     const eligible = await repo.fetchAndRemoveEligible('round-1', 3.0);
     expect(eligible).toEqual([
@@ -59,11 +59,15 @@ describe('AutoCashOutRepository', () => {
       { playerId: 'player-2', targetMultiplier: 3.0 },
     ]);
     expect(redis.eval._calls).toHaveLength(1);
+    const [, numKeys, key, maxScore] = redis.eval._calls[0];
+    expect(numKeys).toBe(1);
+    expect(key).toBe('round:round-1:cashouts');
+    expect(maxScore).toBe('3');
   });
 
   test('should return empty array when no eligible players', async () => {
     redis = createMockRedis({ eval: mockFn(() => []) });
-    repo = new AutoCashOutRepository(redis as any);
+    repo = new RedisAutoCashOutRepository(redis as any);
 
     const eligible = await repo.fetchAndRemoveEligible('round-1', 1.5);
     expect(eligible).toEqual([]);
@@ -71,7 +75,7 @@ describe('AutoCashOutRepository', () => {
 
   test('should acquire idempotency lock', async () => {
     redis = createMockRedis({ set: mockFn(() => 'OK') });
-    repo = new AutoCashOutRepository(redis as any);
+    repo = new RedisAutoCashOutRepository(redis as any);
 
     const acquired = await repo.acquireLock('round-1', 'player-1');
     expect(acquired).toBe(true);
@@ -80,7 +84,7 @@ describe('AutoCashOutRepository', () => {
 
   test('should fail to acquire lock if already held', async () => {
     redis = createMockRedis({ set: mockFn(() => null) });
-    repo = new AutoCashOutRepository(redis as any);
+    repo = new RedisAutoCashOutRepository(redis as any);
 
     const acquired = await repo.acquireLock('round-1', 'player-1');
     expect(acquired).toBe(false);
@@ -92,21 +96,56 @@ describe('AutoCashOutRepository', () => {
     const [key, value, ...rest] = redis.set._calls[0];
     expect(key).toBe('cashout:result:round-1:player-1');
     expect(JSON.parse(value)).toEqual({ multiplier: 2.5, payoutCents: '2500' });
+    expect(rest).toEqual(['EX', 300]);
   });
 
   test('should get cached result', async () => {
     redis = createMockRedis({
       get: mockFn(() => JSON.stringify({ multiplier: 2.5, payoutCents: '2500' })),
     });
-    repo = new AutoCashOutRepository(redis as any);
+    repo = new RedisAutoCashOutRepository(redis as any);
 
     const result = await repo.getCachedResult('round-1', 'player-1');
     expect(result).toEqual({ multiplier: 2.5, payoutCents: 2500n });
   });
 
+  test('should round-trip a cached result without losing bigint precision', async () => {
+    const store = new Map<string, string>();
+    redis = createMockRedis({
+      set: mockFn((key: string, value: string) => {
+        store.set(key, value);
+        return 'OK';
+      }),
+      get: mockFn((key: string) => store.get(key) ?? null),
+    });
+    repo = new RedisAutoCashOutRepository(redis as any);
+    const payoutCents = 9_007_199_254_740_993n; // > Number.MAX_SAFE_INTEGER
+
+    await repo.cacheResult('round-1', 'player-1', { multiplier: 2.5, payoutCents });
+
+    expect(await repo.getCachedResult('round-1', 'player-1')).toEqual({
+      multiplier: 2.5,
+      payoutCents,
+    });
+  });
+
+  test('should return null for a corrupted cached result', async () => {
+    redis = createMockRedis({ get: mockFn(() => 'not-json') });
+    repo = new RedisAutoCashOutRepository(redis as any);
+
+    expect(await repo.getCachedResult('round-1', 'player-1')).toBeNull();
+  });
+
+  test('should return null for a cached value without multiplier', async () => {
+    redis = createMockRedis({ get: mockFn(() => JSON.stringify({ payoutCents: '2500' })) });
+    repo = new RedisAutoCashOutRepository(redis as any);
+
+    expect(await repo.getCachedResult('round-1', 'player-1')).toBeNull();
+  });
+
   test('should return null when no cached result', async () => {
     redis = createMockRedis({ get: mockFn(() => null) });
-    repo = new AutoCashOutRepository(redis as any);
+    repo = new RedisAutoCashOutRepository(redis as any);
 
     const result = await repo.getCachedResult('round-1', 'player-1');
     expect(result).toBeNull();

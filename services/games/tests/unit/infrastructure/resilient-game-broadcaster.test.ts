@@ -1,114 +1,108 @@
-import { describe, test, expect, mock } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import { ResilientGameBroadcaster } from '@/infrastructure/websocket/resilient-game-broadcaster';
-import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
+import type {
+  BetBroadcast,
+  BetCancelledBroadcast,
+  CrashBroadcast,
+  IGameBroadcaster,
+  PlayerCashedOutBroadcast,
+  RoundStartedBroadcast,
+} from '@/application/interfaces/game-broadcaster';
+import { createMockBroadcaster } from '../../helpers/mocks';
 
-function createThrowingGateway(overrides: Partial<IGameBroadcaster> = {}): IGameBroadcaster {
-  return {
-    broadcastRoundStarted: mock(() => {}),
-    broadcastBettingEnded: mock(() => {}),
-    broadcastCrash: mock(() => {}),
-    broadcastBetPlaced: mock(() => {}),
-    broadcastBetConfirmed: mock(() => {}),
-    broadcastBetCancelled: mock(() => {}),
-    broadcastPlayerCashedOut: mock(() => {}),
-    ...overrides,
-  };
+const roundStarted: RoundStartedBroadcast = {
+  roundId: 'round-1',
+  seedHash: 'hash',
+  bettingEndTime: new Date('2026-01-01T00:00:10Z'),
+};
+const crash: CrashBroadcast = { roundId: 'round-1', crashPoint: 2.5, seed: 'seed' };
+const bet: BetBroadcast = {
+  roundId: 'round-1',
+  betId: 'bet-1',
+  playerId: 'player-1',
+  playerName: 'Player',
+  amountCents: 100n,
+};
+const betCancelled: BetCancelledBroadcast = { ...bet, reason: 'Insufficient funds' };
+const cashedOut: PlayerCashedOutBroadcast = {
+  roundId: 'round-1',
+  betId: 'bet-1',
+  playerId: 'player-1',
+  playerName: 'Player',
+  multiplier: 2.5,
+  payoutCents: 250n,
+};
+
+type Method = keyof IGameBroadcaster;
+
+/** Every broadcaster method with the arguments it is called with. */
+const CALLS: Array<[Method, unknown[]]> = [
+  ['broadcastRoundStarted', [roundStarted]],
+  ['broadcastBettingEnded', ['round-1']],
+  ['broadcastMultiplierUpdate', ['round-1', 1.23]],
+  ['broadcastCrash', [crash]],
+  ['broadcastBetPlaced', [bet]],
+  ['broadcastBetConfirmed', [bet]],
+  ['broadcastBetCancelled', [betCancelled]],
+  ['broadcastPlayerCashedOut', [cashedOut]],
+];
+
+function invoke(target: IGameBroadcaster, method: Method, args: unknown[]): void {
+  (target[method] as (...a: unknown[]) => void)(...args);
 }
 
 describe('ResilientGameBroadcaster', () => {
-  test('should not throw when gateway throws on broadcastRoundStarted', () => {
-    const gateway = createThrowingGateway({
-      broadcastRoundStarted: mock(() => {
-        throw new Error('WS error');
-      }),
-    });
-    const broadcaster = new ResilientGameBroadcaster(gateway);
+  let gateway: ReturnType<typeof createMockBroadcaster>;
+  let broadcaster: ResilientGameBroadcaster;
 
-    expect(() => broadcaster.broadcastRoundStarted('round-1', 'hash', new Date())).not.toThrow();
+  beforeEach(() => {
+    gateway = createMockBroadcaster();
+    broadcaster = new ResilientGameBroadcaster(gateway);
+    // Silence the error log produced by the swallowed failures
+    (broadcaster as unknown as { logger: { error: () => void } }).logger.error = () => {};
   });
 
-  test('should not throw when gateway throws on broadcastBetPlaced', () => {
-    const gateway = createThrowingGateway({
-      broadcastBetPlaced: mock(() => {
-        throw new Error('WS error');
-      }),
-    });
-    const broadcaster = new ResilientGameBroadcaster(gateway);
+  for (const [method, args] of CALLS) {
+    test(`${method} should delegate the payload to the gateway unchanged`, () => {
+      invoke(broadcaster, method, args);
 
-    expect(() =>
-      broadcaster.broadcastBetPlaced('round-1', 'bet-1', 'player-1', 'Player', 100n),
-    ).not.toThrow();
+      expect(gateway[method].callCount).toBe(1);
+      expect(gateway[method].calls[0]).toEqual(args as never);
+    });
+
+    test(`${method} should not throw when the gateway throws`, () => {
+      gateway[method].mockImplementation(() => {
+        throw new Error('WS error');
+      });
+
+      expect(() => invoke(broadcaster, method, args)).not.toThrow();
+      expect(gateway[method].callCount).toBe(1);
+    });
+  }
+
+  test('should log the failure with the broadcast label', () => {
+    const logged: unknown[][] = [];
+    (broadcaster as unknown as { logger: { error: (...a: unknown[]) => void } }).logger.error = (
+      ...a
+    ) => logged.push(a);
+    const error = new Error('WS error');
+    gateway.broadcastCrash.mockImplementation(() => {
+      throw error;
+    });
+
+    broadcaster.broadcastCrash(crash);
+
+    expect(logged).toEqual([['Failed to broadcast crash', error]]);
   });
 
-  test('should not throw when gateway throws on broadcastBetConfirmed', () => {
-    const gateway = createThrowingGateway({
-      broadcastBetConfirmed: mock(() => {
-        throw new Error('WS error');
-      }),
+  test('should keep broadcasting after a failure', () => {
+    gateway.broadcastMultiplierUpdate.mockImplementation(() => {
+      throw new Error('WS error');
     });
-    const broadcaster = new ResilientGameBroadcaster(gateway);
 
-    expect(() =>
-      broadcaster.broadcastBetConfirmed('round-1', 'bet-1', 'player-1', 'Player', 100n),
-    ).not.toThrow();
-  });
+    broadcaster.broadcastMultiplierUpdate('round-1', 1.5);
+    broadcaster.broadcastCrash(crash);
 
-  test('should not throw when gateway throws on broadcastBetCancelled', () => {
-    const gateway = createThrowingGateway({
-      broadcastBetCancelled: mock(() => {
-        throw new Error('WS error');
-      }),
-    });
-    const broadcaster = new ResilientGameBroadcaster(gateway);
-
-    expect(() =>
-      broadcaster.broadcastBetCancelled('round-1', 'bet-1', 'player-1', 'Player', 100n, 'reason'),
-    ).not.toThrow();
-  });
-
-  test('should not throw when gateway throws on broadcastPlayerCashedOut', () => {
-    const gateway = createThrowingGateway({
-      broadcastPlayerCashedOut: mock(() => {
-        throw new Error('WS error');
-      }),
-    });
-    const broadcaster = new ResilientGameBroadcaster(gateway);
-
-    expect(() =>
-      broadcaster.broadcastPlayerCashedOut('round-1', 'bet-1', 'player-1', 'Player', 2.5, 250n),
-    ).not.toThrow();
-  });
-
-  test('should not throw when gateway throws on broadcastBettingEnded', () => {
-    const gateway = createThrowingGateway({
-      broadcastBettingEnded: mock(() => {
-        throw new Error('WS error');
-      }),
-    });
-    const broadcaster = new ResilientGameBroadcaster(gateway);
-
-    expect(() => broadcaster.broadcastBettingEnded('round-1')).not.toThrow();
-  });
-
-  test('should not throw when gateway throws on broadcastCrash', () => {
-    const gateway = createThrowingGateway({
-      broadcastCrash: mock(() => {
-        throw new Error('WS error');
-      }),
-    });
-    const broadcaster = new ResilientGameBroadcaster(gateway);
-
-    expect(() => broadcaster.broadcastCrash('round-1', 2.5, 'seed')).not.toThrow();
-  });
-
-  test('should delegate to gateway when no error occurs', () => {
-    const gateway = createThrowingGateway();
-    const broadcaster = new ResilientGameBroadcaster(gateway);
-
-    broadcaster.broadcastBetPlaced('round-1', 'bet-1', 'player-1', 'Player', 100n);
-    broadcaster.broadcastCrash('round-1', 2.5, 'seed');
-
-    expect(gateway.broadcastBetPlaced).toHaveBeenCalledTimes(1);
-    expect(gateway.broadcastCrash).toHaveBeenCalledTimes(1);
+    expect(gateway.broadcastCrash.callCount).toBe(1);
   });
 });

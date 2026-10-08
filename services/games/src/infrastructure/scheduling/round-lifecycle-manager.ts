@@ -1,377 +1,243 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { createHash } from 'crypto';
-import { Cron } from '@nestjs/schedule';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
 import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
 import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { ISeedChainRepository } from '@/application/interfaces/seed-chain.repository';
-import { GamesGateway } from '@/infrastructure/websocket/games.gateway';
+import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
+import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
+import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import {
   ROUND_REPOSITORY,
-  GAMES_GATEWAY,
   SEED_CHAIN_REPOSITORY,
   AUTO_CASHOUT_REPOSITORY,
-  ROUND_CACHE_REPOSITORY,
+  GAME_BROADCASTER,
 } from '@/application/di.tokens';
-import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
-import type { RoundCacheRepository } from '@/infrastructure/redis/round-cache.repository';
-import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
 import { CreateRoundUseCase } from '@/application/use-cases/create-round.use-case';
 import { StartRoundUseCase } from '@/application/use-cases/start-round.use-case';
 import { CrashRoundUseCase } from '@/application/use-cases/crash-round.use-case';
+import { CASHOUT_QUEUE } from '@/infrastructure/di.tokens';
+import type { AutoCashOutJobData } from '@/infrastructure/workers/auto-cashout.worker';
+import { deterministicUuid } from './deterministic-uuid';
+
+const SEED_CHAIN_SIZE = 1000;
+const MULTIPLIER_TICK_MS = 100;
+const NEXT_ROUND_DELAY_MS = 5000;
 
 /**
  * Round Lifecycle Manager - Infrastructure Layer
  *
- * Thin orchestrator for the round lifecycle:
- * 1. Creates new rounds (delegates persistence to CreateRoundUseCase)
- * 2. Transitions BETTING → ACTIVE (delegates to StartRoundUseCase)
- * 3. Updates multiplier during ACTIVE phase
- * 4. Detects crash and delegates to CrashRoundUseCase
- * 5. Broadcasts multiplier updates via WebSocket
+ * Drives the game loop and owns the live (in-memory) round:
+ * 1. Creates rounds from the provably fair seed chain (CreateRoundUseCase)
+ * 2. Transitions BETTING → ACTIVE when the betting window closes (StartRoundUseCase)
+ * 3. Ticks the multiplier, dispatches auto cash-outs and pushes updates
+ * 4. Persists the crash (CrashRoundUseCase) and schedules the next round
  */
-
 @Injectable()
-export class RoundLifecycleManager implements IRoundStateProvider {
+export class RoundLifecycleManager implements IRoundStateProvider, OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RoundLifecycleManager.name);
   private currentRound: Round | null = null;
-  private currentSeedChain: SeedChain | null = null;
-  private roundStartTime: Date | null = null;
-  private updateInterval: NodeJS.Timeout | null = null;
-  private bettingEndTimeout: NodeJS.Timeout | null = null;
+  private seedChain: SeedChain | null = null;
+  private multiplierInterval: NodeJS.Timeout | null = null;
+  private pendingTimeout: NodeJS.Timeout | null = null;
+  private ticking = false;
 
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(SEED_CHAIN_REPOSITORY) private readonly seedChainRepository: ISeedChainRepository,
-    @Inject(GAMES_GATEWAY) private readonly gamesGateway: GamesGateway,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepository: IAutoCashOutRepository,
+    @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
     private readonly createRoundUseCase: CreateRoundUseCase,
     private readonly startRoundUseCase: StartRoundUseCase,
     private readonly crashRoundUseCase: CrashRoundUseCase,
-    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
-    @Inject(ROUND_CACHE_REPOSITORY) private readonly roundCacheRepo: RoundCacheRepository,
-    @InjectQueue('cashout') private readonly cashoutQueue: Queue,
+    @InjectQueue(CASHOUT_QUEUE) private readonly cashoutQueue: Queue<AutoCashOutJobData>,
   ) {}
 
-  /**
-   * Initialize the round lifecycle manager.
-   * Called when the module initializes.
-   */
-  async onModuleInit() {
-    this.currentSeedChain = await this.seedChainRepository.load();
+  async onModuleInit(): Promise<void> {
+    this.seedChain = await this.loadSeedChain();
 
-    if (!this.currentSeedChain) {
-      this.logger.log('No seed chain found, generating new chain...');
-      this.currentSeedChain = await SeedChain.generate(1000, process.env.DETERMINISTIC_SEED);
-      await this.seedChainRepository.save(this.currentSeedChain);
-
-      const summary = this.currentSeedChain.getSummary();
-      this.logger.log(
-        `New seed chain created: ${summary.total} seeds, ` +
-          `commitment: ${summary.commitment.substring(0, 16)}...`,
-      );
-    } else {
-      const summary = this.currentSeedChain.getSummary();
-      this.logger.log(
-        `Seed chain loaded: ${summary.remaining}/${summary.total} seeds remaining, ` +
-          `position: ${summary.currentPosition}`,
-      );
-
-      // Check if chain needs regeneration
-      if (this.currentSeedChain.needsRegeneration()) {
-        this.logger.warn('Seed chain running low, consider regeneration');
-      }
-    }
-
-    this.currentRound = await this.roundRepository.findCurrentRound();
-
-    if (!this.currentRound) {
+    const round = await this.roundRepository.findCurrentRound();
+    if (!round || round.getStatus() === RoundStatus.CRASHED) {
       await this.createNewRound();
     } else {
-      this.logger.log(`Resumed existing round: ${this.currentRound.id}`);
-      this.resumeRound();
+      this.logger.log(`Resuming round ${round.id} in ${round.getStatus()} phase`);
+      this.currentRound = round;
+      this.resumeRound(round);
     }
   }
 
-  /**
-   * Create a new round using the current seed from the chain.
-   */
-  async createNewRound() {
-    this.logger.log('Creating new round...');
-
-    if (!this.currentSeedChain) {
-      throw new Error('Seed chain not initialized');
-    }
-
-    // Check if chain needs regeneration
-    if (this.currentSeedChain.needsRegeneration()) {
-      this.logger.warn('Seed chain running low, regenerating...');
-      this.currentSeedChain = await SeedChain.generate(1000, process.env.DETERMINISTIC_SEED);
-      await this.seedChainRepository.save(this.currentSeedChain);
-
-      const summary = this.currentSeedChain.getSummary();
-      this.logger.log(
-        `New seed chain generated: ${summary.total} seeds, ` +
-          `commitment: ${summary.commitment.substring(0, 16)}...`,
-      );
-    }
-
-    const newRound = await Round.createWithSeedChain(this.currentSeedChain, DEFAULT_ROUND_CONFIG);
-
-    const { round } = await this.createRoundUseCase.execute({ round: newRound });
-
-    try {
-      this.currentSeedChain = this.currentSeedChain.advance();
-      await this.seedChainRepository.save(this.currentSeedChain);
-    } catch (error) {
-      this.logger.error(
-        `Failed to advance seed chain: ${error instanceof Error ? error.message : error}`,
-      );
-    }
-
-    this.currentRound = round;
-
-    try {
-      await this.roundCacheRepo.setCurrentRound({
-        roundId: round.id,
-        status: 'betting',
-        multiplier: 1.0,
-      });
-    } catch (error) {
-      this.logger.error('Failed to set round cache on new round', error);
-    }
-
-    this.scheduleBettingEnd();
-
-    this.logger.log(`Round ${round.id} started in BETTING phase`);
-  }
-
-  /**
-   * Resume an existing round (after server restart).
-   */
-  private async resumeRound() {
-    if (!this.currentRound) return;
-
-    const status = this.currentRound.getStatus();
-
-    if (status === RoundStatus.CRASHED) {
-      // Round crashed while server was down - create new round immediately
-      this.logger.log(`Current round ${this.currentRound.id} is CRASHED, creating new round`);
-      await this.createNewRound();
-    } else if (status === RoundStatus.BETTING) {
-      // Check if betting phase should have ended
-      const bettingEndTime = this.currentRound.getBettingEndTime();
-      if (bettingEndTime && bettingEndTime < new Date()) {
-        this.endBettingPhase();
-      } else {
-        this.scheduleBettingEnd();
-      }
-    } else if (status === RoundStatus.ACTIVE) {
-      // Resume active round
-      this.roundStartTime = this.currentRound.getStartedAt() || new Date();
-      this.startMultiplierUpdates();
+  onModuleDestroy(): void {
+    this.stopTicking();
+    if (this.pendingTimeout) {
+      clearTimeout(this.pendingTimeout);
     }
   }
 
-  /**
-   * Schedule the transition from BETTING to ACTIVE.
-   */
-  private scheduleBettingEnd() {
-    const bettingEndTime = this.currentRound?.getBettingEndTime();
-    if (!bettingEndTime) return;
-
-    const delay = bettingEndTime.getTime() - Date.now();
-    if (delay <= 0) {
-      this.endBettingPhase();
-      return;
-    }
-
-    this.bettingEndTimeout = setTimeout(() => {
-      this.endBettingPhase();
-    }, delay);
-  }
-
-  /**
-   * End the betting phase and start the round.
-   * Delegates to StartRoundUseCase which handles optimistic lock conflicts.
-   */
-  private async endBettingPhase() {
-    if (!this.currentRound) return;
-
-    this.logger.log(`Ending betting phase for round ${this.currentRound.id}`);
-
-    const result = await this.startRoundUseCase.execute({ round: this.currentRound });
-
-    this.currentRound = result.round;
-    this.roundStartTime = this.currentRound.getStartedAt() || new Date();
-    this.startMultiplierUpdates();
-  }
-
-  /**
-   * Start periodic multiplier updates during ACTIVE phase.
-   */
-  private startMultiplierUpdates() {
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-    }
-
-    // Update every 100ms (10 times per second)
-    this.updateInterval = setInterval(() => {
-      this.updateMultiplier();
-    }, 100);
-  }
-
-  /**
-   * Update the multiplier based on elapsed time.
-   */
-  private async updateMultiplier() {
-    if (!this.currentRound || !this.roundStartTime) return;
-
-    const elapsedSeconds = (Date.now() - this.roundStartTime.getTime()) / 1000;
-    this.currentRound.updateMultiplier(elapsedSeconds);
-
-    const currentMultiplier = this.currentRound.getCurrentMultiplier();
-
-    // Update Redis round cache
-    try {
-      await this.roundCacheRepo.setCurrentRound({
-        roundId: this.currentRound.id,
-        status: 'active',
-        multiplier: currentMultiplier,
-      });
-    } catch (error) {
-      this.logger.error('Failed to update round cache', error);
-    }
-
-    // Process auto cash-outs via Lua script
-    try {
-      const eligible = await this.autoCashOutRepo.fetchAndRemoveEligible(
-        this.currentRound.id,
-        currentMultiplier,
-      );
-
-      if (eligible.length > 0) {
-        await this.processAutoCashOuts(eligible);
-      }
-    } catch (error) {
-      this.logger.error('Failed to process auto cash-outs', error);
-    }
-
-    this.gamesGateway.broadcastMultiplierUpdate(this.currentRound.id, currentMultiplier);
-
-    if (this.currentRound.getStatus() === RoundStatus.CRASHED) {
-      this.handleRoundCrashed();
-    }
-  }
-
-  /**
-   * Process auto cash-outs for eligible players by dispatching BullMQ jobs.
-   */
-  private async processAutoCashOuts(
-    eligible: Array<{ playerId: string; targetMultiplier: number }>,
-  ): Promise<void> {
-    if (!this.currentRound) return;
-
-    const jobs = eligible.map(({ playerId, targetMultiplier }) => ({
-      name: 'auto-cashout',
-      data: {
-        playerId,
-        roundId: this.currentRound!.id,
-        targetMultiplier,
-        idempotencyKey: this.deterministicUUID(this.currentRound!.id, playerId),
-      },
-      opts: {
-        attempts: 3,
-        backoff: { type: 'exponential' as const, delay: 500 },
-        removeOnComplete: 100,
-        removeOnFail: { age: 3600, count: 50 },
-      },
-    }));
-
-    await this.cashoutQueue.addBulk(jobs);
-    this.logger.log(
-      `Dispatched ${jobs.length} auto cash-out job(s) for round ${this.currentRound.id}`,
-    );
-  }
-
-  /**
-   * Handle round crashed — delegates to CrashRoundUseCase.
-   */
-  private async handleRoundCrashed() {
-    if (!this.currentRound) return;
-
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-      this.updateInterval = null;
-    }
-
-    const { round } = await this.crashRoundUseCase.execute({ round: this.currentRound });
-
-    this.currentRound = round;
-
-    try {
-      await this.autoCashOutRepo.clearRound(round.id);
-      await this.roundCacheRepo.clearCurrentRound();
-    } catch (error) {
-      this.logger.error('Failed to clear Redis keys on crash', error);
-    }
-
-    setTimeout(() => {
-      this.createNewRound();
-    }, 5000); // 5 second delay before next round
-  }
-
-  /**
-   * Tick method called every second for monitoring.
-   */
-  @Cron('* * * * * *', {
-    name: 'round-ticker',
-  })
-  private tick() {
-    if (!this.currentRound) return;
-
-    const status = this.currentRound.getStatus();
-
-    this.logger.debug(
-      `Round ${this.currentRound.id}: ${status}, ` +
-        `Multiplier: ${this.currentRound.getCurrentMultiplier().toFixed(2)}x, ` +
-        `Bets: ${this.currentRound.getBets().length}`,
-    );
-  }
-
-  /**
-   * Get the current round.
-   */
   getCurrentRound(): Round | null {
     return this.currentRound;
   }
 
-  /**
-   * Cleanup on module destroy.
-   */
-  onModuleDestroy() {
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
+  private async loadSeedChain(): Promise<SeedChain> {
+    const stored = await this.seedChainRepository.load();
+    if (stored && !stored.needsRegeneration()) {
+      const { remaining, total } = stored.getSummary();
+      this.logger.log(`Seed chain loaded: ${remaining}/${total} seeds remaining`);
+      return stored;
+    }
+    return this.generateSeedChain();
+  }
+
+  private async generateSeedChain(): Promise<SeedChain> {
+    const chain = await SeedChain.generate(SEED_CHAIN_SIZE, process.env.DETERMINISTIC_SEED);
+    await this.seedChainRepository.save(chain);
+    this.logger.log(
+      `New seed chain generated, commitment: ${chain.getCommitment().slice(0, 16)}...`,
+    );
+    return chain;
+  }
+
+  private async createNewRound(): Promise<void> {
+    if (!this.seedChain || this.seedChain.needsRegeneration()) {
+      this.seedChain = await this.generateSeedChain();
     }
 
-    if (this.bettingEndTimeout) {
-      clearTimeout(this.bettingEndTimeout);
+    const round = await Round.createWithSeedChain(this.seedChain, DEFAULT_ROUND_CONFIG);
+    await this.createRoundUseCase.execute({ round });
+    this.currentRound = round;
+
+    this.seedChain = this.seedChain.advance();
+    await this.seedChainRepository.save(this.seedChain);
+
+    this.logger.log(`Round ${round.id} started in BETTING phase`);
+    this.scheduleBettingEnd(round);
+  }
+
+  private resumeRound(round: Round): void {
+    if (round.getStatus() === RoundStatus.BETTING) {
+      this.scheduleBettingEnd(round);
+    } else {
+      this.startTicking();
+    }
+  }
+
+  private scheduleBettingEnd(round: Round): void {
+    const delay = Math.max(0, (round.getBettingEndTime()?.getTime() ?? 0) - Date.now());
+    this.schedule(delay, 'end betting phase', () => this.endBettingPhase());
+  }
+
+  private async endBettingPhase(): Promise<void> {
+    if (!this.currentRound) return;
+
+    const { round } = await this.startRoundUseCase.execute({ round: this.currentRound });
+    this.currentRound = round;
+    this.startTicking();
+  }
+
+  private startTicking(): void {
+    this.stopTicking();
+    this.multiplierInterval = setInterval(() => void this.tick(), MULTIPLIER_TICK_MS);
+  }
+
+  private stopTicking(): void {
+    if (this.multiplierInterval) {
+      clearInterval(this.multiplierInterval);
+      this.multiplierInterval = null;
     }
   }
 
   /**
-   * Generate a deterministic UUID v4 from input strings.
-   * Same inputs always produce the same UUID.
+   * One multiplier step. Ticks never overlap: a slow tick (Redis, queue)
+   * makes the next one skip instead of processing the crash twice.
    */
-  private deterministicUUID(...inputs: string[]): string {
-    const hex = createHash('sha256').update(inputs.join(':')).digest('hex');
-    return [
-      hex.slice(0, 8),
-      hex.slice(8, 12),
-      '4' + hex.slice(13, 16),
-      ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16) + hex.slice(17, 20),
-      hex.slice(20, 32),
-    ].join('-');
+  private async tick(): Promise<void> {
+    const round = this.currentRound;
+    const startedAt = round?.getStartedAt();
+    if (!round || !startedAt || this.ticking) return;
+
+    this.ticking = true;
+    try {
+      round.updateMultiplier((Date.now() - startedAt.getTime()) / 1000);
+      const multiplier = round.getCurrentMultiplier();
+
+      await this.dispatchAutoCashOuts(round, multiplier);
+      this.broadcaster.broadcastMultiplierUpdate(round.id, multiplier);
+
+      if (round.getStatus() === RoundStatus.CRASHED) {
+        this.stopTicking();
+        await this.finishRound(round);
+      }
+    } catch (error) {
+      this.logger.error(`Tick failed for round ${round.id}`, error);
+    } finally {
+      this.ticking = false;
+    }
+  }
+
+  private async dispatchAutoCashOuts(round: Round, multiplier: number): Promise<void> {
+    try {
+      const eligible = await this.autoCashOutRepository.fetchAndRemoveEligible(
+        round.id,
+        multiplier,
+      );
+      if (eligible.length === 0) return;
+
+      await this.cashoutQueue.addBulk(
+        eligible.map(({ playerId, targetMultiplier }) => ({
+          name: 'auto-cashout',
+          data: {
+            playerId,
+            roundId: round.id,
+            targetMultiplier,
+            idempotencyKey: deterministicUuid(round.id, playerId),
+          },
+        })),
+      );
+      this.logger.log(`Dispatched ${eligible.length} auto cash-out job(s) for round ${round.id}`);
+    } catch (error) {
+      this.logger.error('Failed to dispatch auto cash-outs', error);
+    }
+  }
+
+  private async finishRound(round: Round): Promise<void> {
+    try {
+      await this.crashRoundUseCase.execute({ round });
+    } catch (error) {
+      this.logger.error(`Failed to persist crash of round ${round.id}`, error);
+    }
+
+    try {
+      await this.autoCashOutRepository.clearRound(round.id);
+    } catch (error) {
+      this.logger.error(`Failed to clear auto cash-out targets of round ${round.id}`, error);
+    }
+
+    this.scheduleNextRound();
+  }
+
+  /**
+   * Keeps the game loop alive: a failed round creation is retried after the same delay.
+   */
+  private scheduleNextRound(): void {
+    this.schedule(NEXT_ROUND_DELAY_MS, 'create next round', async () => {
+      try {
+        await this.createNewRound();
+      } catch (error) {
+        this.scheduleNextRound();
+        throw error;
+      }
+    });
+  }
+
+  private schedule(delayMs: number, label: string, task: () => Promise<void>): void {
+    this.pendingTimeout = setTimeout(() => {
+      task().catch((error) => this.logger.error(`Failed to ${label}`, error));
+    }, delayMs);
   }
 }

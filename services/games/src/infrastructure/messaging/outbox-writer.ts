@@ -1,24 +1,22 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import { serializeEvent, type IEventPublisher, type SerializedEvent } from '@crash/messaging';
 import type { GameDomainEvent } from '@/domain/events/round.events';
-import type { IEventPublisher } from '@crash/messaging';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
-import { RABBITMQ_PUBLISHER } from '@/application/di.tokens';
+import type { PrismaTransaction } from '@/infrastructure/persistence/prisma/transaction-context';
+import { RABBITMQ_PUBLISHER } from '@/infrastructure/di.tokens';
 
-/**
- * Prisma interactive-transaction client.
- */
-export type PrismaTransaction = Prisma.TransactionClient;
+export interface OutboxEntry {
+  id: string;
+  event: SerializedEvent;
+}
 
 /**
  * OutboxWriter - Infrastructure Layer
  *
- * Serializes GameDomainEvent into outbox_events rows within a Prisma transaction.
- * The caller owns the transaction boundary — this service only writes rows.
- *
- * After the transaction commits, tryImmediatePublish() can be called to publish
- * events directly to RabbitMQ for low latency. If that fails, the OutboxProcessor
- * polling fallback will pick them up.
+ * Appends serialized events to the outbox_events table inside the caller's
+ * transaction. After commit, publishNow() pushes them to RabbitMQ for low
+ * latency; anything it cannot publish stays PENDING for the OutboxProcessor.
  */
 @Injectable()
 export class OutboxWriter {
@@ -26,80 +24,49 @@ export class OutboxWriter {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(RABBITMQ_PUBLISHER) private readonly rabbitMQPublisher: IEventPublisher,
+    @Inject(RABBITMQ_PUBLISHER) private readonly publisher: IEventPublisher,
   ) {}
 
-  async writeWithinTransaction(
+  async write(
     tx: PrismaTransaction,
     aggregateId: string,
     events: GameDomainEvent[],
-  ): Promise<string[]> {
-    if (events.length === 0) return [];
+  ): Promise<OutboxEntry[]> {
+    const entries: OutboxEntry[] = [];
 
-    const outboxIds: string[] = [];
-
-    for (const event of events) {
-      const payload = JSON.parse(
-        JSON.stringify(event, (_key, value) =>
-          typeof value === 'bigint' ? value.toString() : value,
-        ),
-      );
-
-      const outboxEvent = await tx.outboxEvent.create({
+    for (const domainEvent of events) {
+      const event = serializeEvent(domainEvent);
+      const row = await tx.outboxEvent.create({
         data: {
           aggregateId,
           eventType: event.eventType,
-          payload,
+          payload: event as Prisma.InputJsonObject,
           status: 'PENDING',
         },
+        select: { id: true },
       });
-
-      outboxIds.push(outboxEvent.id);
-
-      this.logger.debug(`Wrote outbox event: ${event.eventType} for aggregate ${aggregateId}`);
+      entries.push({ id: row.id, event });
     }
 
-    return outboxIds;
+    return entries;
   }
 
   /**
-   * Best-effort immediate publish after transaction commits.
-   *
-   * Tries to publish each event to RabbitMQ directly. On success, marks the
-   * outbox event as SENT. On failure, logs a warning and leaves the event as
-   * PENDING so the OutboxProcessor polling fallback picks it up.
-   *
-   * This method NEVER throws — it is purely best-effort.
+   * Best-effort publish after the transaction commits. Never throws.
    */
-  async tryImmediatePublish(events: GameDomainEvent[], outboxIds: string[]): Promise<void> {
-    for (let i = 0; i < events.length; i++) {
-      const event = events[i];
-      const outboxId = outboxIds[i];
-
+  async publishNow(entries: OutboxEntry[]): Promise<void> {
+    for (const { id, event } of entries) {
       try {
-        const serialized = JSON.parse(
-          JSON.stringify(event, (_key, value) =>
-            typeof value === 'bigint' ? value.toString() : value,
-          ),
-        );
-
-        await this.rabbitMQPublisher.publish(serialized);
-
+        await this.publisher.publish(event);
         await this.prisma.outboxEvent.update({
-          where: { id: outboxId },
-          data: {
-            status: 'SENT',
-            sentAt: new Date(),
-          },
+          where: { id },
+          data: { status: 'SENT', sentAt: new Date() },
         });
-
-        this.logger.debug(`Immediate publish succeeded: ${event.eventType}`);
       } catch (error: unknown) {
         this.logger.warn(
-          `Immediate publish failed for ${event.eventType} (outbox ${outboxId}), ` +
-            `falling back to polling: ${error instanceof Error ? error.message : error}`,
+          `Immediate publish failed for ${event.eventType} (outbox ${id}), falling back to polling: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
         );
-        // Leave as PENDING — OutboxProcessor will pick it up
       }
     }
   }

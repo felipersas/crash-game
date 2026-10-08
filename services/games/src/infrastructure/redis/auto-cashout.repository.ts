@@ -1,6 +1,14 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import type Redis from 'ioredis';
-import { REDIS_CLIENT } from '@/application/di.tokens';
+import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
+import { REDIS_CLIENT } from '@/infrastructure/di.tokens';
+
+const LOCK_TTL_SECONDS = 300;
+const RESULT_TTL_SECONDS = 300;
+
+const targetsKey = (roundId: string) => `round:${roundId}:cashouts`;
+const lockKey = (roundId: string, playerId: string) => `cashout:lock:${roundId}:${playerId}`;
+const resultKey = (roundId: string, playerId: string) => `cashout:result:${roundId}:${playerId}`;
 
 const LUA_FETCH_AND_REMOVE = `
 local players = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
@@ -15,18 +23,20 @@ end
 return results
 `;
 
+/**
+ * Redis-backed auto cash-out targets (sorted set scored by target multiplier)
+ * plus the lock/result cache that keeps the BullMQ worker idempotent.
+ */
 @Injectable()
-export class AutoCashOutRepository {
-  private readonly logger = new Logger(AutoCashOutRepository.name);
-
+export class RedisAutoCashOutRepository implements IAutoCashOutRepository {
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 
   async addTarget(roundId: string, playerId: string, multiplier: number): Promise<void> {
-    await this.redis.zadd(`round:${roundId}:cashouts`, multiplier, playerId);
+    await this.redis.zadd(targetsKey(roundId), multiplier, playerId);
   }
 
   async removeTarget(roundId: string, playerId: string): Promise<void> {
-    await this.redis.zrem(`round:${roundId}:cashouts`, playerId);
+    await this.redis.zrem(targetsKey(roundId), playerId);
   }
 
   async fetchAndRemoveEligible(
@@ -36,7 +46,7 @@ export class AutoCashOutRepository {
     const results = (await this.redis.eval(
       LUA_FETCH_AND_REMOVE,
       1,
-      `round:${roundId}:cashouts`,
+      targetsKey(roundId),
       currentMultiplier.toString(),
     )) as Array<[string, string]>;
 
@@ -47,15 +57,25 @@ export class AutoCashOutRepository {
   }
 
   async acquireLock(roundId: string, playerId: string): Promise<boolean> {
-    const result = await this.redis.set(`cashout:lock:${roundId}:${playerId}`, '', 'EX', 300, 'NX');
+    const result = await this.redis.set(
+      lockKey(roundId, playerId),
+      '',
+      'EX',
+      LOCK_TTL_SECONDS,
+      'NX',
+    );
     return result === 'OK';
+  }
+
+  async releaseLock(roundId: string, playerId: string): Promise<void> {
+    await this.redis.del(lockKey(roundId, playerId));
   }
 
   async getCachedResult(
     roundId: string,
     playerId: string,
   ): Promise<{ multiplier: number; payoutCents: bigint } | null> {
-    const data = await this.redis.get(`cashout:result:${roundId}:${playerId}`);
+    const data = await this.redis.get(resultKey(roundId, playerId));
     if (!data) return null;
     try {
       const parsed = JSON.parse(data);
@@ -74,14 +94,14 @@ export class AutoCashOutRepository {
     result: { multiplier: number; payoutCents: bigint },
   ): Promise<void> {
     await this.redis.set(
-      `cashout:result:${roundId}:${playerId}`,
+      resultKey(roundId, playerId),
       JSON.stringify({ multiplier: result.multiplier, payoutCents: result.payoutCents.toString() }),
       'EX',
-      300,
+      RESULT_TTL_SECONDS,
     );
   }
 
   async clearRound(roundId: string): Promise<void> {
-    await this.redis.del(`round:${roundId}:cashouts`);
+    await this.redis.del(targetsKey(roundId));
   }
 }

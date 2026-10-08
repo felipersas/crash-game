@@ -1,5 +1,7 @@
 import { IsInt, Min, Max, IsOptional, IsNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Bet, BetStatus } from '@/domain/entities/bet.entity';
+import type { PlaceBetOutput } from '@/application/use-cases/place-bet.use-case';
 
 export class PlaceBetRequestDto {
   @ApiProperty({
@@ -14,15 +16,16 @@ export class PlaceBetRequestDto {
   amount!: number;
 
   @ApiProperty({
-    description: 'Auto cash-out target multiplier (min 1.01)',
+    description: 'Auto cash-out target multiplier',
     example: 2.5,
     required: false,
-    minimum: 1.01,
+    minimum: Bet.MIN_AUTO_CASHOUT_MULTIPLIER,
+    maximum: Bet.MAX_AUTO_CASHOUT_MULTIPLIER,
   })
   @IsOptional()
   @IsNumber()
-  @Min(1.01)
-  @Max(1000)
+  @Min(Bet.MIN_AUTO_CASHOUT_MULTIPLIER)
+  @Max(Bet.MAX_AUTO_CASHOUT_MULTIPLIER)
   autoCashOutAt?: number;
 }
 
@@ -36,12 +39,19 @@ export class PlaceBetResponseDto {
   @ApiProperty({ example: 500 })
   amountCents!: number;
 
-  @ApiProperty({
-    example: 'PENDING',
-    enum: ['PENDING', 'ACTIVE', 'CASHED_OUT', 'LOST', 'CANCELLED'],
-  })
-  status!: string;
+  @ApiProperty({ example: BetStatus.PENDING, enum: BetStatus })
+  status!: BetStatus;
 
-  @ApiProperty({ example: 2.5, nullable: true })
+  @ApiProperty({ example: 2.5, required: false })
   autoCashOutMultiplier?: number;
+
+  static from(result: PlaceBetOutput): PlaceBetResponseDto {
+    return {
+      roundId: result.roundId,
+      betId: result.betId,
+      amountCents: Number(result.amountCents),
+      status: result.status,
+      autoCashOutMultiplier: result.autoCashOutMultiplier ?? undefined,
+    };
+  }
 }
