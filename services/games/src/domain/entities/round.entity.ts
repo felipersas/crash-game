@@ -193,7 +193,9 @@ export class Round {
       throw new DuplicateBetError();
     }
 
-    return this.addBet(playerId, playerName, amount, autoCashOutMultiplier);
+    const bet = Bet.create(this.id, playerId, playerName, amount, autoCashOutMultiplier);
+    this.registerBet(bet);
+    return bet;
   }
 
   /**
@@ -240,17 +242,6 @@ export class Round {
     if (amount.isGreaterThan(this.config.maxBetAmount)) {
       throw new BetAboveMaximumError(amount, this.config.maxBetAmount);
     }
-  }
-
-  private addBet(
-    playerId: PlayerId,
-    playerName: string,
-    amount: Money,
-    autoCashOutMultiplier?: number,
-  ): Bet {
-    const bet = Bet.create(this.id, playerId, playerName, amount, autoCashOutMultiplier);
-    this.registerBet(bet);
-    return bet;
   }
 
   private registerBet(bet: Bet): void {
