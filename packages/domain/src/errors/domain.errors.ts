@@ -1,12 +1,20 @@
-/**
- * Domain-specific exceptions for shared domain components.
- * All domain errors extend this base class for consistent error handling.
- */
+import { formatCents } from '../format-cents';
 
-export class DomainError extends Error {
-  constructor(message: string) {
+/**
+ * Base class for every domain error across bounded contexts.
+ *
+ * Each error carries a stable `code` for API consumers and a user-friendly
+ * `message` (no internal IDs). Bounded contexts extend this class so that
+ * presentation layers can recognise any domain error with a single
+ * `instanceof DomainError` check.
+ */
+export abstract class DomainError extends Error {
+  readonly code: string;
+
+  protected constructor(message: string, code: string) {
     super(message);
-    this.name = this.constructor.name;
+    this.name = new.target.name;
+    this.code = code;
     // Ensure prototype chain is correct for instanceof checks
     Object.setPrototypeOf(this, new.target.prototype);
   }
@@ -17,7 +25,10 @@ export class DomainError extends Error {
  */
 export class InvalidMoneyAmountError extends DomainError {
   constructor(amount: string | number) {
-    super(`Invalid money amount: ${String(amount)}. Amount must be a non-negative number.`);
+    super(
+      `Invalid money amount: ${String(amount)}. Amount must be a non-negative number.`,
+      'INVALID_MONEY_AMOUNT',
+    );
   }
 }
 
@@ -25,9 +36,8 @@ export class InvalidMoneyAmountError extends DomainError {
  * Thrown when a negative money value is encountered where only positive is allowed.
  */
 export class NegativeMoneyError extends DomainError {
-  constructor(amount: bigint) {
-    const cents = Number(amount) / 100;
-    super(`Negative money value not allowed: $${cents.toFixed(2)}`);
+  constructor(amountCents: bigint) {
+    super(`Negative money value not allowed: $${formatCents(amountCents)}`, 'NEGATIVE_MONEY');
   }
 }
 
@@ -36,6 +46,6 @@ export class NegativeMoneyError extends DomainError {
  */
 export class InvalidIdempotencyKeyError extends DomainError {
   constructor() {
-    super('Invalid idempotency key: must be a valid UUID v4');
+    super('Invalid idempotency key: must be a valid UUID v4', 'INVALID_IDEMPOTENCY_KEY');
   }
 }

@@ -9,8 +9,7 @@
 
 /// <reference types="bun-types" />
 import { describe, test, expect } from 'bun:test';
-import { Money } from '@crash/domain';
-import { InvalidMoneyAmountError, NegativeMoneyError } from '../../src/domain/errors/domain.errors';
+import { Money, NegativeMoneyError, formatCents } from '../src';
 
 describe('Money Value Object', () => {
   describe('Factory Methods', () => {
@@ -335,5 +334,25 @@ describe('Money Value Object', () => {
       // 10.00 * 0.333 = 3.30 (Math.round(33.3) = 33)
       expect(result.toDecimal()).toBe('3.30');
     });
+  });
+});
+
+describe('formatCents', () => {
+  test('formats positive, zero and negative cents without floating point', () => {
+    expect(formatCents(1099n)).toBe('10.99');
+    expect(formatCents(0n)).toBe('0.00');
+    expect(formatCents(-50n)).toBe('-0.50');
+    expect(formatCents(-123456n)).toBe('-1234.56');
+  });
+
+  test('keeps precision beyond Number.MAX_SAFE_INTEGER', () => {
+    expect(formatCents(900719925474099312n)).toBe('9007199254740993.12');
+  });
+});
+
+describe('NegativeMoneyError', () => {
+  test('reports the attempted negative amount', () => {
+    expect(() => Money.fromDecimal('-10.50')).toThrow(NegativeMoneyError);
+    expect(() => Money.fromDecimal('-10.50')).toThrow('$-10.50');
   });
 });
