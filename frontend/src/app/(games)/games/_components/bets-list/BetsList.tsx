@@ -4,7 +4,7 @@ import { useMemo, memo } from "react";
 import { useGameStore } from "@/store/game-store";
 import { formatMoney } from "@/domain/money";
 import { Users } from "lucide-react";
-import type { Bet } from "@/types";
+import { BetStatus, type Bet } from "@/types";
 
 const MAX_VISIBLE_BETS = 15;
 
@@ -15,7 +15,7 @@ function BetsList() {
   const visibleBets = useMemo<Bet[]>(
     () =>
       currentBets
-        .filter((bet) => bet.status !== "CANCELLED")
+        .filter((bet) => bet.status !== BetStatus.CANCELLED)
         .slice(-MAX_VISIBLE_BETS)
         .reverse(),
     [currentBets],
@@ -69,11 +69,11 @@ function BetsList() {
               </span>
 
               {/* Payout Multiplier */}
-              {bet.status === "CASHED_OUT" && bet.cashOutMultiplier ? (
+              {bet.status === BetStatus.CASHED_OUT && bet.cashOutMultiplier ? (
                 <span className="font-terminal text-sm text-primary text-right">
                   @{bet.cashOutMultiplier.toFixed(2)}x
                 </span>
-              ) : bet.status === "ACTIVE" ? (
+              ) : bet.status === BetStatus.ACTIVE ? (
                 <span className="font-terminal text-sm text-warning text-right">
                   Playing
                 </span>

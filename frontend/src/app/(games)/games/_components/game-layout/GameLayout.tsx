@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, LogOut, Settings, User } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useWallet } from "@/hooks/useWallet";
 import { formatMoney } from "@/domain/money";
@@ -16,28 +16,22 @@ export default function GameLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { balance } = useWallet();
+  const { wallet, balanceCents } = useWallet();
   const { logout } = useAuth();
 
-  const prevBalance = useRef(balance);
+  const prevBalanceCents = useRef<string | null>(null);
   const [balanceGlow, setBalanceGlow] = useState<"win" | "lose" | null>(null);
 
+  // Flash the balance green/red when it changes (skips the initial load).
   useEffect(() => {
-    if (prevBalance.current === balance || prevBalance.current == null) {
-      prevBalance.current = balance;
-      return;
-    }
-    const prev = Number(prevBalance.current) || 0;
-    const curr = Number(balance) || 0;
-    if (curr > prev) {
-      setBalanceGlow("win");
-    } else if (curr < prev) {
-      setBalanceGlow("lose");
-    }
-    prevBalance.current = balance;
+    if (!wallet) return;
+    const prev = prevBalanceCents.current;
+    prevBalanceCents.current = balanceCents;
+    if (prev === null || prev === balanceCents) return;
+    setBalanceGlow(BigInt(balanceCents) > BigInt(prev) ? "win" : "lose");
     const id = setTimeout(() => setBalanceGlow(null), 1500);
     return () => clearTimeout(id);
-  }, [balance]);
+  }, [wallet, balanceCents]);
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -47,8 +41,7 @@ export default function GameLayout({
 
       {/* Fixed Top Navigation Bar */}
       <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-surface/90 backdrop-blur-md border-b border-border">
-        <div className="h-full flex items-center justify-between px-6">
-          <div />
+        <div className="h-full flex items-center justify-end px-6">
 
           {/* Right - Wallet & Utilities */}
           <div className="flex items-center gap-6">
@@ -60,7 +53,7 @@ export default function GameLayout({
               <span
                 className={`text-lg font-bold font-terminal text-primary ${balanceGlow === "win" ? "glow-balance-win" : balanceGlow === "lose" ? "glow-balance-lose" : ""}`}
               >
-                {formatMoney(Number(balance) || 0)}
+                {formatMoney(balanceCents)}
               </span>
             </div>
 
@@ -79,6 +72,7 @@ export default function GameLayout({
                   className="w-44 p-1 bg-surface border border-border text-text-primary shadow-lg"
                 >
                   <button
+                    type="button"
                     onClick={() => logout()}
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-muted hover:text-error hover:bg-surface-bright/50 rounded-md transition-colors font-terminal"
                   >

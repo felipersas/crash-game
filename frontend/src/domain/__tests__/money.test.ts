@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatMoney, formatMultiplier, calculatePayout } from '../money';
+import { centsToDecimal, formatMoney, formatMultiplier, calculatePayout } from '../money';
 
 describe('formatMoney', () => {
   it('formats zero cents', () => {
@@ -31,7 +31,7 @@ describe('formatMoney', () => {
   });
 
   it('formats negative amounts', () => {
-    expect(formatMoney(-500)).toBe('$-5.00');
+    expect(formatMoney(-500)).toBe('-$5.00');
   });
 
   it('formats max bet', () => {
@@ -40,6 +40,27 @@ describe('formatMoney', () => {
 
   it('formats min bet', () => {
     expect(formatMoney(100)).toBe('$1.00');
+  });
+
+  it('formats cents given as a string (wallet balance)', () => {
+    expect(formatMoney('50000')).toBe('$500.00');
+  });
+
+  it('formats values beyond Number.MAX_SAFE_INTEGER exactly', () => {
+    expect(formatMoney(BigInt('900719925474099312'))).toBe('$9007199254740993.12');
+  });
+});
+
+describe('centsToDecimal', () => {
+  it('converts cents to a 2-decimal string', () => {
+    expect(centsToDecimal(1050)).toBe('10.50');
+    expect(centsToDecimal(5)).toBe('0.05');
+    expect(centsToDecimal(0)).toBe('0.00');
+  });
+
+  it('keeps the sign for negatives', () => {
+    expect(centsToDecimal(-500)).toBe('-5.00');
+    expect(centsToDecimal(-1)).toBe('-0.01');
   });
 });
 
@@ -72,5 +93,16 @@ describe('calculatePayout', () => {
 
   it('floors result for fractional multipliers', () => {
     expect(calculatePayout(333, 2.47)).toBe(822);
+  });
+
+  it('truncates the multiplier to hundredths like the backend', () => {
+    expect(calculatePayout(1000, 2.019)).toBe(2010);
+    expect(calculatePayout(10000, 1.999)).toBe(19900);
+  });
+
+  it('is not affected by float representation error', () => {
+    // 2.01 * 100 === 200.99999999999997 in IEEE-754
+    expect(calculatePayout(100, 2.01)).toBe(201);
+    expect(calculatePayout(100, 1.15)).toBe(115);
   });
 });
