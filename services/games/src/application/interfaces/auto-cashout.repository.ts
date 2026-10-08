@@ -13,6 +13,7 @@ export interface IAutoCashOutRepository {
     currentMultiplier: number,
   ): Promise<Array<{ playerId: string; targetMultiplier: number }>>;
   acquireLock(roundId: string, playerId: string): Promise<boolean>;
+  releaseLock(roundId: string, playerId: string): Promise<void>;
   getCachedResult(
     roundId: string,
     playerId: string,

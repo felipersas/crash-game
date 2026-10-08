@@ -1,40 +1,31 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import { type Round, RoundStatus } from '@/domain/entities/round.entity';
-import { BetStatus } from '@/domain/entities/bet.entity';
-import type { IRoundRepository } from '../interfaces/round.repository';
-import type { IBetRepository } from '../interfaces/bet.repository';
-import type { IUseCase } from '../interfaces/use-case';
-import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
+import { IdempotencyKey, type PlayerId, type RoundId } from '@crash/domain';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
+import { type Round, RoundStatus } from '@/domain/entities/round.entity';
+import type { Bet } from '@/domain/entities/bet.entity';
+import { Multiplier } from '@/domain/value-objects/multiplier.value-object';
 import { RoundNotFoundError, NoActiveBetError } from '@/domain/errors/domain.errors';
+import type { IRoundRepository } from '@/application/interfaces/round.repository';
+import type { IBetRepository } from '@/application/interfaces/bet.repository';
+import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
+import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
+import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
+import type { IUnitOfWork } from '@/application/interfaces/unit-of-work';
+import type { IUseCase } from '@/application/interfaces/use-case';
 import {
   ROUND_REPOSITORY,
   BET_REPOSITORY,
-  EVENT_PUBLISHER,
+  UNIT_OF_WORK,
   GAME_BROADCASTER,
   ROUND_STATE_PROVIDER,
   AUTO_CASHOUT_REPOSITORY,
 } from '@/application/di.tokens';
-import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
-import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
-import type { IRoundStateProvider } from '@/application/interfaces/round-state-provider';
-import type { PlayerCashedOutEvent } from '@/domain/events/round.events';
-import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
-import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
-import { type PlayerId, type RoundId, PlayerId as PlayerIdVO, IdempotencyKey } from '@crash/domain';
-import { Multiplier } from '@/domain/value-objects/multiplier.value-object';
-
-/**
- * Cash Out Use Case
- *
- * Allows a player to cash out their bet at the current multiplier.
- * Uses in-memory Round from LifecycleManager for real-time multiplier accuracy.
- */
 
 export interface CashOutInput {
   playerId: PlayerId;
   roundId?: RoundId;
   idempotencyKey: string;
+  /** Auto cash-out target reached; overrides the live multiplier. */
   targetMultiplier?: number;
 }
 
@@ -46,6 +37,13 @@ export interface CashOutOutput {
   payoutCents: bigint;
 }
 
+/**
+ * Cash Out Use Case - Application Layer
+ *
+ * Cashes out a player's active bet. Uses the live round from the lifecycle
+ * manager so the payout reflects the real-time multiplier. Repeating a cash out
+ * for an already cashed-out bet returns the stored result (idempotent).
+ */
 @Injectable()
 export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   private readonly logger = new Logger(CashOutUseCase.name);
@@ -53,136 +51,91 @@ export class CashOutUseCase implements IUseCase<CashOutInput, CashOutOutput> {
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
     @Inject(ROUND_STATE_PROVIDER) private readonly roundStateProvider: IRoundStateProvider,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepository: IAutoCashOutRepository,
+    @Inject(UNIT_OF_WORK) private readonly unitOfWork: IUnitOfWork,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
-    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
-    private readonly prisma: PrismaService,
-    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(input: CashOutInput): Promise<CashOutOutput> {
-    const roundForCleanup = input.roundId ?? this.roundStateProvider.getCurrentRound()?.id;
-    if (roundForCleanup) {
-      this.autoCashOutRepo.removeTarget(roundForCleanup, input.playerId);
-    }
-
     IdempotencyKey.from(input.idempotencyKey);
 
     const round = await this.loadRound(input.roundId);
-    const bet = await this.loadBet(input.playerId, round.id);
-
-    if (bet.isCashedOut()) {
-      return {
-        betId: bet.id,
-        roundId: round.id,
-        playerId: input.playerId,
-        cashOutMultiplier: bet.getAutoCashOutMultiplier()!,
-        payoutCents: bet.getCashOutAmount()!.toCents(),
-      };
-    }
-
-    round.syncBet(bet);
-    const overrideMultiplier = input.targetMultiplier
-      ? Multiplier.fromValue(input.targetMultiplier)
-      : undefined;
-    const payout = round.cashOut(input.playerId, overrideMultiplier);
-
-    const cashedOutBet = round.getBetByPlayer(input.playerId);
-    const events = round.pullEvents();
-
-    let outboxIds: string[] = [];
-    await this.prisma.$transaction(async (tx) => {
-      if (cashedOutBet) {
-        await this.betRepository.update(cashedOutBet, tx);
-      }
-      if (events.length > 0) {
-        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, round.id, events);
-      }
-    });
-
-    // Best-effort immediate publish for low latency
-    if (events.length > 0 && outboxIds.length > 0) {
-      await this.outboxWriter.tryImmediatePublish(events, outboxIds);
-    }
-
-    this.metrics.incrBet('cashed_out', Number(bet.getAmount().toCents()));
-    this.metrics.incrPayout(Number(payout.toCents()));
-
-    await this.broadcastCashOut(round, events);
-
-    return this.mapToOutput(input.playerId, bet, round, payout, overrideMultiplier);
-  }
-
-  private async loadRound(roundId?: RoundId): Promise<Round> {
-    let round: Round | null = null;
-
-    const liveRound = this.roundStateProvider.getCurrentRound();
-
-    if (liveRound && liveRound.getStatus() === RoundStatus.ACTIVE) {
-      round = liveRound;
-    } else if (roundId) {
-      round = await this.roundRepository.findById(roundId);
-    } else {
-      round = liveRound;
-    }
-
-    if (!round) {
-      throw new RoundNotFoundError();
-    }
-
-    return round;
-  }
-
-  private async loadBet(playerId: PlayerId, roundId: RoundId) {
-    const bet = await this.betRepository.findByPlayerAndRound(playerId, roundId);
-
+    const bet = await this.betRepository.findByPlayerAndRound(input.playerId, round.id);
     if (!bet) {
       throw new NoActiveBetError();
     }
 
-    return bet;
+    if (bet.isCashedOut()) {
+      return this.toOutput(bet);
+    }
+
+    // A manual cash out supersedes any pending auto cash-out target
+    await this.removeAutoCashOutTarget(round.id, input.playerId);
+
+    round.syncBet(bet);
+    const multiplier =
+      input.targetMultiplier !== undefined
+        ? Multiplier.fromValue(input.targetMultiplier)
+        : undefined;
+    const payout = round.cashOut(input.playerId, multiplier);
+
+    await this.unitOfWork.commit(round.id, round.pullEvents(), (tx) =>
+      this.betRepository.update(bet, tx),
+    );
+
+    this.metrics.incrBet('cashed_out', Number(bet.getAmount().toCents()));
+    this.metrics.incrPayout(Number(payout.toCents()));
+
+    const output = this.toOutput(bet);
+    this.broadcaster.broadcastPlayerCashedOut({
+      roundId: output.roundId,
+      betId: output.betId,
+      playerId: output.playerId,
+      playerName: bet.playerName,
+      multiplier: output.cashOutMultiplier,
+      payoutCents: output.payoutCents,
+    });
+
+    return output;
   }
 
-  private async broadcastCashOut(round: Round, events: any[]): Promise<void> {
-    const cashedOut = events.find(
-      (e): e is PlayerCashedOutEvent => e.eventType === 'PlayerCashedOut',
-    );
-    if (cashedOut) {
-      const cashedOutBet = round.getBetByPlayer(PlayerIdVO.from(cashedOut.playerId));
-      if (!cashedOutBet) {
-        this.logger.warn(
-          `Bet not found for cashed out player ${cashedOut.playerId} in round ${cashedOut.roundId}`,
-        );
-      }
-      this.broadcaster.broadcastPlayerCashedOut(
-        cashedOut.roundId,
-        cashedOut.betId,
-        cashedOut.playerId,
-        cashedOutBet?.playerName ?? '',
-        cashedOut.cashOutMultiplier,
-        cashedOut.winAmount,
-      );
+  /**
+   * Prefer the live ACTIVE round (real-time multiplier); otherwise fall back to
+   * the requested round from the database.
+   */
+  private async loadRound(roundId?: RoundId): Promise<Round> {
+    const liveRound = this.roundStateProvider.getCurrentRound();
+
+    const round =
+      liveRound?.getStatus() === RoundStatus.ACTIVE
+        ? liveRound
+        : roundId
+          ? await this.roundRepository.findById(roundId)
+          : liveRound;
+
+    if (!round) {
+      throw new RoundNotFoundError();
+    }
+    return round;
+  }
+
+  private async removeAutoCashOutTarget(roundId: string, playerId: string): Promise<void> {
+    try {
+      await this.autoCashOutRepository.removeTarget(roundId, playerId);
+    } catch (error) {
+      this.logger.error('Failed to remove auto cash-out target on cash out', error);
     }
   }
 
-  private mapToOutput(
-    playerId: PlayerId,
-    bet: { id: string },
-    round: Round,
-    payout: { toCents(): bigint },
-    overrideMultiplier?: Multiplier,
-  ): CashOutOutput {
-    const effectiveMultiplier = overrideMultiplier
-      ? overrideMultiplier.getValue()
-      : round.getCurrentMultiplier();
+  private toOutput(bet: Bet): CashOutOutput {
     return {
       betId: bet.id,
-      roundId: round.id,
-      playerId,
-      cashOutMultiplier: effectiveMultiplier,
-      payoutCents: payout.toCents(),
+      roundId: bet.roundId,
+      playerId: bet.playerId,
+      cashOutMultiplier: bet.getCashOutMultiplier()!.getValue(),
+      payoutCents: bet.getCashOutAmount()!.toCents(),
     };
   }
 }

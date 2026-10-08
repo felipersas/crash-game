@@ -1,125 +1,148 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { Money, PlayerId } from '@crash/domain';
 import { GetRoundHistoryUseCase } from '../../../src/application/use-cases/get-round-history.use-case';
 import { Round, RoundStatus } from '../../../src/domain/entities/round.entity';
-import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
-import { Money, PlayerId } from '@crash/domain';
+import { createMockRoundRepository } from '../../helpers/mocks';
 
-function mockFn<T extends (...args: any[]) => any>(
-  impl?: T,
-): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
-  const fn: any = (...args: any[]) => fn._impl(...args);
-  fn._impl = impl || (() => {});
-  fn.mockReturnValue = (v: any) => {
-    fn._impl = () => v;
-  };
-  fn.mockResolvedValue = (v: any) => {
-    fn._impl = () => Promise.resolve(v);
-  };
-  return fn;
+interface BetSpec {
+  playerId: string;
+  amount: string;
+  /** Leave the bet PENDING so the crash cancels it. */
+  unconfirmed?: boolean;
 }
 
-// Create a real crashed round for history testing
-async function createCrashedRound(
-  bets: { playerId: string; playerName: string; amount: string }[],
-): Promise<Round> {
-  const round = await Round.create();
-
-  for (const b of bets) {
-    const pid = PlayerId.from(b.playerId);
-    round.placeBet(pid, b.playerName, Money.fromDecimal(b.amount));
-    round.getBetByPlayer(pid)!.confirm();
+async function createCrashedRound(bets: BetSpec[]): Promise<Round> {
+  const round = await Round.create(undefined, 'test-crash-10.0');
+  for (const spec of bets) {
+    const playerId = PlayerId.from(spec.playerId);
+    round.placeBet(playerId, `Name ${spec.playerId}`, Money.fromDecimal(spec.amount));
+    if (!spec.unconfirmed) {
+      round.getBetByPlayer(playerId)!.confirm();
+    }
   }
-
   await round.startRound();
-  // Force crash by advancing multiplier to a very high value
-  round.updateMultiplier(1000);
-
+  round.crash();
+  round.pullEvents();
   return round;
 }
 
 describe('GetRoundHistoryUseCase', () => {
+  let roundRepository: ReturnType<typeof createMockRoundRepository>;
   let useCase: GetRoundHistoryUseCase;
-  let mockRoundRepo: any;
 
   beforeEach(() => {
-    mockRoundRepo = {
-      findHistory: mockFn(async () => []),
-      findHistoryCount: mockFn(async () => 0),
-    };
-    useCase = new GetRoundHistoryUseCase(mockRoundRepo);
+    roundRepository = createMockRoundRepository();
+    useCase = new GetRoundHistoryUseCase(roundRepository as any);
   });
 
-  test('Should return paginated round history', async () => {
-    const round1 = await createCrashedRound([
-      { playerId: 'p1', playerName: 'Player 1', amount: '10.00' },
-    ]);
-    const round2 = await createCrashedRound([
-      { playerId: 'p2', playerName: 'Player 2', amount: '20.00' },
-    ]);
+  test('should return paginated round history', async () => {
+    // Arrange
+    const round1 = await createCrashedRound([{ playerId: 'p1', amount: '10.00' }]);
+    const round2 = await createCrashedRound([{ playerId: 'p2', amount: '20.00' }]);
+    roundRepository.findHistory.mockResolvedValue([round1, round2]);
+    roundRepository.countHistory.mockResolvedValue(25);
 
-    mockRoundRepo.findHistory.mockResolvedValue([round1, round2]);
-    mockRoundRepo.findHistoryCount.mockResolvedValue(25);
-
+    // Act
     const result = await useCase.execute({ page: 1, limit: 20 });
 
-    expect(result.data).toHaveLength(2);
-    expect(result.meta.page).toBe(1);
-    expect(result.meta.total).toBe(25);
-    expect(result.meta.totalPages).toBe(2); // ceil(25/20)
+    // Assert
+    expect(result.data.map((r) => r.roundId)).toEqual([round1.id, round2.id]);
+    expect(result.meta).toEqual({ page: 1, limit: 20, total: 25, totalPages: 2 });
   });
 
-  test('Should map rounds to summary with bet totals', async () => {
+  test('should query the repository with limit and offset derived from the page', async () => {
+    // Act
+    await useCase.execute({ page: 3, limit: 10 });
+
+    // Assert
+    expect(roundRepository.findHistory.calls).toEqual([[10, 20]]);
+    expect(roundRepository.countHistory.callCount).toBe(1);
+  });
+
+  test('should map rounds to summaries with bigint wagered totals', async () => {
+    // Arrange
     const round = await createCrashedRound([
-      { playerId: 'p1', playerName: 'Player 1', amount: '10.00' },
-      { playerId: 'p2', playerName: 'Player 2', amount: '20.00' },
+      { playerId: 'p1', amount: '10.00' },
+      { playerId: 'p2', amount: '20.00' },
     ]);
+    roundRepository.findHistory.mockResolvedValue([round]);
+    roundRepository.countHistory.mockResolvedValue(1);
 
-    mockRoundRepo.findHistory.mockResolvedValue([round]);
-    mockRoundRepo.findHistoryCount.mockResolvedValue(1);
-
+    // Act
     const result = await useCase.execute({});
 
+    // Assert
     expect(result.data).toHaveLength(1);
-    const summary = result.data[0];
+    const summary = result.data[0]!;
     expect(summary.roundId).toBe(round.id);
     expect(summary.status).toBe(RoundStatus.CRASHED);
-    expect(summary.crashPoint).not.toBeNull();
-    expect(summary.startedAt).not.toBeNull();
-    expect(summary.crashedAt).not.toBeNull();
+    expect(summary.crashPoint).toBe(round.getCrashPoint());
+    expect(summary.startedAt).toBeInstanceOf(Date);
+    expect(summary.crashedAt).toBeInstanceOf(Date);
     expect(summary.totalBets).toBe(2);
-    expect(summary.totalWageredCents).toBe(3000); // 1000 + 2000
+    expect(summary.totalWageredCents).toBe(3000n);
   });
 
-  test('Should compute correct pagination metadata', async () => {
-    mockRoundRepo.findHistory.mockResolvedValue([]);
-    mockRoundRepo.findHistoryCount.mockResolvedValue(50);
+  test('should exclude cancelled bets from round totals', async () => {
+    // Arrange: p2 never got wallet confirmation, so the crash cancels it
+    const round = await createCrashedRound([
+      { playerId: 'p1', amount: '10.00' },
+      { playerId: 'p2', amount: '50.00', unconfirmed: true },
+    ]);
+    roundRepository.findHistory.mockResolvedValue([round]);
+    roundRepository.countHistory.mockResolvedValue(1);
 
-    const result = await useCase.execute({ page: 3, limit: 10 });
-
-    expect(result.meta.page).toBe(3);
-    expect(result.meta.limit).toBe(10);
-    expect(result.meta.total).toBe(50);
-    expect(result.meta.totalPages).toBe(5); // ceil(50/10)
-  });
-
-  test('Should handle empty history', async () => {
-    mockRoundRepo.findHistory.mockResolvedValue([]);
-    mockRoundRepo.findHistoryCount.mockResolvedValue(0);
-
+    // Act
     const result = await useCase.execute({});
 
+    // Assert
+    expect(round.getBetByPlayer(PlayerId.from('p2'))!.isCancelled()).toBe(true);
+    expect(result.data[0]!.totalBets).toBe(1);
+    expect(result.data[0]!.totalWageredCents).toBe(1000n);
+  });
+
+  test('should report zero totals for a round without bets', async () => {
+    // Arrange
+    const round = await createCrashedRound([]);
+    roundRepository.findHistory.mockResolvedValue([round]);
+    roundRepository.countHistory.mockResolvedValue(1);
+
+    // Act
+    const result = await useCase.execute({});
+
+    // Assert
+    expect(result.data[0]!.totalBets).toBe(0);
+    expect(result.data[0]!.totalWageredCents).toBe(0n);
+  });
+
+  test('should compute pagination metadata', async () => {
+    // Arrange
+    roundRepository.countHistory.mockResolvedValue(50);
+
+    // Act
+    const result = await useCase.execute({ page: 3, limit: 10 });
+
+    // Assert
+    expect(result.meta).toEqual({ page: 3, limit: 10, total: 50, totalPages: 5 });
+  });
+
+  test('should handle empty history', async () => {
+    // Act
+    const result = await useCase.execute({});
+
+    // Assert
     expect(result.data).toHaveLength(0);
     expect(result.meta.total).toBe(0);
     expect(result.meta.totalPages).toBe(0);
   });
 
-  test('Should use default pagination when not provided', async () => {
-    mockRoundRepo.findHistory.mockResolvedValue([]);
-    mockRoundRepo.findHistoryCount.mockResolvedValue(0);
+  test('should use default pagination when not provided', async () => {
+    // Act
+    const result = await useCase.execute();
 
-    const result = await useCase.execute({});
-
+    // Assert
     expect(result.meta.page).toBe(1);
     expect(result.meta.limit).toBe(20);
+    expect(roundRepository.findHistory.calls).toEqual([[20, 0]]);
   });
 });

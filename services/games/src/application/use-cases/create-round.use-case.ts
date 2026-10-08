@@ -1,19 +1,10 @@
 import { Injectable, Inject } from '@nestjs/common';
 import type { Round } from '@/domain/entities/round.entity';
-import type { IRoundRepository } from '../interfaces/round.repository';
-import type { IUseCase } from '../interfaces/use-case';
-import { ROUND_REPOSITORY, GAME_BROADCASTER } from '@/application/di.tokens';
+import type { IRoundRepository } from '@/application/interfaces/round.repository';
 import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
-import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
-import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
-
-/**
- * Create Round Use Case
- *
- * Persists a new round and publishes its domain events via the outbox.
- * The round entity is created upstream by RoundLifecycleManager via
- * Round.createWithSeedChain() and passed in as input.
- */
+import type { IUnitOfWork } from '@/application/interfaces/unit-of-work';
+import type { IUseCase } from '@/application/interfaces/use-case';
+import { ROUND_REPOSITORY, UNIT_OF_WORK, GAME_BROADCASTER } from '@/application/di.tokens';
 
 export interface CreateRoundInput {
   round: Round;
@@ -23,42 +14,30 @@ export interface CreateRoundOutput {
   round: Round;
 }
 
+/**
+ * Create Round Use Case - Application Layer
+ *
+ * Persists a new round (created by the lifecycle manager from the seed chain)
+ * and announces its betting phase.
+ */
 @Injectable()
 export class CreateRoundUseCase implements IUseCase<CreateRoundInput, CreateRoundOutput> {
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
+    @Inject(UNIT_OF_WORK) private readonly unitOfWork: IUnitOfWork,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
-    private readonly prisma: PrismaService,
-    private readonly outboxWriter: OutboxWriter,
   ) {}
 
-  async execute(input: CreateRoundInput): Promise<CreateRoundOutput> {
-    const { round } = input;
+  async execute({ round }: CreateRoundInput): Promise<CreateRoundOutput> {
+    await this.unitOfWork.commit(round.id, round.pullEvents(), (tx) =>
+      this.roundRepository.create(round, tx),
+    );
 
-    const events = round.pullEvents();
-
-    let outboxIds: string[] = [];
-    await this.prisma.$transaction(async (tx) => {
-      await this.roundRepository.create(round, tx);
-      if (events.length > 0) {
-        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, round.id, events);
-      }
+    this.broadcaster.broadcastRoundStarted({
+      roundId: round.id,
+      seedHash: round.getSeedHash(),
+      bettingEndTime: round.getBettingEndTime()!,
     });
-
-    // Best-effort immediate publish for low latency
-    if (events.length > 0 && outboxIds.length > 0) {
-      await this.outboxWriter.tryImmediatePublish(events, outboxIds);
-    }
-
-    // Broadcast RoundStarted event (non-blocking)
-    const roundStarted = events.find((e) => e.eventType === 'RoundStarted');
-    if (roundStarted) {
-      this.broadcaster.broadcastRoundStarted(
-        round.id,
-        round.getSeedHash(),
-        round.getBettingEndTime()!,
-      );
-    }
 
     return { round };
   }

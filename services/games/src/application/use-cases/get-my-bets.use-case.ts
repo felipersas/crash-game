@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { BetStatus } from '@/domain/entities/bet.entity';
-import type { IBetRepository } from '../interfaces/bet.repository';
-import type { IUseCase } from '../interfaces/use-case';
-import { BET_REPOSITORY } from '@/application/di.tokens';
 import { Pagination, type PaginationMeta, type PlayerId } from '@crash/domain';
+import type { Bet, BetStatus } from '@/domain/entities/bet.entity';
+import type { IBetRepository, PlayerBetsSummary } from '@/application/interfaces/bet.repository';
+import type { IUseCase } from '@/application/interfaces/use-case';
+import { BET_REPOSITORY } from '@/application/di.tokens';
 
 export interface GetMyBetsInput {
   playerId: PlayerId;
@@ -14,26 +14,19 @@ export interface GetMyBetsInput {
 export interface MyBetOutput {
   id: string;
   roundId: string;
-  amountCents: number;
+  amountCents: bigint;
   cashOutMultiplier: number | null;
-  payoutCents: number | null;
-  profitCents: number;
-  status: string;
+  payoutCents: bigint | null;
+  profitCents: bigint;
+  status: BetStatus;
   cashedOutAt: Date | null;
   placedAt: Date;
-}
-
-export interface BetsSummary {
-  totalWageredCents: number;
-  wins: number;
-  losses: number;
-  profitCents: number;
 }
 
 export interface GetMyBetsOutput {
   data: MyBetOutput[];
   meta: PaginationMeta;
-  summary: BetsSummary;
+  summary: PlayerBetsSummary;
 }
 
 @Injectable()
@@ -43,51 +36,30 @@ export class GetMyBetsUseCase implements IUseCase<GetMyBetsInput, GetMyBetsOutpu
   async execute(input: GetMyBetsInput): Promise<GetMyBetsOutput> {
     const { page, limit, offset } = Pagination.compute(input);
 
-    const [bets, total] = await Promise.all([
+    const [bets, total, summary] = await Promise.all([
       this.betRepository.findByPlayerPaginated(input.playerId, limit, offset),
       this.betRepository.countByPlayer(input.playerId),
+      this.betRepository.getSummaryByPlayer(input.playerId),
     ]);
 
-    const data = bets.map((bet) => {
-      const amountCents = Number(bet.getAmount().toCents());
-      const payoutCents = bet.getCashOutAmount()?.toCents()
-        ? Number(bet.getCashOutAmount()!.toCents())
-        : null;
-      const profitCents = this.calculateProfit(bet.getStatus(), amountCents, payoutCents);
-
-      return {
-        id: bet.id,
-        roundId: bet.roundId,
-        amountCents,
-        cashOutMultiplier: bet.getCashOutMultiplier()?.getValue() ?? null,
-        payoutCents,
-        profitCents,
-        status: bet.getStatus(),
-        cashedOutAt: bet.getCashedOutAt(),
-        placedAt: bet.getCreatedAt(),
-      };
-    });
-
-    const summary = await this.betRepository.getSummaryByPlayer(input.playerId);
-
     return {
-      data,
+      data: bets.map(toMyBetOutput),
       meta: Pagination.buildMeta(page, limit, total),
       summary,
     };
   }
+}
 
-  private calculateProfit(
-    status: BetStatus,
-    amountCents: number,
-    payoutCents: number | null,
-  ): number {
-    if (status === BetStatus.CASHED_OUT && payoutCents !== null) {
-      return payoutCents - amountCents;
-    }
-    if (status === BetStatus.LOST) {
-      return -amountCents;
-    }
-    return 0;
-  }
+function toMyBetOutput(bet: Bet): MyBetOutput {
+  return {
+    id: bet.id,
+    roundId: bet.roundId,
+    amountCents: bet.getAmount().toCents(),
+    cashOutMultiplier: bet.getCashOutMultiplier()?.getValue() ?? null,
+    payoutCents: bet.getCashOutAmount()?.toCents() ?? null,
+    profitCents: bet.getProfitCents(),
+    status: bet.getStatus(),
+    cashedOutAt: bet.getCashedOutAt(),
+    placedAt: bet.getCreatedAt(),
+  };
 }

@@ -1,45 +1,32 @@
-import { type Round } from '@/domain/entities/round.entity';
-import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
-import { type RoundId } from '@crash/domain';
+import type { Round } from '@/domain/entities/round.entity';
+import type { RoundId } from '@crash/domain';
+import type { TransactionContext } from './unit-of-work';
 
 /**
  * Round Repository Interface - Application Layer
  *
- * Defines the contract for round persistence.
- * Implemented by Infrastructure layer.
- *
- * NOTE: Bet queries belong to IBetRepository, not here.
+ * Bet queries belong to IBetRepository, not here.
  */
 export interface IRoundRepository {
   /**
-   * Find the current active round (in BETTING or ACTIVE state).
+   * Find the most recently created round (any status), with its bets.
    */
   findCurrentRound(): Promise<Round | null>;
 
-  /**
-   * Find a round by ID.
-   */
   findById(id: RoundId): Promise<Round | null>;
 
   /**
-   * Update an existing round (with optimistic locking).
-   * Optional tx for atomic operations within a transaction boundary.
+   * Update an existing round with optimistic locking.
+   * @throws OptimisticLockError when the stored version moved on.
    */
-  save(round: Round, tx?: PrismaTransaction): Promise<void>;
+  save(round: Round, tx?: TransactionContext): Promise<void>;
+
+  create(round: Round, tx?: TransactionContext): Promise<void>;
 
   /**
-   * Create a new round.
-   * Optional tx for atomic operations within a transaction boundary.
-   */
-  create(round: Round, tx?: PrismaTransaction): Promise<void>;
-
-  /**
-   * Get historical rounds with pagination.
+   * Crashed rounds, newest first.
    */
   findHistory(limit: number, offset: number): Promise<Round[]>;
 
-  /**
-   * Count total finished rounds for pagination.
-   */
-  findHistoryCount(): Promise<number>;
+  countHistory(): Promise<number>;
 }

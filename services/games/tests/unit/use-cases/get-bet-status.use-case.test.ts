@@ -1,46 +1,10 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { BetId, Money, PlayerId, RoundId } from '@crash/domain';
 import { GetBetStatusUseCase } from '../../../src/application/use-cases/get-bet-status.use-case';
 import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
-import { Money, RoundId, PlayerId, BetId } from '@crash/domain';
 import { Multiplier } from '../../../src/domain/value-objects/multiplier.value-object';
 import { BetNotFoundError } from '../../../src/domain/errors/domain.errors';
-
-// --- Mock helpers ---
-
-function mockFn<T extends (...args: any[]) => any>(impl?: T) {
-  const fn: any = (...args: any[]) => {
-    fn.callCount++;
-    return fn._impl(...args);
-  };
-  fn._impl = impl || (() => {});
-  fn.callCount = 0;
-  fn.mockReturnValue = (v: any) => {
-    fn._impl = () => v;
-  };
-  fn.mockResolvedValue = (v: any) => {
-    fn._impl = () => Promise.resolve(v);
-  };
-  return fn as T & {
-    callCount: number;
-    mockReturnValue: (v: any) => void;
-    mockResolvedValue: (v: any) => void;
-  };
-}
-
-function createMockBetRepository(overrides = {}) {
-  return {
-    create: mockFn(() => Promise.resolve()),
-    update: mockFn(() => Promise.resolve()),
-    findById: mockFn(() => Promise.resolve(null)),
-    findByRound: mockFn(() => Promise.resolve([])),
-    findByPlayerAndRound: mockFn(() => Promise.resolve(null)),
-    findByPlayer: mockFn(() => Promise.resolve([])),
-    findByRoundAndStatus: mockFn(() => Promise.resolve([])),
-    findByPlayerPaginated: mockFn(() => Promise.resolve([])),
-    countByPlayer: mockFn(() => Promise.resolve(0)),
-    ...overrides,
-  };
-}
+import { createMockBetRepository } from '../../helpers/mocks';
 
 describe('GetBetStatusUseCase', () => {
   let betRepository: ReturnType<typeof createMockBetRepository>;
@@ -51,57 +15,77 @@ describe('GetBetStatusUseCase', () => {
   const playerName = 'Player 777';
   const amount = Money.fromDecimal('50.00');
 
+  function createBet(): Bet {
+    return Bet.create(roundId, playerId, playerName, amount);
+  }
+
   beforeEach(() => {
     betRepository = createMockBetRepository();
     useCase = new GetBetStatusUseCase(betRepository as any);
   });
 
-  test('should return bet status for existing bet', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
+  test('should return the status of an existing bet', async () => {
+    // Arrange
+    const bet = createBet();
     betRepository.findById.mockResolvedValue(bet);
 
+    // Act
     const result = await useCase.execute({ betId: bet.id });
 
-    expect(result.betId).toBe(bet.id);
-    expect(result.roundId).toBe(roundId);
-    expect(result.playerId).toBe(playerId);
-    expect(result.amountCents).toBe(amount.toCents());
-    expect(result.status).toBe(BetStatus.PENDING);
+    // Assert
+    expect(betRepository.findById.calls).toEqual([[bet.id]]);
+    expect(result).toEqual({
+      betId: bet.id,
+      roundId,
+      playerId,
+      amountCents: 5000n,
+      status: BetStatus.PENDING,
+      cashOutMultiplier: null,
+      payoutCents: null,
+      cashedOutAt: null,
+      cancelReason: null,
+    });
   });
 
-  test('should throw BetNotFoundError when bet not found', async () => {
+  test('should throw BetNotFoundError when the bet does not exist', async () => {
+    // Arrange
     betRepository.findById.mockResolvedValue(null);
 
-    expect(useCase.execute({ betId: BetId.from('nonexistent-bet-id') })).rejects.toThrow(
+    // Act & Assert
+    await expect(useCase.execute({ betId: BetId.from('nonexistent-bet-id') })).rejects.toThrow(
       BetNotFoundError,
     );
   });
 
-  test('should include cash out data for cashed out bet', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
+  test('should include bigint cash out data for a cashed out bet', async () => {
+    // Arrange
+    const bet = createBet();
     bet.confirm();
-    const multiplier = Multiplier.fromValue(3.5);
-    bet.cashOut(multiplier);
-
+    const payout = bet.cashOut(Multiplier.fromValue(3.5));
     betRepository.findById.mockResolvedValue(bet);
 
+    // Act
     const result = await useCase.execute({ betId: bet.id });
 
+    // Assert
     expect(result.status).toBe(BetStatus.CASHED_OUT);
     expect(result.cashOutMultiplier).toBe(3.5);
-    expect(result.payoutCents).toBeDefined();
-    expect(result.payoutCents).not.toBeNull();
+    expect(result.payoutCents).toBe(payout.toCents());
+    expect(result.payoutCents).toBe(17500n);
     expect(result.cashedOutAt).toBeInstanceOf(Date);
+    expect(result.cancelReason).toBeNull();
   });
 
-  test('should include cancel reason for cancelled bet', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
+  test('should include the cancel reason for a cancelled bet', async () => {
+    // Arrange
+    const bet = createBet();
     bet.cancel('Insufficient funds');
-
     betRepository.findById.mockResolvedValue(bet);
 
+    // Act
     const result = await useCase.execute({ betId: bet.id });
 
+    // Assert
     expect(result.status).toBe(BetStatus.CANCELLED);
     expect(result.cancelReason).toBe('Insufficient funds');
     expect(result.cashOutMultiplier).toBeNull();
@@ -109,28 +93,16 @@ describe('GetBetStatusUseCase', () => {
     expect(result.cashedOutAt).toBeNull();
   });
 
-  test('should return correct status for pending bet', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
-
-    betRepository.findById.mockResolvedValue(bet);
-
-    const result = await useCase.execute({ betId: bet.id });
-
-    expect(result.status).toBe(BetStatus.PENDING);
-    expect(result.cashOutMultiplier).toBeNull();
-    expect(result.payoutCents).toBeNull();
-    expect(result.cashedOutAt).toBeNull();
-    expect(result.cancelReason).toBeNull();
-  });
-
-  test('should return correct status for active (confirmed) bet', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
+  test('should return ACTIVE without cash out data for a confirmed bet', async () => {
+    // Arrange
+    const bet = createBet();
     bet.confirm();
-
     betRepository.findById.mockResolvedValue(bet);
 
+    // Act
     const result = await useCase.execute({ betId: bet.id });
 
+    // Assert
     expect(result.status).toBe(BetStatus.ACTIVE);
     expect(result.cashOutMultiplier).toBeNull();
     expect(result.payoutCents).toBeNull();
@@ -138,16 +110,19 @@ describe('GetBetStatusUseCase', () => {
     expect(result.cancelReason).toBeNull();
   });
 
-  test('should return correct status for lost bet', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
+  test('should return LOST without cash out data for a lost bet', async () => {
+    // Arrange
+    const bet = createBet();
     bet.confirm();
     bet.markAsLost();
-
     betRepository.findById.mockResolvedValue(bet);
 
+    // Act
     const result = await useCase.execute({ betId: bet.id });
 
+    // Assert
     expect(result.status).toBe(BetStatus.LOST);
+    expect(result.amountCents).toBe(5000n);
     expect(result.cashOutMultiplier).toBeNull();
     expect(result.payoutCents).toBeNull();
     expect(result.cashedOutAt).toBeNull();

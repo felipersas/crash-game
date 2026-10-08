@@ -1,259 +1,306 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { BetId, Money, PlayerId, RoundId } from '@crash/domain';
 import { ConfirmBetUseCase } from '../../../src/application/use-cases/confirm-bet.use-case';
-import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
-import { Money, RoundId, PlayerId, BetId } from '@crash/domain';
-import { BetNotFoundError } from '../../../src/domain/errors/domain.errors';
+import { Bet, BetStatus, type BetSnapshot } from '../../../src/domain/entities/bet.entity';
+import { Round } from '../../../src/domain/entities/round.entity';
+import { BetNotFoundError, InvalidBetStateError } from '../../../src/domain/errors/domain.errors';
+import {
+  FAKE_TX,
+  createMockAutoCashOutRepository,
+  createMockBetRepository,
+  createMockBroadcaster,
+  createMockMetrics,
+  createMockRoundStateProvider,
+  createMockUnitOfWork,
+} from '../../helpers/mocks';
 
-// --- Mock helpers ---
+const PLAYER_ID = PlayerId.from('player-123');
+const PLAYER_NAME = 'Player 123';
+const ROUND_ID = RoundId.from('round-1');
 
-function mockFn<T extends (...args: any[]) => any>(impl?: T) {
-  const fn: any = (...args: any[]) => {
-    fn.callCount++;
-    fn.lastArgs = args;
-    return fn._impl(...args);
-  };
-  fn._impl = impl || (() => {});
-  fn.callCount = 0;
-  fn.lastArgs = null;
-  fn.mockReturnValue = (v: any) => {
-    fn._impl = () => v;
-  };
-  fn.mockResolvedValue = (v: any) => {
-    fn._impl = () => Promise.resolve(v);
-  };
-  return fn as T & {
-    callCount: number;
-    lastArgs: any[] | null;
-    mockReturnValue: (v: any) => void;
-    mockResolvedValue: (v: any) => void;
-  };
-}
-
-function createMockBetRepository(overrides = {}) {
-  return {
-    create: mockFn(() => Promise.resolve()),
-    update: mockFn(() => Promise.resolve()),
-    findById: mockFn(() => Promise.resolve(null)),
-    findByRound: mockFn(() => Promise.resolve([])),
-    findByPlayerAndRound: mockFn(() => Promise.resolve(null)),
-    findByPlayer: mockFn(() => Promise.resolve([])),
-    findByRoundAndStatus: mockFn(() => Promise.resolve([])),
-    findByPlayerPaginated: mockFn(() => Promise.resolve([])),
-    countByPlayer: mockFn(() => Promise.resolve(0)),
+function restoreBet(overrides: Partial<BetSnapshot> = {}): Bet {
+  return Bet.restore({
+    id: BetId.create(),
+    roundId: ROUND_ID,
+    playerId: PLAYER_ID,
+    playerName: PLAYER_NAME,
+    amountCents: 1000n,
+    status: BetStatus.PENDING,
+    autoCashOutMultiplier: null,
+    cashOutMultiplier: null,
+    cashOutAmount: null,
+    cashedOutAt: null,
+    cancelReason: null,
+    createdAt: new Date(),
     ...overrides,
-  };
-}
-
-function createMockEventPublisher() {
-  return {
-    publish: mockFn(() => Promise.resolve()),
-    publishBatch: mockFn(() => Promise.resolve()),
-    isConnected: mockFn(() => true),
-  };
-}
-
-function createMockGamesGateway(overrides = {}) {
-  return {
-    broadcastBetPlaced: mockFn(() => {}),
-    broadcastBetConfirmed: mockFn(() => {}),
-    broadcastBetCancelled: mockFn(() => {}),
-    broadcastPlayerCashedOut: mockFn(() => {}),
-    broadcastRoundStarted: mockFn(() => {}),
-    broadcastBettingEnded: mockFn(() => {}),
-    broadcastMultiplierUpdate: mockFn(() => {}),
-    broadcastCrash: mockFn(() => {}),
-    ...overrides,
-  };
-}
-
-function createMockMetrics() {
-  return {
-    incrBet: mockFn(() => {}),
-    incrPayout: mockFn(() => {}),
-  };
-}
-
-function createMockPrisma() {
-  return {
-    $transaction: async (fn: any) => {
-      const tx = {
-        outboxEvent: { create: async () => {} },
-        round: { create: async () => {}, update: async () => {} },
-        bet: { create: async () => {}, update: async () => {} },
-      };
-      return fn(tx);
-    },
-  };
-}
-
-function createMockOutboxWriter() {
-  return {
-    writeWithinTransaction: mockFn(async () => ['outbox-id-1']),
-    tryImmediatePublish: mockFn(async () => {}),
-  };
-}
-
-function createMockAutoCashOutRepo() {
-  return {
-    addTarget: mockFn(() => Promise.resolve()),
-    removeTarget: mockFn(() => Promise.resolve()),
-    fetchAndRemoveEligible: mockFn(() => Promise.resolve([])),
-    acquireLock: mockFn(() => Promise.resolve(true)),
-    getCachedResult: mockFn(() => Promise.resolve(null)),
-    cacheResult: mockFn(() => Promise.resolve()),
-    clearRound: mockFn(() => Promise.resolve()),
-  };
+  });
 }
 
 describe('ConfirmBetUseCase', () => {
   let betRepository: ReturnType<typeof createMockBetRepository>;
-  let gamesGateway: ReturnType<typeof createMockGamesGateway>;
+  let roundStateProvider: ReturnType<typeof createMockRoundStateProvider>;
+  let autoCashOutRepository: ReturnType<typeof createMockAutoCashOutRepository>;
+  let unitOfWork: ReturnType<typeof createMockUnitOfWork>;
+  let broadcaster: ReturnType<typeof createMockBroadcaster>;
   let metrics: ReturnType<typeof createMockMetrics>;
-  let prisma: ReturnType<typeof createMockPrisma>;
-  let outboxWriter: ReturnType<typeof createMockOutboxWriter>;
-  let autoCashOutRepo: ReturnType<typeof createMockAutoCashOutRepo>;
   let useCase: ConfirmBetUseCase;
-
-  const roundId = RoundId.from('round-123');
-  const playerId = PlayerId.from('player-456');
-  const playerName = 'Player 456';
-  const amount = Money.fromDecimal('10.00');
 
   beforeEach(() => {
     betRepository = createMockBetRepository();
-    gamesGateway = createMockGamesGateway();
+    roundStateProvider = createMockRoundStateProvider();
+    autoCashOutRepository = createMockAutoCashOutRepository();
+    unitOfWork = createMockUnitOfWork();
+    broadcaster = createMockBroadcaster();
     metrics = createMockMetrics();
-    prisma = createMockPrisma();
-    outboxWriter = createMockOutboxWriter();
-    autoCashOutRepo = createMockAutoCashOutRepo();
-    const roundStateProvider = {
-      getCurrentRound: mockFn(() => null),
-    };
     useCase = new ConfirmBetUseCase(
-      betRepository as any,
-      gamesGateway as any,
-      metrics as any,
-      prisma as any,
-      outboxWriter as any,
-      autoCashOutRepo as any,
-      roundStateProvider as any,
+      betRepository as never,
+      roundStateProvider as never,
+      autoCashOutRepository as never,
+      unitOfWork as never,
+      broadcaster as never,
+      metrics as never,
     );
   });
 
-  test('should confirm pending bet (PENDING -> ACTIVE)', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
-    betRepository.findByPlayerAndRound.mockResolvedValue(bet);
+  describe('Happy path', () => {
+    test('should confirm a pending bet (PENDING -> ACTIVE)', async () => {
+      // Arrange
+      const bet = restoreBet();
+      betRepository.findById.mockResolvedValue(bet);
 
-    const result = await useCase.execute({
-      roundId,
-      betId: bet.id,
-      playerId,
+      // Act
+      const result = await useCase.execute({
+        roundId: ROUND_ID,
+        betId: bet.id,
+        playerId: PLAYER_ID,
+      });
+
+      // Assert
+      expect(result).toEqual({ betId: bet.id, roundId: ROUND_ID, playerId: PLAYER_ID });
+      expect(bet.getStatus()).toBe(BetStatus.ACTIVE);
+      expect(betRepository.findById.calls).toEqual([[bet.id]]);
     });
 
-    expect(result.betId).toBe(bet.id);
-    expect(result.roundId).toBe(roundId);
-    expect(result.playerId).toBe(playerId);
-    // Verify the bet status changed to ACTIVE
-    expect(bet.getStatus()).toBe(BetStatus.ACTIVE);
-  });
+    test('should persist the bet and commit BetConfirmed in the unit of work', async () => {
+      // Arrange
+      const bet = restoreBet();
+      betRepository.findById.mockResolvedValue(bet);
 
-  test('should throw BetNotFoundError when bet not found', async () => {
-    betRepository.findByPlayerAndRound.mockResolvedValue(null);
+      // Act
+      await useCase.execute({ roundId: ROUND_ID, betId: bet.id, playerId: PLAYER_ID });
 
-    expect(
-      useCase.execute({ roundId, betId: BetId.from('nonexistent'), playerId }),
-    ).rejects.toThrow(BetNotFoundError);
-  });
-
-  test('should save confirmed bet', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
-    betRepository.findByPlayerAndRound.mockResolvedValue(bet);
-
-    await useCase.execute({ roundId, betId: bet.id, playerId });
-
-    expect(betRepository.update.callCount).toBe(1);
-  });
-
-  test('should emit BetConfirmedEvent', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
-    betRepository.findByPlayerAndRound.mockResolvedValue(bet);
-
-    await useCase.execute({ roundId, betId: bet.id, playerId });
-
-    expect(outboxWriter.writeWithinTransaction.callCount).toBe(1);
-  });
-
-  test('should broadcast via WebSocket', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
-    betRepository.findByPlayerAndRound.mockResolvedValue(bet);
-
-    await useCase.execute({ roundId, betId: bet.id, playerId });
-
-    expect(gamesGateway.broadcastBetConfirmed.callCount).toBe(1);
-  });
-
-  test('should pass correct data to WebSocket broadcast', async () => {
-    const bet = Bet.create(roundId, playerId, playerName, amount);
-    betRepository.findByPlayerAndRound.mockResolvedValue(bet);
-
-    await useCase.execute({ roundId, betId: bet.id, playerId });
-
-    expect(gamesGateway.broadcastBetConfirmed.callCount).toBe(1);
-    const args = gamesGateway.broadcastBetConfirmed.lastArgs;
-    expect(args).not.toBeNull();
-    // broadcastBetConfirmed(roundId, betId, playerId, playerName, amountCents)
-    expect(args![0]).toBe(roundId);
-    expect(args![1]).toBe(bet.id);
-    expect(args![2]).toBe(playerId);
-    expect(args![3]).toBe(playerName);
-    expect(args![4]).toBe(amount.toCents());
-  });
-
-  test('should register auto cash-out target when bet has autoCashOutMultiplier', async () => {
-    const bet = Bet.restore(
-      'bet-1' as any,
-      'round-1' as any,
-      'player-1' as any,
-      'Player',
-      1000n,
-      BetStatus.PENDING,
-      2.5,
-      null,
-      null,
-      null,
-    );
-    betRepository.findByPlayerAndRound.mockResolvedValue(bet);
-
-    await useCase.execute({
-      roundId: 'round-1' as any,
-      betId: 'bet-1' as any,
-      playerId: 'player-1' as any,
+      // Assert
+      expect(betRepository.update.calls).toEqual([[bet, FAKE_TX]]);
+      expect(unitOfWork.commits).toHaveLength(1);
+      expect(unitOfWork.commits[0].aggregateId).toBe(ROUND_ID);
+      const events = unitOfWork.committedEvents;
+      expect(events.map((e) => e.eventType)).toEqual(['BetConfirmed']);
+      expect(events[0]).toMatchObject({ betId: bet.id, playerId: PLAYER_ID, amount: 1000n });
     });
 
-    expect(autoCashOutRepo.addTarget.callCount).toBe(1);
+    test('should broadcast the confirmation and record metrics', async () => {
+      // Arrange
+      const bet = restoreBet();
+      betRepository.findById.mockResolvedValue(bet);
+
+      // Act
+      await useCase.execute({ roundId: ROUND_ID, betId: bet.id, playerId: PLAYER_ID });
+
+      // Assert
+      expect(broadcaster.broadcastBetConfirmed.calls[0][0]).toEqual({
+        roundId: ROUND_ID,
+        betId: bet.id,
+        playerId: PLAYER_ID,
+        playerName: PLAYER_NAME,
+        amountCents: 1000n,
+      });
+      expect(metrics.incrBet.calls).toEqual([['confirmed', 1000]]);
+    });
   });
 
-  test('should NOT register auto cash-out target when bet has no autoCashOutMultiplier', async () => {
-    const bet = Bet.restore(
-      'bet-1' as any,
-      'round-1' as any,
-      'player-1' as any,
-      'Player',
-      1000n,
-      BetStatus.PENDING,
-      null,
-      null,
-      null,
-      null,
-    );
-    betRepository.findByPlayerAndRound.mockResolvedValue(bet);
+  describe('Bet ownership', () => {
+    test('should throw BetNotFoundError when the bet does not exist', async () => {
+      // Arrange
+      betRepository.findById.mockResolvedValue(null);
 
-    await useCase.execute({
-      roundId: 'round-1' as any,
-      betId: 'bet-1' as any,
-      playerId: 'player-1' as any,
+      // Act & Assert
+      await expect(
+        useCase.execute({ roundId: ROUND_ID, betId: BetId.create(), playerId: PLAYER_ID }),
+      ).rejects.toThrow(BetNotFoundError);
+      expect(unitOfWork.commit.callCount).toBe(0);
     });
 
-    expect(autoCashOutRepo.addTarget.callCount).toBe(0);
+    test('should throw BetNotFoundError when the bet belongs to another player', async () => {
+      // Arrange
+      const bet = restoreBet({ playerId: PlayerId.from('someone-else') });
+      betRepository.findById.mockResolvedValue(bet);
+
+      // Act & Assert
+      await expect(
+        useCase.execute({ roundId: ROUND_ID, betId: bet.id, playerId: PLAYER_ID }),
+      ).rejects.toThrow(BetNotFoundError);
+      expect(bet.getStatus()).toBe(BetStatus.PENDING);
+      expect(unitOfWork.commit.callCount).toBe(0);
+    });
+
+    test('should throw BetNotFoundError when the bet belongs to another round', async () => {
+      // Arrange
+      const bet = restoreBet({ roundId: RoundId.from('other-round') });
+      betRepository.findById.mockResolvedValue(bet);
+
+      // Act & Assert
+      await expect(
+        useCase.execute({ roundId: ROUND_ID, betId: bet.id, playerId: PLAYER_ID }),
+      ).rejects.toThrow(BetNotFoundError);
+      expect(unitOfWork.commit.callCount).toBe(0);
+    });
+
+    test('should not confirm the newer bet when the reply refers to an old replaced bet (regression)', async () => {
+      // Arrange: the old bet was replaced (CANCELLED); a newer PENDING bet exists
+      const oldBet = restoreBet({
+        status: BetStatus.CANCELLED,
+        cancelReason: 'Replaced by new bet attempt',
+      });
+      const newerBet = restoreBet();
+      betRepository.findById.mockImplementation(async (id: string) =>
+        id === oldBet.id ? oldBet : id === newerBet.id ? newerBet : null,
+      );
+      betRepository.findByPlayerAndRound.mockResolvedValue(newerBet);
+
+      // Act & Assert
+      await expect(
+        useCase.execute({ roundId: ROUND_ID, betId: oldBet.id, playerId: PLAYER_ID }),
+      ).rejects.toThrow(InvalidBetStateError);
+      expect(newerBet.getStatus()).toBe(BetStatus.PENDING);
+      expect(betRepository.findByPlayerAndRound.callCount).toBe(0);
+      expect(unitOfWork.commit.callCount).toBe(0);
+      expect(broadcaster.broadcastBetConfirmed.callCount).toBe(0);
+    });
+
+    test('should throw InvalidBetStateError when the bet is not PENDING', async () => {
+      // Arrange
+      const bet = restoreBet({ status: BetStatus.ACTIVE });
+      betRepository.findById.mockResolvedValue(bet);
+
+      // Act & Assert
+      await expect(
+        useCase.execute({ roundId: ROUND_ID, betId: bet.id, playerId: PLAYER_ID }),
+      ).rejects.toThrow(InvalidBetStateError);
+      expect(unitOfWork.commit.callCount).toBe(0);
+      expect(autoCashOutRepository.addTarget.callCount).toBe(0);
+    });
+  });
+
+  describe('Live round sync', () => {
+    test('should sync the confirmed bet into the live round when round ids match', async () => {
+      // Arrange
+      const liveRound = await Round.create();
+      const staleLiveBet = liveRound.placeBet(PLAYER_ID, PLAYER_NAME, Money.fromDecimal('10.00'));
+      liveRound.pullEvents();
+      const bet = restoreBet({ id: staleLiveBet.id, roundId: liveRound.id });
+      betRepository.findById.mockResolvedValue(bet);
+      roundStateProvider.getCurrentRound.mockReturnValue(liveRound);
+
+      // Act
+      await useCase.execute({ roundId: liveRound.id, betId: bet.id, playerId: PLAYER_ID });
+
+      // Assert
+      expect(liveRound.getBetByPlayer(PLAYER_ID)).toBe(bet);
+      expect(liveRound.getBetByPlayer(PLAYER_ID)?.isActive()).toBe(true);
+    });
+
+    test('should not touch the live round when it is a different round', async () => {
+      // Arrange
+      const liveRound = await Round.create();
+      liveRound.pullEvents();
+      const bet = restoreBet();
+      betRepository.findById.mockResolvedValue(bet);
+      roundStateProvider.getCurrentRound.mockReturnValue(liveRound);
+
+      // Act
+      await useCase.execute({ roundId: ROUND_ID, betId: bet.id, playerId: PLAYER_ID });
+
+      // Assert
+      expect(liveRound.getBetByPlayer(PLAYER_ID)).toBeUndefined();
+      expect(bet.getStatus()).toBe(BetStatus.ACTIVE);
+    });
+
+    test('should confirm the bet when there is no live round', async () => {
+      // Arrange
+      const bet = restoreBet();
+      betRepository.findById.mockResolvedValue(bet);
+      roundStateProvider.getCurrentRound.mockReturnValue(null);
+
+      // Act
+      await useCase.execute({ roundId: ROUND_ID, betId: bet.id, playerId: PLAYER_ID });
+
+      // Assert
+      expect(bet.getStatus()).toBe(BetStatus.ACTIVE);
+      expect(unitOfWork.commit.callCount).toBe(1);
+    });
+  });
+
+  describe('Auto cash-out', () => {
+    test('should register the auto cash-out target after the commit', async () => {
+      // Arrange
+      const bet = restoreBet({ autoCashOutMultiplier: 2.5 });
+      betRepository.findById.mockResolvedValue(bet);
+      let commitsAtRegistration = -1;
+      autoCashOutRepository.addTarget.mockImplementation(async () => {
+        commitsAtRegistration = unitOfWork.commits.length;
+      });
+
+      // Act
+      await useCase.execute({ roundId: ROUND_ID, betId: bet.id, playerId: PLAYER_ID });
+
+      // Assert
+      expect(autoCashOutRepository.addTarget.calls).toEqual([[ROUND_ID, PLAYER_ID, 2.5]]);
+      expect(commitsAtRegistration).toBe(1);
+    });
+
+    test('should not register an auto cash-out target when the bet has none', async () => {
+      // Arrange
+      const bet = restoreBet();
+      betRepository.findById.mockResolvedValue(bet);
+
+      // Act
+      await useCase.execute({ roundId: ROUND_ID, betId: bet.id, playerId: PLAYER_ID });
+
+      // Assert
+      expect(autoCashOutRepository.addTarget.callCount).toBe(0);
+    });
+
+    test('should not register the target when the commit fails', async () => {
+      // Arrange
+      const bet = restoreBet({ autoCashOutMultiplier: 2.5 });
+      betRepository.findById.mockResolvedValue(bet);
+      unitOfWork.commit.mockRejectedValue(new Error('db down'));
+
+      // Act & Assert
+      await expect(
+        useCase.execute({ roundId: ROUND_ID, betId: bet.id, playerId: PLAYER_ID }),
+      ).rejects.toThrow('db down');
+      expect(autoCashOutRepository.addTarget.callCount).toBe(0);
+      expect(broadcaster.broadcastBetConfirmed.callCount).toBe(0);
+    });
+
+    test('should log and continue when registering the auto cash-out target fails', async () => {
+      // Arrange
+      const bet = restoreBet({ autoCashOutMultiplier: 2.5 });
+      betRepository.findById.mockResolvedValue(bet);
+      autoCashOutRepository.addTarget.mockRejectedValue(new Error('redis down'));
+
+      // Act
+      const result = await useCase.execute({
+        roundId: ROUND_ID,
+        betId: bet.id,
+        playerId: PLAYER_ID,
+      });
+
+      // Assert
+      expect(result.betId).toBe(bet.id);
+      expect(unitOfWork.commit.callCount).toBe(1);
+      expect(broadcaster.broadcastBetConfirmed.callCount).toBe(1);
+    });
   });
 });

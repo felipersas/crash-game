@@ -1,21 +1,19 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Round, type RoundStatus, DEFAULT_ROUND_CONFIG } from '@/domain/entities/round.entity';
-import type { Bet } from '@/domain/entities/bet.entity';
-import type { IRoundRepository } from '@/application/interfaces/round.repository';
-import type { IBetRepository } from '@/application/interfaces/bet.repository';
-import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
-import type { IUseCase } from '@/application/interfaces/use-case';
 import { Money, type PlayerId } from '@crash/domain';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
+import type { Bet, BetStatus } from '@/domain/entities/bet.entity';
+import { RoundNotFoundError } from '@/domain/errors/domain.errors';
+import type { IRoundRepository } from '@/application/interfaces/round.repository';
+import type { IBetRepository } from '@/application/interfaces/bet.repository';
+import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
+import type { IUnitOfWork } from '@/application/interfaces/unit-of-work';
+import type { IUseCase } from '@/application/interfaces/use-case';
 import {
   ROUND_REPOSITORY,
   BET_REPOSITORY,
-  EVENT_PUBLISHER,
+  UNIT_OF_WORK,
   GAME_BROADCASTER,
 } from '@/application/di.tokens';
-import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
-import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
-import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
 
 export interface PlaceBetInput {
   playerId: PlayerId;
@@ -28,111 +26,77 @@ export interface PlaceBetOutput {
   roundId: string;
   betId: string;
   amountCents: bigint;
-  status: RoundStatus;
+  status: BetStatus;
   autoCashOutMultiplier: number | null;
 }
 
+/**
+ * Place Bet Use Case - Application Layer
+ *
+ * Creates a PENDING bet on the current round (replacing a previous PENDING or
+ * CANCELLED attempt) and emits BetPlaced so the wallet can debit the stake.
+ */
 @Injectable()
 export class PlaceBetUseCase implements IUseCase<PlaceBetInput, PlaceBetOutput> {
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IGameEventPublisher,
+    @Inject(UNIT_OF_WORK) private readonly unitOfWork: IUnitOfWork,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
-    private readonly prisma: PrismaService,
-    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(input: PlaceBetInput): Promise<PlaceBetOutput> {
-    const round = await this.getOrCreateRound();
-    return this.placeBetOnRound(round, input);
-  }
+    const round = await this.roundRepository.findCurrentRound();
+    if (!round) {
+      throw new RoundNotFoundError();
+    }
 
-  private async getOrCreateRound(): Promise<Round> {
-    const existing = await this.roundRepository.findCurrentRound();
-    if (existing) return existing;
-
-    const round = await Round.create(DEFAULT_ROUND_CONFIG);
-    await this.persistWithOutbox(round, async (tx) => {
-      await this.roundRepository.create(round, tx);
-    });
-
-    return round;
-  }
-
-  private async placeBetOnRound(round: Round, input: PlaceBetInput): Promise<PlaceBetOutput> {
-    const amount = Money.fromCents(input.amountCents);
     const { bet, replacedBet } = round.placeOrReplaceBet(
       input.playerId,
       input.playerName,
-      amount,
+      Money.fromCents(input.amountCents),
       input.autoCashOutMultiplier,
     );
 
-    this.handleReplacement(round, replacedBet, input);
-
-    await this.persistWithOutbox(round, async (tx) => {
+    await this.unitOfWork.commit(round.id, round.pullEvents(), async (tx) => {
       if (replacedBet) {
         await this.betRepository.update(replacedBet, tx);
       }
       await this.betRepository.create(bet, tx);
     });
 
-    this.metrics.incrBet('placed', Number(input.amountCents));
+    if (replacedBet) {
+      this.notifyReplaced(replacedBet);
+    }
 
-    this.broadcastBetPlaced(round, bet, input);
+    this.metrics.incrBet('placed', Number(input.amountCents));
+    this.broadcaster.broadcastBetPlaced({
+      roundId: round.id,
+      betId: bet.id,
+      playerId: bet.playerId,
+      playerName: bet.playerName,
+      amountCents: bet.getAmount().toCents(),
+    });
 
     return {
       roundId: round.id,
       betId: bet.id,
-      amountCents: input.amountCents,
-      status: round.getStatus(),
+      amountCents: bet.getAmount().toCents(),
+      status: bet.getStatus(),
       autoCashOutMultiplier: bet.getAutoCashOutMultiplier(),
     };
   }
 
-  private handleReplacement(round: Round, replacedBet: Bet | null, input: PlaceBetInput): void {
-    if (!replacedBet) return;
-
+  private notifyReplaced(replacedBet: Bet): void {
     this.metrics.incrBet('cancelled', Number(replacedBet.getAmount().toCents()));
-
-    this.broadcaster.broadcastBetCancelled(
-      round.id,
-      replacedBet.id,
-      input.playerId,
-      replacedBet.playerName,
-      replacedBet.getAmount().toCents(),
-      'Replaced by new bet attempt',
-    );
-  }
-
-  private async persistWithOutbox(
-    round: Round,
-    persistFn: (tx: any) => Promise<void>,
-  ): Promise<void> {
-    const events = round.pullEvents();
-    let outboxIds: string[] = [];
-
-    await this.prisma.$transaction(async (tx) => {
-      await persistFn(tx);
-      if (events.length > 0) {
-        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, round.id, events);
-      }
+    this.broadcaster.broadcastBetCancelled({
+      roundId: replacedBet.roundId,
+      betId: replacedBet.id,
+      playerId: replacedBet.playerId,
+      playerName: replacedBet.playerName,
+      amountCents: replacedBet.getAmount().toCents(),
+      reason: replacedBet.getCancelReason() ?? '',
     });
-
-    if (events.length > 0 && outboxIds.length > 0) {
-      await this.outboxWriter.tryImmediatePublish(events, outboxIds);
-    }
-  }
-
-  private broadcastBetPlaced(round: Round, bet: Bet, input: PlaceBetInput): void {
-    this.broadcaster.broadcastBetPlaced(
-      round.id,
-      bet.id,
-      input.playerId,
-      input.playerName,
-      input.amountCents,
-    );
   }
 }
