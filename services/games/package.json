@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@crash/domain": "workspace:*",
+    "@crash/http": "workspace:*",
     "@crash/messaging": "workspace:*",
     "@crash/observability": "workspace:*",
     "@nestjs/bullmq": "^11.0.0",

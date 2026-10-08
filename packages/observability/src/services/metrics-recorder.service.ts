@@ -141,10 +141,7 @@ export class MetricsRecorderService {
       { method, route, status_code: String(statusCode) },
       durationSeconds,
     );
-    this.httpRequestsTotal.inc(
-      { method, route, status_code: String(statusCode) },
-      1,
-    );
+    this.httpRequestsTotal.inc({ method, route, status_code: String(statusCode) }, 1);
   }
 
   setWsConnections(count: number): void {

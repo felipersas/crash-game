@@ -1,2 +1,3 @@
-export { ObservabilityModule } from './observability.module.js';
-export { MetricsRecorderService, METRICS_RECORDER } from './services/metrics-recorder.service.js';
+export { ObservabilityModule } from './observability.module';
+export { MetricsRecorderService, METRICS_RECORDER } from './services/metrics-recorder.service';
+export { MetricsInterceptor } from './interceptors/metrics.interceptor';
