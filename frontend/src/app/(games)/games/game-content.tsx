@@ -5,7 +5,7 @@ import BetControls from "./_components/bet-controls/BetControls";
 import BetsList from "./_components/bets-list/BetsList";
 import RoundHistory from "./_components/round-history/RoundHistory";
 import { useGameStore } from "@/store/game-store";
-import { RoundStatus } from "@/types";
+import { RoundStatus, type Phase } from "@/types";
 import { useGameWebSocket } from "@/hooks/useGameWebSocket";
 import { useRoundHistory } from "@/hooks/useRoundHistory";
 import { useSession } from "next-auth/react";
@@ -18,10 +18,12 @@ export function GameContent() {
   const isHydrated = useGameStore((s) => s.isHydrated);
   const { data: session, status } = useSession();
 
+  // Wait for the session so the socket authenticates with the real token and
+  // handlers know my playerId; reconnects automatically if either changes.
   useGameWebSocket({
     token: session?.accessToken,
     playerId: session?.playerId,
-    enabled: true,
+    enabled: status !== "loading",
   });
 
   const { data: historyData } = useRoundHistory({ page: 1, limit: 10 });
@@ -30,7 +32,7 @@ export function GameContent() {
     return <GamesLoading />;
   }
 
-  const roundPhase =
+  const roundPhase: Phase =
     roundStatus === RoundStatus.BETTING
       ? "betting"
       : roundStatus === RoundStatus.ACTIVE

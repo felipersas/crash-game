@@ -8,6 +8,7 @@
  */
 
 import { InvalidMoneyAmountError, NegativeMoneyError } from '../errors/domain.errors';
+import { formatCents } from '../format-cents';
 
 export class Money {
   private readonly amount: bigint;
@@ -37,18 +38,20 @@ export class Money {
   static fromDecimal(decimal: string): Money {
     const trimmed = decimal.trim();
 
-    if (trimmed.startsWith('-')) {
-      throw new NegativeMoneyError(0n);
+    if (/^-\d+(\.\d*)?$/.test(trimmed)) {
+      throw new NegativeMoneyError(Money.parseCents(trimmed.slice(1)) * -1n);
     }
     if (!/^\d+(\.\d*)?$/.test(trimmed)) {
       throw new InvalidMoneyAmountError(decimal);
     }
 
-    const [whole = '0', fractional = ''] = trimmed.split('.');
-    const truncatedFractional = fractional.slice(0, 2).padEnd(2, '0');
-    const cents = BigInt(whole) * 100n + BigInt(truncatedFractional);
+    return new Money(Money.parseCents(trimmed));
+  }
 
-    return new Money(cents);
+  /** Parses an unsigned decimal string into cents, truncating extra fractional digits. */
+  private static parseCents(decimal: string): bigint {
+    const [whole = '0', fractional = ''] = decimal.split('.');
+    return BigInt(whole) * 100n + BigInt(fractional.slice(0, 2).padEnd(2, '0'));
   }
 
   /**
@@ -125,15 +128,10 @@ export class Money {
 
   /**
    * Convert Money to decimal string format for display.
-   * Uses pure bigint arithmetic to avoid Number precision loss on large values.
    * @returns Decimal string (e.g., "10.99" for $10.99)
    */
   toDecimal(): string {
-    const absAmount = this.amount < 0n ? -this.amount : this.amount;
-    const whole = absAmount / 100n;
-    const fractional = absAmount % 100n;
-    const sign = this.amount < 0n ? '-' : '';
-    return `${sign}${whole}.${fractional.toString().padStart(2, '0')}`;
+    return formatCents(this.amount);
   }
 
   /**

@@ -1,85 +1,80 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import type { IEventPublisher, SerializedEvent } from '@crash/messaging';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
-import type { IEventPublisher } from '@crash/messaging';
-import { RABBITMQ_PUBLISHER } from '@/application/di.tokens';
+import { RABBITMQ_PUBLISHER } from '@/infrastructure/di.tokens';
 
+/**
+ * Outbox Processor - Infrastructure Layer
+ *
+ * Polling fallback for events whose immediate publish failed.
+ */
 @Injectable()
 export class OutboxProcessor {
   private readonly logger = new Logger(OutboxProcessor.name);
-  private readonly MAX_RETRY_ATTEMPTS = 5;
-  private readonly RETRY_DELAY_MS = 1000;
+  private readonly MAX_RETRIES = 5;
+  private readonly BATCH_SIZE = 50;
+  private readonly RETENTION_DAYS = 30;
+  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(RABBITMQ_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    @Inject(RABBITMQ_PUBLISHER) private readonly publisher: IEventPublisher,
   ) {}
 
   @Cron(CronExpression.EVERY_SECOND)
-  async processPendingEvents() {
-    const pendingEvents = await this.prisma.outboxEvent.findMany({
-      where: {
-        status: 'PENDING',
-        retryCount: {
-          lt: this.MAX_RETRY_ATTEMPTS,
-        },
-      },
-      take: 10,
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
+  async processPendingEvents(): Promise<void> {
+    // Cron ticks can overlap with a slow batch; never publish the same row twice concurrently
+    if (this.running) return;
+    this.running = true;
 
-    for (const event of pendingEvents) {
-      await this.processEvent(event);
-    }
-  }
-
-  private async processEvent(event: any) {
     try {
-      const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
-      await this.eventPublisher.publish(payload);
-
-      await this.prisma.outboxEvent.update({
-        where: { id: event.id },
-        data: {
-          status: 'SENT',
-          sentAt: new Date(),
-        },
+      const pending = await this.prisma.outboxEvent.findMany({
+        where: { status: 'PENDING', retryCount: { lt: this.MAX_RETRIES } },
+        orderBy: { createdAt: 'asc' },
+        take: this.BATCH_SIZE,
       });
 
-      this.logger.debug(`Published outbox event: ${event.eventType}`);
+      for (const row of pending) {
+        await this.publish(row.id, row.payload as SerializedEvent, row.retryCount ?? 0);
+      }
     } catch (error: unknown) {
-      this.logger.error(`Failed to publish outbox event ${event.id}:`, error);
-
-      const retryCount = (event.retryCount || 0) + 1;
-      const delay = this.RETRY_DELAY_MS * Math.pow(2, retryCount - 1);
-
-      await this.prisma.outboxEvent.update({
-        where: { id: event.id },
-        data: {
-          retryCount,
-          errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        },
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      this.logger.error('Error processing outbox events', error);
+    } finally {
+      this.running = false;
     }
   }
 
-  async cleanupOldSentEvents() {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    await this.prisma.outboxEvent.deleteMany({
-      where: {
-        status: 'SENT',
-        sentAt: {
-          lt: thirtyDaysAgo,
-        },
-      },
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async cleanupSentEvents(): Promise<void> {
+    const cutoff = new Date(Date.now() - this.RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const { count } = await this.prisma.outboxEvent.deleteMany({
+      where: { status: 'SENT', sentAt: { lt: cutoff } },
     });
+    if (count > 0) {
+      this.logger.log(`Cleaned up ${count} sent outbox events`);
+    }
+  }
 
-    this.logger.debug('Cleaned up old sent events');
+  private async publish(id: string, event: SerializedEvent, retryCount: number): Promise<void> {
+    try {
+      await this.publisher.publish(event);
+      await this.prisma.outboxEvent.update({
+        where: { id },
+        data: { status: 'SENT', sentAt: new Date() },
+      });
+    } catch (error: unknown) {
+      const attempts = retryCount + 1;
+      this.logger.error(`Failed to publish outbox event ${id} (attempt ${attempts})`, error);
+      await this.prisma.outboxEvent.update({
+        where: { id },
+        data: {
+          retryCount: attempts,
+          // Give up visibly instead of leaving an unpublishable row PENDING forever
+          status: attempts >= this.MAX_RETRIES ? 'FAILED' : 'PENDING',
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   }
 }

@@ -1,28 +1,58 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Controller, type Control } from "react-hook-form";
+import { useState } from "react";
+import { useController, type Control } from "react-hook-form";
 import { Input } from "@/components/ui/Input";
-import { RoundStatus } from "@/types";
+import { GAME_CONSTANTS } from "@/constants/game";
 import type { BetFormValues } from "@/schemas/bet-form.schema";
 
 const STORAGE_KEY = "auto-cashout-last-multiplier";
 const PRESETS = [1.5, 2, 5, 10] as const;
+const DEFAULT_TARGET = 2;
 
 interface AutoCashOutProps {
   control: Control<BetFormValues>;
   disabled: boolean;
-  roundStatus: RoundStatus;
 }
 
-export function AutoCashOut({ control, disabled, roundStatus }: AutoCashOutProps) {
-  const [enabled, setEnabled] = useState(false);
+function isValidTarget(value: number): boolean {
+  return (
+    !Number.isNaN(value) &&
+    value >= GAME_CONSTANTS.MIN_AUTO_CASHOUT &&
+    value <= GAME_CONSTANTS.MAX_AUTO_CASHOUT
+  );
+}
 
-  useEffect(() => {
-    if (roundStatus === RoundStatus.BETTING) {
-      setEnabled(false);
-    }
-  }, [roundStatus]);
+function readSavedTarget(): number {
+  try {
+    const saved = Number.parseFloat(localStorage.getItem(STORAGE_KEY) ?? "");
+    return isValidTarget(saved) ? saved : DEFAULT_TARGET;
+  } catch {
+    return DEFAULT_TARGET;
+  }
+}
+
+function saveTarget(value: number) {
+  try {
+    localStorage.setItem(STORAGE_KEY, value.toFixed(2));
+  } catch {
+    // storage unavailable (private mode) — not critical
+  }
+}
+
+/**
+ * Auto cash-out toggle + target input.
+ *
+ * The toggle state is derived from the form value: `targetMultiplier`
+ * undefined means OFF, so a hidden target is never submitted.
+ */
+export function AutoCashOut({ control, disabled }: AutoCashOutProps) {
+  const { field, fieldState } = useController({ control, name: "targetMultiplier" });
+  const enabled = field.value !== undefined;
+
+  const toggle = () => {
+    field.onChange(enabled ? undefined : readSavedTarget());
+  };
 
   return (
     <div className={`rounded-lg border transition-all ${
@@ -32,8 +62,10 @@ export function AutoCashOut({ control, disabled, roundStatus }: AutoCashOutProps
     }`}>
       <button
         type="button"
+        role="switch"
+        aria-checked={enabled}
         disabled={disabled}
-        onClick={() => setEnabled((v) => !v)}
+        onClick={toggle}
         className="w-full flex items-center justify-between px-3 py-2"
       >
         <span className={`text-sm font-terminal ${enabled ? "text-primary" : "text-text-muted"}`}>
@@ -52,91 +84,60 @@ export function AutoCashOut({ control, disabled, roundStatus }: AutoCashOutProps
         </div>
       </button>
 
-      <Controller
-        control={control}
-        name="targetMultiplier"
-        render={({ field: { onChange, value } }) => (
-          <>{enabled && (
-            <AutoCashOutInput
-              value={value ?? null}
-              onChange={onChange}
-              disabled={disabled}
-            />
-          )}</>
-        )}
-      />
+      {enabled && (
+        <AutoCashOutInput
+          initialValue={field.value}
+          onChange={field.onChange}
+          disabled={disabled}
+          error={fieldState.error?.message}
+        />
+      )}
     </div>
   );
 }
 
 function AutoCashOutInput({
-  value,
+  initialValue,
   onChange,
   disabled,
+  error,
 }: {
-  value: number | null;
-  onChange: (val: number | undefined) => void;
+  initialValue: number | undefined;
+  onChange: (val: number) => void;
   disabled: boolean;
+  error?: string;
 }) {
+  // Local text state so partially typed values ("1.", "") are preserved.
+  // Mounted only while enabled, so it initializes from the form value.
   const [inputValue, setInputValue] = useState(
-    value != null ? value.toFixed(2) : "",
+    initialValue !== undefined && !Number.isNaN(initialValue)
+      ? initialValue.toFixed(2)
+      : "",
   );
-
-  useEffect(() => {
-    if (value != null) {
-      setInputValue(value.toFixed(2));
-    }
-  }, [value]);
-
-  const loadSaved = useCallback(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = parseFloat(saved);
-        if (!isNaN(parsed) && parsed >= 1.01 && parsed <= 1000) {
-          setInputValue(parsed.toFixed(2));
-          onChange(parsed);
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, [onChange]);
-
-  useEffect(() => {
-    if (value == null) {
-      loadSaved();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
-    if (raw === "" || /^\d*\.?\d{0,2}$/.test(raw)) {
-      setInputValue(raw);
-      const num = parseFloat(raw);
-      if (!isNaN(num) && num >= 1.01 && num <= 1000) {
-        onChange(Math.round(num * 100) / 100);
-        localStorage.setItem(STORAGE_KEY, num.toFixed(2));
-      } else {
-        onChange(undefined);
-      }
-    }
+    if (raw !== "" && !/^\d*\.?\d{0,2}$/.test(raw)) return;
+    setInputValue(raw);
+    // Invalid / empty input becomes NaN so the schema blocks submission
+    // instead of silently sending a stale target.
+    const num = Number.parseFloat(raw);
+    onChange(num);
+    if (isValidTarget(num)) saveTarget(num);
   };
 
   const handlePreset = (preset: number) => {
     setInputValue(preset.toFixed(2));
     onChange(preset);
-    localStorage.setItem(STORAGE_KEY, preset.toFixed(2));
+    saveTarget(preset);
   };
 
   const handleBlur = () => {
-    const num = parseFloat(inputValue);
-    if (!isNaN(num) && num >= 1.01) {
-      const rounded = Math.round(num * 100) / 100;
-      setInputValue(rounded.toFixed(2));
-    }
+    const num = Number.parseFloat(inputValue);
+    if (!Number.isNaN(num)) setInputValue(num.toFixed(2));
   };
+
+  const current = Number.parseFloat(inputValue);
 
   return (
     <div className="px-3 pb-3 space-y-2">
@@ -148,11 +149,16 @@ function AutoCashOutInput({
           type="text"
           inputMode="decimal"
           placeholder="Multiplier"
+          aria-label="Auto cashout multiplier"
+          aria-invalid={!!error}
           disabled={disabled}
           className="h-8 bg-background border-border text-primary text-sm font-bold text-center focus-visible:border-primary focus-visible:ring-primary/30"
         />
         <span className="text-text-muted text-sm font-terminal">×</span>
       </div>
+      {error && (
+        <p className="text-xs text-destructive font-terminal">{error}</p>
+      )}
       <div className="flex gap-1.5">
         {PRESETS.map((preset) => (
           <button
@@ -161,7 +167,7 @@ function AutoCashOutInput({
             disabled={disabled}
             onClick={() => handlePreset(preset)}
             className={`flex-1 py-1 rounded text-xs font-terminal transition-colors disabled:opacity-50 ${
-              parseFloat(inputValue) === preset
+              current === preset
                 ? "bg-primary/15 border border-primary text-primary"
                 : "bg-secondary border border-border text-text-muted hover:border-primary/30 hover:text-primary"
             }`}

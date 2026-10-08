@@ -24,10 +24,6 @@ export interface ApiError {
   code?: string;
 }
 
-interface HttpRequestConfig extends AxiosRequestConfig {
-  skipAuth?: boolean;
-}
-
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,
   timeout: 10000,
@@ -36,12 +32,9 @@ export const apiClient: AxiosInstance = axios.create({
 
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
-    const httpConfig = config as HttpRequestConfig;
-    if (!httpConfig.skipAuth) {
-      const session = await getSession();
-      if (session?.accessToken) {
-        config.headers.Authorization = `Bearer ${session.accessToken}`;
-      }
+    const session = await getSession();
+    if (session?.accessToken) {
+      config.headers.Authorization = `Bearer ${session.accessToken}`;
     }
     return config;
   },
@@ -109,15 +102,5 @@ export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<
 
 export async function post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
   const response = await apiClient.post<T>(url, data, config);
-  return response.data;
-}
-
-export async function put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-  const response = await apiClient.put<T>(url, data, config);
-  return response.data;
-}
-
-export async function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-  const response = await apiClient.delete<T>(url, config);
   return response.data;
 }

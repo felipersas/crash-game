@@ -23,62 +23,48 @@ Guide all changes to the wallets service following established DDD architecture 
 
 ```
 services/wallets/src/
-├── domain/           # Wallet entity, Wallet events, Domain errors
-├── application/      # Use cases (credit, debit, create, get), Repository interfaces, PlayerWalletResolver
-├── infrastructure/   # Prisma repo, RabbitMQ handlers (inbox/outbox), DI tokens, Filters/Interceptors
-└── presentation/     # WalletsController, DTOs, @UserContext decorator
+├── domain/           # Wallet aggregate, wallet events, domain errors
+├── application/      # Use cases, ports (interfaces/), integration events (events/), di.tokens.ts
+├── infrastructure/   # Prisma adapters + unit of work, outbox/inbox, RabbitMQ consumer, di.tokens.ts
+└── presentation/     # WalletsController, DTOs (with static from())
 ```
+
+Same layering and conventions as the games service (see games-service skill): ports in
+`application/di.tokens.ts`, `IUnitOfWork` + `TransactionContext`, no infrastructure import
+from application, shared `@crash/http` filter/`UserContext`.
 
 ## Key Patterns
 
 ### Wallet Entity
-- `Wallet.create(playerId)` — new wallet with zero balance, emits `WalletCreatedEvent`
+- `Wallet.create(playerId)` — zero balance, emits `WalletCreated`
 - `Wallet.restore(id, playerId, balanceCents, version)` — rehydration, no events
-- `credit(amount: Money, reason: string)` — always succeeds, emits `MoneyCreditedEvent`
-- `debit(amount: Money, reason: string)` — throws `InsufficientFundsError` if insufficient
-- `canDebit(amount: Money): boolean` — non-throwing check
-- `pullEvents()` — extract and clear domain events
-- Optimistic locking via `version` field
+- `credit(amount: Money, reason)` / `debit(amount: Money, reason)` — bump `version`, emit
+  `MoneyCredited` / `MoneyDebited`; `debit` throws `InsufficientFundsError`
+- Optimistic locking via `version` (`OptimisticLockError` on conflict)
 
 ### CRITICAL: Money Handling
-- **NEVER use floating point** — always `bigint` cents or `Money` from `@crash/domain`
-- `Money.fromCents(1000n)` — $10.00
-- `Money.fromDecimal('1.00')` — $1.00
-- `wallet.getBalance().toCents()` — returns `bigint`
-- DB column: `BIGINT` / `NUMERIC` for cents
+- **NEVER use floating point** — `bigint` cents or `Money` from `@crash/domain`
+- Format with `formatCents` / `Money.toDecimal()`; API balance is a string of cents
+- DB column: `BIGINT` cents
 
 ### Use Cases
-```typescript
-@Injectable()
-export class DebitWalletUseCase implements IUseCase<DebitInput, DebitOutput> {
-  constructor(
-    @Inject(WALLET_REPOSITORY) private readonly walletRepo: IWalletRepository,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
-    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
-  ) {}
-}
-```
+- `CreateWalletUseCase` — idempotent creation
+- `GetWalletUseCase`
+- `CreditWalletUseCase` — credit by player (cash-out payouts)
+- `DebitBetStakeUseCase` — bet saga step: debit + `WalletDebited` reply (or
+  `WalletDebitFailed` for business rejections) committed in ONE transaction
+
+### Exactly-once money movements
+Consumers run inside `IdempotentInbox.process(key, type, payload, handler)`; the handler
+receives the inbox event id and the use case marks it PROCESSED inside the same
+`unitOfWork.commit`, so a retry can never debit or credit twice.
+Only transient errors (`OptimisticLockError`, DB connectivity) are retried; business
+rejections are final outcomes.
 
 ### Event-Driven Operations
-Wallets react to games events via RabbitMQ:
-- `BetPlaced` → Debit wallet (async, at-least-once delivery)
-- `PlayerCashedOut` → Credit wallet (payout)
-- Reply with `WalletDebited` or `WalletDebitFailed` events
-
-### Inbox/Outbox Pattern
-- `inbox-processor.ts` — deduplicates incoming events
-- `outbox-processor.ts` — ensures reliable event publishing
-- `dlq-setup.service.ts` — dead letter queue for failed messages
-- Handlers: `bet-placed.handler.ts`, `player-cashed-out.handler.ts`
-
-### PlayerWalletResolver
-`application/services/player-wallet-resolver.service.ts` — resolves or creates wallet for a player idempotently.
-
-### DI Tokens
-```typescript
-export const WALLET_REPOSITORY = 'WALLET_REPOSITORY';
-export const INBOX_REPOSITORY = 'INBOX_REPOSITORY';
-```
+- `BetPlaced` → `DebitBetStakeUseCase` → `WalletDebited` | `WalletDebitFailed`
+- `PlayerCashedOut` → `CreditWalletUseCase` (payout)
+- Saga replies are integration events in `application/events/bet-stake.events.ts`
 
 ## Routes (via Kong)
 - `GET /wallets/me` — Get authenticated player's wallet
@@ -86,9 +72,9 @@ export const INBOX_REPOSITORY = 'INBOX_REPOSITORY';
 - `GET /wallets/health` — Health check
 
 ## Validation
-- [ ] No `number` for money — always `bigint` / `Money`
-- [ ] Wallet balance never negative — `canDebit()` check before `debit()`
-- [ ] Domain events pulled after mutation
-- [ ] Inbox pattern for idempotency on incoming events
+- [ ] No `number` for money — `bigint` / `Money`
+- [ ] Wallet balance never negative — `debit()` enforces it
+- [ ] Money movements committed with their events and inbox mark in one `unitOfWork.commit`
+- [ ] Business rejections are replied, not retried; transient errors are rethrown
 - [ ] Optimistic lock version incremented on every mutation
-- [ ] `InsufficientFundsError` thrown with context (current balance, attempted amount)
+- [ ] Domain errors extend `DomainError` with a code mapped in `infrastructure/http/error-status.ts`

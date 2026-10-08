@@ -13,7 +13,7 @@ export function useMyBets({ page = 1, limit = 20 }: { page?: number; limit?: num
   const { data: session } = useSession();
   const hasShownError = useRef(false);
 
-  const query = useQuery<MyBetsResponse>({
+  const query = useQuery<MyBetsResponse, ApiError>({
     queryKey: ['my-bets', page, limit],
     queryFn: () => getMyBets({ page, limit }),
     enabled: !!session?.accessToken,
@@ -22,8 +22,7 @@ export function useMyBets({ page = 1, limit = 20 }: { page?: number; limit?: num
 
   useEffect(() => {
     if (query.isError && !hasShownError.current) {
-      const error = query.error as unknown as ApiError;
-      toast.error(getErrorMessage(error.code, 'Failed to load bets'));
+      toast.error(getErrorMessage(query.error.code, 'Failed to load bets'));
       hasShownError.current = true;
     }
     if (!query.isError) {

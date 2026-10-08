@@ -1,169 +1,157 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { BetId, PlayerId, RoundId } from '@crash/domain';
 import { GetMyBetsUseCase } from '../../../src/application/use-cases/get-my-bets.use-case';
-import { Bet, BetStatus } from '../../../src/domain/entities/bet.entity';
-import { PlayerId, BetId, RoundId } from '@crash/domain';
-
-function mockFn<T extends (...args: any[]) => any>(
-  impl?: T,
-): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
-  const fn: any = (...args: any[]) => fn._impl(...args);
-  fn._impl = impl || (() => {});
-  fn.mockReturnValue = (v: any) => {
-    fn._impl = () => v;
-  };
-  fn.mockResolvedValue = (v: any) => {
-    fn._impl = () => Promise.resolve(v);
-  };
-  return fn;
-}
+import { Bet, BetStatus, type BetSnapshot } from '../../../src/domain/entities/bet.entity';
+import { createMockBetRepository } from '../../helpers/mocks';
 
 const PLAYER_ID = PlayerId.from('player-1');
-const PLAYER_NAME = 'Player One';
 
-function makeBet(overrides: {
-  id?: string;
-  roundId?: string;
-  playerId?: string;
-  playerName?: string;
-  amountCents?: bigint;
-  status: BetStatus;
-  autoCashOutMultiplier?: number | null;
-  cashOutMultiplier?: number | null;
-  cashOutAmountCents?: bigint | null;
-  cashedOutAt?: Date | null;
-  createdAt?: Date;
-}): Bet {
-  return Bet.restore(
-    BetId.from(overrides.id ?? crypto.randomUUID()),
-    RoundId.from(overrides.roundId ?? crypto.randomUUID()),
-    PlayerId.from(overrides.playerId ?? PLAYER_ID),
-    overrides.playerName ?? PLAYER_NAME,
-    overrides.amountCents ?? 1000n,
-    overrides.status,
-    overrides.autoCashOutMultiplier ?? null,
-    overrides.cashOutMultiplier ?? null,
-    overrides.cashOutAmountCents ?? null,
-    overrides.cashedOutAt ?? null,
-    overrides.createdAt,
-  );
+function makeBet(overrides: Partial<BetSnapshot> & { status: BetStatus }): Bet {
+  return Bet.restore({
+    id: BetId.from(crypto.randomUUID()),
+    roundId: RoundId.from(crypto.randomUUID()),
+    playerId: PLAYER_ID,
+    playerName: 'Player One',
+    amountCents: 1000n,
+    autoCashOutMultiplier: null,
+    cashOutMultiplier: null,
+    cashOutAmount: null,
+    cashedOutAt: null,
+    cancelReason: null,
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+    ...overrides,
+  });
 }
 
 describe('GetMyBetsUseCase', () => {
+  let betRepository: ReturnType<typeof createMockBetRepository>;
   let useCase: GetMyBetsUseCase;
-  let mockBetRepo: any;
 
   beforeEach(() => {
-    mockBetRepo = {
-      findByPlayerPaginated: mockFn(async () => []),
-      countByPlayer: mockFn(async () => 0),
-      getSummaryByPlayer: mockFn(async () => ({
-        totalWageredCents: 0,
-        wins: 0,
-        losses: 0,
-        profitCents: 0,
-      })),
-    };
-    useCase = new GetMyBetsUseCase(mockBetRepo);
+    betRepository = createMockBetRepository();
+    useCase = new GetMyBetsUseCase(betRepository as any);
   });
 
-  test('Should return paginated bets for player', async () => {
+  test('should return paginated bets for the player', async () => {
+    // Arrange
     const bet1 = makeBet({
       status: BetStatus.CASHED_OUT,
       cashOutMultiplier: 2.5,
-      cashOutAmountCents: 2500n,
+      cashOutAmount: 2500n,
     });
     const bet2 = makeBet({ status: BetStatus.LOST });
+    betRepository.findByPlayerPaginated.mockResolvedValue([bet1, bet2]);
+    betRepository.countByPlayer.mockResolvedValue(10);
 
-    mockBetRepo.findByPlayerPaginated.mockResolvedValue([bet1, bet2]);
-    mockBetRepo.countByPlayer.mockResolvedValue(10);
-
+    // Act
     const result = await useCase.execute({ playerId: PLAYER_ID, page: 1, limit: 20 });
 
-    expect(result.data).toHaveLength(2);
-    expect(result.meta.page).toBe(1);
-    expect(result.meta.total).toBe(10);
+    // Assert
+    expect(result.data.map((b) => b.id)).toEqual([bet1.id, bet2.id]);
+    expect(result.meta).toEqual({ page: 1, limit: 20, total: 10, totalPages: 1 });
   });
 
-  test('Should compute correct pagination metadata', async () => {
-    mockBetRepo.countByPlayer.mockResolvedValue(45);
+  test('should query the repositories for the given player with computed offset', async () => {
+    // Act
+    await useCase.execute({ playerId: PLAYER_ID, page: 2, limit: 15 });
 
-    const result = await useCase.execute({ playerId: PLAYER_ID, page: 2, limit: 20 });
-
-    expect(result.meta.page).toBe(2);
-    expect(result.meta.limit).toBe(20);
-    expect(result.meta.total).toBe(45);
-    expect(result.meta.totalPages).toBe(3);
+    // Assert
+    expect(betRepository.findByPlayerPaginated.calls).toEqual([[PLAYER_ID, 15, 15]]);
+    expect(betRepository.countByPlayer.calls).toEqual([[PLAYER_ID]]);
+    expect(betRepository.getSummaryByPlayer.calls).toEqual([[PLAYER_ID]]);
   });
 
-  test('Should calculate profit for cashed out bets', async () => {
+  test('should map a cashed out bet with bigint money and positive profit', async () => {
+    // Arrange
+    const cashedOutAt = new Date('2026-01-01T00:00:05Z');
     const bet = makeBet({
       status: BetStatus.CASHED_OUT,
       cashOutMultiplier: 2.5,
-      cashOutAmountCents: 2500n,
+      cashOutAmount: 2500n,
+      cashedOutAt,
     });
+    betRepository.findByPlayerPaginated.mockResolvedValue([bet]);
 
-    mockBetRepo.findByPlayerPaginated.mockResolvedValue([bet]);
-    mockBetRepo.countByPlayer.mockResolvedValue(1);
-
+    // Act
     const result = await useCase.execute({ playerId: PLAYER_ID });
 
-    expect(result.data[0].profitCents).toBe(1500);
-  });
-
-  test('Should calculate negative profit for lost bets', async () => {
-    const bet = makeBet({ status: BetStatus.LOST });
-
-    mockBetRepo.findByPlayerPaginated.mockResolvedValue([bet]);
-    mockBetRepo.countByPlayer.mockResolvedValue(1);
-
-    const result = await useCase.execute({ playerId: PLAYER_ID });
-
-    expect(result.data[0].profitCents).toBe(-1000);
-  });
-
-  test('Should return zero profit for pending bets', async () => {
-    const bet = makeBet({ status: BetStatus.PENDING });
-
-    mockBetRepo.findByPlayerPaginated.mockResolvedValue([bet]);
-    mockBetRepo.countByPlayer.mockResolvedValue(1);
-
-    const result = await useCase.execute({ playerId: PLAYER_ID });
-
-    expect(result.data[0].profitCents).toBe(0);
-  });
-
-  test('Should return summary from repository aggregate', async () => {
-    mockBetRepo.getSummaryByPlayer.mockResolvedValue({
-      totalWageredCents: 1800,
-      wins: 1,
-      losses: 1,
-      profitCents: 500,
+    // Assert
+    expect(result.data[0]).toEqual({
+      id: bet.id,
+      roundId: bet.roundId,
+      amountCents: 1000n,
+      cashOutMultiplier: 2.5,
+      payoutCents: 2500n,
+      profitCents: 1500n,
+      status: BetStatus.CASHED_OUT,
+      cashedOutAt,
+      placedAt: bet.getCreatedAt(),
     });
-
-    const result = await useCase.execute({ playerId: PLAYER_ID });
-
-    expect(result.summary.totalWageredCents).toBe(1800);
-    expect(result.summary.wins).toBe(1);
-    expect(result.summary.losses).toBe(1);
-    expect(result.summary.profitCents).toBe(500);
   });
 
-  test('Should handle empty bet list', async () => {
+  test('should report negative profit for lost bets', async () => {
+    // Arrange
+    betRepository.findByPlayerPaginated.mockResolvedValue([makeBet({ status: BetStatus.LOST })]);
+
+    // Act
     const result = await useCase.execute({ playerId: PLAYER_ID });
 
+    // Assert
+    expect(result.data[0]!.profitCents).toBe(-1000n);
+    expect(result.data[0]!.payoutCents).toBeNull();
+    expect(result.data[0]!.cashOutMultiplier).toBeNull();
+  });
+
+  test('should report zero profit for pending, active and cancelled bets', async () => {
+    // Arrange
+    betRepository.findByPlayerPaginated.mockResolvedValue([
+      makeBet({ status: BetStatus.PENDING }),
+      makeBet({ status: BetStatus.ACTIVE }),
+      makeBet({ status: BetStatus.CANCELLED, cancelReason: 'Insufficient funds' }),
+    ]);
+
+    // Act
+    const result = await useCase.execute({ playerId: PLAYER_ID });
+
+    // Assert
+    expect(result.data.map((b) => b.profitCents)).toEqual([0n, 0n, 0n]);
+  });
+
+  test('should return the summary from the repository aggregate', async () => {
+    // Arrange
+    const summary = { totalWageredCents: 1800n, wins: 1, losses: 1, profitCents: 500n };
+    betRepository.getSummaryByPlayer.mockResolvedValue(summary);
+
+    // Act
+    const result = await useCase.execute({ playerId: PLAYER_ID });
+
+    // Assert
+    expect(result.summary).toEqual(summary);
+  });
+
+  test('should handle an empty bet list', async () => {
+    // Act
+    const result = await useCase.execute({ playerId: PLAYER_ID });
+
+    // Assert
     expect(result.data).toHaveLength(0);
     expect(result.meta.total).toBe(0);
     expect(result.meta.totalPages).toBe(0);
-    expect(result.summary.totalWageredCents).toBe(0);
-    expect(result.summary.wins).toBe(0);
-    expect(result.summary.losses).toBe(0);
-    expect(result.summary.profitCents).toBe(0);
+    expect(result.summary).toEqual({
+      totalWageredCents: 0n,
+      wins: 0,
+      losses: 0,
+      profitCents: 0n,
+    });
   });
 
-  test('Should use default pagination when not provided', async () => {
+  test('should use default pagination when not provided', async () => {
+    // Act
     const result = await useCase.execute({ playerId: PLAYER_ID });
 
+    // Assert
     expect(result.meta.page).toBe(1);
     expect(result.meta.limit).toBe(20);
+    expect(betRepository.findByPlayerPaginated.calls).toEqual([[PLAYER_ID, 20, 0]]);
   });
 });

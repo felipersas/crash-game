@@ -1,18 +1,19 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState, useRef, memo } from "react";
+import { useEffect, useState, memo } from "react";
 import { formatMultiplier } from "@/domain/money";
 import { useGameStore } from "@/store/game-store";
-import type { RoundHistoryItem } from "../round-history/RoundHistoryTable";
-import { useCurvePoints } from "./useCurvePoints";
+import { GAME_CONSTANTS } from "@/constants/game";
+import type { Phase, RoundSummary } from "@/types";
+import { useCurvePoints, type CurveData } from "./useCurvePoints";
 
 /* ── Types ── */
 
 interface Props {
   multiplier: number;
-  phase: "betting" | "active" | "crashed";
-  recentRounds?: RoundHistoryItem[];
+  phase: Phase;
+  recentRounds?: RoundSummary[];
 }
 
 type ColorZone = "error" | "profit" | "warning" | "neutral";
@@ -58,20 +59,27 @@ const GLOW_SHADOW: Record<ColorZone, string> = {
     "0 0 10px hsl(var(--curve-neutral) / 0.6), 0 0 30px hsl(var(--curve-neutral) / 0.3), 0 0 60px hsl(var(--curve-neutral) / 0.1)",
 };
 
-function getStatusLabel(phase: Props["phase"], multiplier: number): string {
+function getStatusLabel(phase: Phase, multiplier: number): string {
   if (phase === "crashed") return "CRASHED";
   if (phase === "betting") return "Awaiting Round";
   return formatMultiplier(multiplier);
 }
 
-function getProgressBarWidth(multiplier: number, phase: Props["phase"]): number {
+const BETTING_DURATION_S = GAME_CONSTANTS.BETTING_DURATION_MS / 1000;
+
+/** Fraction (0-1) of the betting window still remaining. */
+function bettingFractionLeft(timeRemaining: number): number {
+  return Math.min(1, Math.max(0, timeRemaining / BETTING_DURATION_S));
+}
+
+function getProgressBarWidth(multiplier: number, phase: Phase, timeRemaining: number): number {
   if (phase === "crashed") return 0;
-  if (phase === "betting") {
-    const progress = useGameStore.getState().getBettingProgress();
-    return (1 - progress) * 100;
-  }
+  if (phase === "betting") return bettingFractionLeft(timeRemaining) * 100;
   return Math.min((multiplier - 1) * 8, 100);
 }
+
+const SHAKE = { x: [-5, 5, -5, 5, 0] };
+const REST = { x: 0 };
 
 /* ── Sub-components ── */
 
@@ -79,7 +87,7 @@ function MultiplierCurve({
   curveData,
   color,
 }: {
-  curveData: NonNullable<ReturnType<typeof useCurvePoints>>;
+  curveData: CurveData;
   color: string;
 }) {
   const shared = { d: curveData.path, fill: "none" as const, strokeLinecap: "round" as const, vectorEffect: "non-scaling-stroke" as const };
@@ -131,7 +139,7 @@ function BettingCountdown({ timeRemaining }: { timeRemaining: number }) {
               strokeWidth="4"
               strokeLinecap="round"
               initial={{ pathLength: 1 }}
-              animate={{ pathLength: Math.max(0, timeRemaining / 10) }}
+              animate={{ pathLength: bettingFractionLeft(timeRemaining) }}
               style={{ strokeDasharray: "175.93", strokeDashoffset: 0 }}
             />
           </svg>
@@ -155,35 +163,26 @@ function CrashGraph({ multiplier, phase, recentRounds = [] }: Props) {
   const currentRoundId = useGameStore((s) => s.currentRoundId);
   const currentBets = useGameStore((s) => s.currentBets);
 
-  const [timeRemaining, setTimeRemaining] = useState(0);
-  const [shouldShake, setShouldShake] = useState(false);
-  const prevPhase = useRef(phase);
+  const [bettingTimeLeft, setBettingTimeLeft] = useState(0);
+  const timeRemaining = isBetting ? bettingTimeLeft : 0;
 
   const curveData = useCurvePoints(multiplier, phase);
 
   useEffect(() => {
-    if (isBetting) {
-      const tick = () => setTimeRemaining(useGameStore.getState().getBettingTimeRemaining());
-      tick();
-      const id = setInterval(tick, 100);
-      return () => clearInterval(id);
-    }
-    setTimeRemaining(0);
+    if (!isBetting) return;
+    const tick = () => setBettingTimeLeft(useGameStore.getState().getBettingTimeRemaining());
+    const first = setTimeout(tick, 0);
+    const id = setInterval(tick, 100);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
   }, [isBetting]);
-
-  useEffect(() => {
-    if (isCrashed && prevPhase.current !== "crashed") {
-      setShouldShake(true);
-      const id = setTimeout(() => setShouldShake(false), 500);
-      return () => clearTimeout(id);
-    }
-    prevPhase.current = phase;
-  }, [phase, isCrashed]);
 
   return (
     <motion.div
-      className={`panel-cyber rounded-lg overflow-hidden relative h-full flex flex-col ${shouldShake ? "animate-glitch" : ""} ${phase === "active" ? "glow-panel-active" : ""}`}
-      animate={shouldShake ? { x: [-5, 5, -5, 5, 0] } : {}}
+      className={`panel-cyber rounded-lg overflow-hidden relative h-full flex flex-col ${isCrashed ? "animate-glitch" : ""} ${phase === "active" ? "glow-panel-active" : ""}`}
+      animate={isCrashed ? SHAKE : REST}
       transition={{ duration: 0.3 }}
     >
       {/* History Bar */}
@@ -251,7 +250,7 @@ function CrashGraph({ multiplier, phase, recentRounds = [] }: Props) {
           <motion.div
             className={`h-full ${isCrashed ? "bg-error" : "bg-primary"}`}
             initial={{ width: 0 }}
-            animate={{ width: `${getProgressBarWidth(multiplier, phase)}%` }}
+            animate={{ width: `${getProgressBarWidth(multiplier, phase, timeRemaining)}%` }}
             transition={{ duration: 0.1 }}
           >
             <motion.div

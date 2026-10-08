@@ -1,188 +1,103 @@
 /**
- * Unit tests for CreditWalletUseCase
- *
- * Tests cover:
- * - Happy path: crediting amount to existing wallet
- * - Error: wallet not found
- * - Persistence: save called with updated wallet
- * - Event publishing: MoneyCreditedEvent written to outbox
- * - Output correctness: newBalance, version
- * - Edge case: zero amount credit
+ * Unit tests for CreditWalletUseCase.
  */
-
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { PlayerId, WalletId } from '@crash/domain';
 import { CreditWalletUseCase } from '../../../src/application/use-cases/credit-wallet.use-case';
 import { Wallet } from '../../../src/domain/entities/wallet.entity';
 import { WalletNotFoundError } from '../../../src/domain/errors/domain.errors';
-import { PlayerId, WalletId } from '@crash/domain';
+import {
+  FAKE_TX,
+  createMockInboxRepository,
+  createMockMetrics,
+  createMockUnitOfWork,
+  createMockWalletRepository,
+} from '../../helpers/mocks';
 
-// --- Mock helpers ---
-
-function mockFn<T extends (...args: any[]) => any>(
-  impl?: T,
-): T & { mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void } {
-  const calls: any[] = [];
-  const fn: any = (...args: any[]) => {
-    calls.push(args);
-    return (fn._impl as any)(...args);
-  };
-  fn._impl = impl || (() => {});
-  fn._calls = calls;
-  fn.mockReturnValue = (v: any) => {
-    fn._impl = () => v;
-  };
-  fn.mockResolvedValue = (v: any) => {
-    fn._impl = () => Promise.resolve(v);
-  };
-  return fn;
-}
-
-function createMockWalletRepository(overrides: Record<string, any> = {}) {
-  return {
-    findById: mockFn(() => Promise.resolve(null)),
-    findByPlayerId: mockFn(() => Promise.resolve(null)),
-    save: mockFn(() => Promise.resolve()),
-    create: mockFn(() => Promise.resolve()),
-    ...overrides,
-  };
-}
-
-function createMockMetrics(overrides: Record<string, any> = {}) {
-  return {
-    incrWalletOp: mockFn(() => {}),
-    ...overrides,
-  };
-}
-
-function createMockPrisma() {
-  return {
-    $transaction: mockFn(async (fn: any) => {
-      const mockTx = {
-        outboxEvent: { create: mockFn(() => Promise.resolve()) },
-        wallet: {
-          create: mockFn(() => Promise.resolve()),
-          update: mockFn(() => Promise.resolve()),
-        },
-      };
-      return fn(mockTx);
-    }),
-    wallet: { create: mockFn(() => Promise.resolve()), update: mockFn(() => Promise.resolve()) },
-    outboxEvent: { create: mockFn(() => Promise.resolve()) },
-  };
-}
-
-function createMockOutboxWriter() {
-  return {
-    writeWithinTransaction: mockFn(() => Promise.resolve(['outbox-id-1'])),
-    tryImmediatePublish: mockFn(() => Promise.resolve()),
-  };
-}
+const PLAYER_ID = PlayerId.from('player-1');
 
 describe('CreditWalletUseCase', () => {
-  let mockWalletRepo: ReturnType<typeof createMockWalletRepository>;
-  let mockMetrics: ReturnType<typeof createMockMetrics>;
-  let mockPrisma: ReturnType<typeof createMockPrisma>;
-  let mockOutboxWriter: ReturnType<typeof createMockOutboxWriter>;
+  let walletRepository: ReturnType<typeof createMockWalletRepository>;
+  let inboxRepository: ReturnType<typeof createMockInboxRepository>;
+  let unitOfWork: ReturnType<typeof createMockUnitOfWork>;
+  let metrics: ReturnType<typeof createMockMetrics>;
   let useCase: CreditWalletUseCase;
+  let wallet: Wallet;
 
   beforeEach(() => {
-    mockWalletRepo = createMockWalletRepository();
-    mockMetrics = createMockMetrics();
-    mockPrisma = createMockPrisma();
-    mockOutboxWriter = createMockOutboxWriter();
+    walletRepository = createMockWalletRepository();
+    inboxRepository = createMockInboxRepository();
+    unitOfWork = createMockUnitOfWork();
+    metrics = createMockMetrics();
     useCase = new CreditWalletUseCase(
-      mockWalletRepo as any,
-      mockMetrics as any,
-      mockPrisma as any,
-      mockOutboxWriter as any,
+      walletRepository as any,
+      inboxRepository as any,
+      unitOfWork as any,
+      metrics as any,
     );
+    wallet = Wallet.restore(WalletId.from('wallet-1'), PLAYER_ID, 1000n, 1);
+    walletRepository.findByPlayerId.mockResolvedValue(wallet);
   });
 
-  test('should credit amount to existing wallet', async () => {
-    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
-    mockWalletRepo.findById.mockResolvedValue(wallet);
-
+  test('credits the player wallet and returns the new balance and version', async () => {
+    // Act
     const result = await useCase.execute({
-      walletId: WalletId.from('wallet-1'),
-      amount: 5000n,
-      reason: 'win',
+      playerId: PLAYER_ID,
+      amountCents: 2500n,
+      reason: 'Cash out',
     });
 
-    expect(result.newBalance).toBe(15000n);
+    // Assert
+    expect(result).toEqual({ walletId: 'wallet-1', newBalanceCents: 3500n, version: 2 });
   });
 
-  test('should throw WalletNotFoundError when wallet not found', async () => {
-    mockWalletRepo.findById.mockResolvedValue(null);
+  test('saves the wallet and commits MoneyCredited in one transaction', async () => {
+    await useCase.execute({ playerId: PLAYER_ID, amountCents: 2500n, reason: 'Cash out' });
 
-    expect(
-      useCase.execute({
-        walletId: WalletId.from('nonexistent'),
-        amount: 1000n,
-        reason: 'win',
-      }),
-    ).rejects.toThrow(WalletNotFoundError);
-  });
-
-  test('should persist updated wallet within transaction', async () => {
-    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
-    mockWalletRepo.findById.mockResolvedValue(wallet);
-
-    await useCase.execute({
-      walletId: WalletId.from('wallet-1'),
+    expect(walletRepository.save.calls).toEqual([[wallet, FAKE_TX]]);
+    expect(unitOfWork.commits).toHaveLength(1);
+    expect(unitOfWork.commits[0].aggregateId).toBe('wallet-1');
+    expect(unitOfWork.commits[0].events).toHaveLength(1);
+    expect(unitOfWork.commits[0].events[0]).toMatchObject({
+      eventType: 'MoneyCredited',
       amount: 2500n,
-      reason: 'deposit',
+      newBalance: 3500n,
+      reason: 'Cash out',
     });
-
-    expect(mockWalletRepo.save._calls.length).toBe(1);
-    const savedWallet = mockWalletRepo.save._calls[0][0] as Wallet;
-    expect(savedWallet.getBalance().toCents()).toBe(12500n);
   });
 
-  test('should write MoneyCreditedEvent to outbox', async () => {
-    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
-    mockWalletRepo.findById.mockResolvedValue(wallet);
-
+  test('marks the inbox event processed inside the transaction', async () => {
     await useCase.execute({
-      walletId: WalletId.from('wallet-1'),
-      amount: 3000n,
-      reason: 'bonus',
+      playerId: PLAYER_ID,
+      amountCents: 2500n,
+      reason: 'Cash out',
+      inboxEventId: 'inbox-1',
     });
 
-    expect(mockOutboxWriter.writeWithinTransaction._calls.length).toBe(1);
-    const events = mockOutboxWriter.writeWithinTransaction._calls[0][2];
-    expect(events.length).toBe(1);
-    expect(events[0].eventType).toBe('MoneyCredited');
-    expect(events[0].amount).toBe(3000n);
-    expect(events[0].newBalance).toBe(13000n);
-    expect(events[0].reason).toBe('bonus');
+    expect(inboxRepository.markAsProcessed.calls).toEqual([['inbox-1', FAKE_TX]]);
   });
 
-  test('should return correct newBalance and version', async () => {
-    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 3);
-    mockWalletRepo.findById.mockResolvedValue(wallet);
+  test('records the credit metric', async () => {
+    await useCase.execute({ playerId: PLAYER_ID, amountCents: 2500n, reason: 'Cash out' });
 
-    const result = await useCase.execute({
-      walletId: WalletId.from('wallet-1'),
-      amount: 5000n,
-      reason: 'win',
-    });
-
-    expect(result.walletId).toBe('wallet-1');
-    expect(result.newBalance).toBe(15000n);
-    expect(result.version).toBe(4);
+    expect(metrics.incrWalletOp.calls).toEqual([['credit', 2500]]);
   });
 
-  test('should handle credit of zero amount', async () => {
-    const wallet = Wallet.restore(WalletId.from('wallet-1'), PlayerId.from('player-1'), 10000n, 1);
-    mockWalletRepo.findById.mockResolvedValue(wallet);
+  test('throws WalletNotFoundError when the player has no wallet', async () => {
+    walletRepository.findByPlayerId.mockResolvedValue(null);
 
-    const result = await useCase.execute({
-      walletId: WalletId.from('wallet-1'),
-      amount: 0n,
-      reason: 'adjustment',
-    });
+    await expect(
+      useCase.execute({ playerId: PLAYER_ID, amountCents: 2500n, reason: 'Cash out' }),
+    ).rejects.toThrow(WalletNotFoundError);
+    expect(unitOfWork.commits).toHaveLength(0);
+  });
 
-    expect(result.newBalance).toBe(10000n);
-    expect(result.version).toBe(2);
+  test('does not record a metric when the commit fails', async () => {
+    walletRepository.save.mockRejectedValue(new Error('db down'));
+
+    await expect(
+      useCase.execute({ playerId: PLAYER_ID, amountCents: 2500n, reason: 'Cash out' }),
+    ).rejects.toThrow('db down');
+    expect(metrics.incrWalletOp.callCount).toBe(0);
   });
 });

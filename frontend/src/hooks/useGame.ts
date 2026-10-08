@@ -1,31 +1,28 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { placeBet, cashOut, getCurrentRound } from "@/libs/games-api";
+import { placeBet, cashOut } from "@/libs/games-api";
 import { useGameStore } from "@/store/game-store";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import {
   BetStatus,
-  RoundStatus,
-  type Round,
   type Bet,
+  type Wallet,
   type PlaceBetResponse,
   type CashOutResponse,
 } from "@/types";
 import type { ApiError } from "@/libs/axios";
 import { getErrorMessage } from "@/constants/error-codes";
+import { centsToDecimal } from "@/domain/money";
+import { WALLET_QUERY_KEY } from "@/hooks/useWallet";
 
 /**
  * Game operations hook
  *
- * Manages game state, bet placement, and cash out operations.
- * Combines TanStack Query for server state with Zustand for real-time UI state.
- *
- * IMPORTANT: Multiplier and round phase are managed by WebSocket via Zustand store.
- * This hook only provides REST-based mutations (bet placement, cash out) and
- * periodic polling during BETTING phase for round synchronization.
+ * REST-based mutations (bet placement, cash out). Round phase, multiplier and
+ * bets are pushed by the WebSocket into the Zustand store — no polling here.
  */
 export function useGame() {
   const queryClient = useQueryClient();
@@ -33,36 +30,21 @@ export function useGame() {
   const setMyActiveBet = useGameStore((s) => s.setMyActiveBet);
   const updateBetStatus = useGameStore((s) => s.updateBetStatus);
   const myActiveBet = useGameStore((s) => s.myActiveBet);
-  const roundStatus = useGameStore((s) => s.roundStatus);
-
-  const currentRoundQuery = useQuery<Round>({
-    queryKey: ["current-round"],
-    queryFn: getCurrentRound,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status ?? roundStatus;
-      if (status === RoundStatus.ACTIVE) {
-        return false;
-      }
-      return status === RoundStatus.BETTING ? 3000 : false;
-    },
-    refetchOnWindowFocus: roundStatus === RoundStatus.BETTING,
-  });
 
   const placeBetMutation = useMutation<
     PlaceBetResponse,
     ApiError,
     { amountCents: number; autoCashOutAt?: number },
-    { prev?: { balance: string } }
+    { prev?: Wallet }
   >({
     mutationFn: ({ amountCents, autoCashOutAt }) => placeBet(amountCents, autoCashOutAt),
     onMutate: async ({ amountCents }) => {
-      await queryClient.cancelQueries({ queryKey: ["wallet"] });
-      const prev = queryClient.getQueryData<{ balance: string }>(["wallet"]);
+      await queryClient.cancelQueries({ queryKey: WALLET_QUERY_KEY });
+      const prev = queryClient.getQueryData<Wallet>(WALLET_QUERY_KEY);
       if (prev?.balance) {
-        const newBalance = (Number(prev.balance) * 100 - amountCents * 100) / 100;
-        queryClient.setQueryData(["wallet"], {
+        queryClient.setQueryData<Wallet>(WALLET_QUERY_KEY, {
           ...prev,
-          balance: newBalance.toFixed(2),
+          balance: (BigInt(prev.balance) - BigInt(amountCents)).toString(),
         });
       }
       return { prev };
@@ -74,8 +56,9 @@ export function useGame() {
         playerId: session?.playerId || "",
         playerName: session?.user?.username || "",
         amountCents: data.amountCents,
-        amountDecimal: (data.amountCents / 100).toFixed(2),
-        status: data.status,
+        amountDecimal: centsToDecimal(data.amountCents),
+        // Always PENDING until the wallet debit is confirmed via WebSocket.
+        status: BetStatus.PENDING,
         cashOutMultiplier: null,
         payoutCents: null,
         payoutDecimal: null,
@@ -84,13 +67,11 @@ export function useGame() {
       };
 
       setMyActiveBet(newBet);
-
-      queryClient.invalidateQueries({ queryKey: ["wallet"] });
-      queryClient.invalidateQueries({ queryKey: ["current-round"] });
+      queryClient.invalidateQueries({ queryKey: WALLET_QUERY_KEY });
     },
     onError: (error: ApiError, _vars, context) => {
       if (context?.prev) {
-        queryClient.setQueryData(["wallet"], context.prev);
+        queryClient.setQueryData(WALLET_QUERY_KEY, context.prev);
       }
       toast.error(getErrorMessage(error.code, error.message));
     },
@@ -107,20 +88,14 @@ export function useGame() {
         payoutCents: data.payoutCents,
         payoutDecimal: data.payoutDecimal,
       });
-
-      queryClient.invalidateQueries({ queryKey: ["wallet"] });
-      queryClient.invalidateQueries({ queryKey: ["current-round"] });
+      queryClient.invalidateQueries({ queryKey: WALLET_QUERY_KEY });
     },
     onError: (error: ApiError) => {
       toast.error(getErrorMessage(error.code, error.message));
     },
   });
 
-  const roundData: Round | undefined = currentRoundQuery.data;
-
   return {
-    currentRound: roundData,
-    isLoading: currentRoundQuery.isLoading,
     placeBet: placeBetMutation.mutate,
     isPlacingBet: placeBetMutation.isPending,
     cashOut: cashOutMutation.mutate,

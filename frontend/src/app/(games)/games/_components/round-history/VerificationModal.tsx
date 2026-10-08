@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Copy, Check, Shield, X, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
-import { useVerifyRound } from '@/hooks/useVerifyRound';
-import { computeSHA256 } from '@/utils/crypto';
+import { useSeedVerification } from '@/hooks/useSeedVerification';
 import { formatMultiplier } from '@/domain/money';
 import { InlineSkeleton } from '@/components/ui/Skeleton';
 
@@ -13,9 +12,8 @@ interface VerificationModalProps {
 }
 
 export default function VerificationModal({ roundId, onClose }: VerificationModalProps) {
-  const { data, isLoading, error } = useVerifyRound(roundId);
-  const [computedHash, setComputedHash] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { data, isLoading, error, computedHash, hashesMatch, copied, verify, copyHash } =
+    useSeedVerification(roundId);
   const [showHelp, setShowHelp] = useState(false);
 
   const panelRef = useRef<HTMLDivElement>(null);
@@ -58,21 +56,6 @@ export default function VerificationModal({ roundId, onClose }: VerificationModa
     };
   }, [handleKeyDown]);
 
-  const handleVerify = async () => {
-    if (!data) return;
-    const hash = await computeSHA256(data.seed);
-    setComputedHash(hash);
-  };
-
-  const handleCopy = async () => {
-    if (!data) return;
-    await navigator.clipboard.writeText(data.seedHash);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const hashesMatch = computedHash === data?.seedHash;
-
   return (
     <div
       className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -94,7 +77,7 @@ export default function VerificationModal({ roundId, onClose }: VerificationModa
               Verify Round
             </h4>
           </div>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary">
+          <button type="button" onClick={onClose} aria-label="Close" className="text-text-muted hover:text-text-primary">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -110,6 +93,8 @@ export default function VerificationModal({ roundId, onClose }: VerificationModa
             {/* How to verify */}
             <div className="rounded-lg bg-primary/5 border border-primary/20 p-3">
               <button
+                type="button"
+                aria-expanded={showHelp}
                 onClick={() => setShowHelp(!showHelp)}
                 className="flex items-center gap-2 w-full text-left text-sm font-terminal text-primary/80 hover:text-primary transition-colors"
               >
@@ -156,7 +141,8 @@ export default function VerificationModal({ roundId, onClose }: VerificationModa
                 mono
                 action={
                   <button
-                    onClick={handleCopy}
+                    type="button"
+                    onClick={copyHash}
                     className="text-primary hover:text-primary/80 shrink-0"
                     title="Copy hash"
                   >
@@ -171,7 +157,8 @@ export default function VerificationModal({ roundId, onClose }: VerificationModa
 
             {/* Verify button */}
             <button
-              onClick={handleVerify}
+              type="button"
+              onClick={verify}
               className="w-full btn-cyber-primary py-2.5 rounded-lg text-sm uppercase tracking-widest"
             >
               Verify (SHA-256)

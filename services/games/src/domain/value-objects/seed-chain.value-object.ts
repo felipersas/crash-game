@@ -23,6 +23,9 @@
  * 6. When chain runs low, generate new chain
  */
 
+import { SeedChainExhaustedError } from '../errors/domain.errors';
+import { bytesToHex, sha256, sha256Hex } from '../crypto/sha256';
+
 export interface SeedChainData {
   readonly seeds: readonly string[]; // [seed_N, seed_N+1, ..., seed_0]
   readonly current: number; // Index of current seed
@@ -44,70 +47,41 @@ export class SeedChain {
    * Generate a new seed chain with the specified size.
    *
    * @param size - Number of seeds to generate (default: 1000)
-   * @returns A new SeedChain with randomly generated seeds
+   * @param deterministicSeed - Optional string to derive a reproducible chain (testing only)
    */
   static async generate(size: number = 1000, deterministicSeed?: string): Promise<SeedChain> {
-    // Use deterministic seed if provided (for testing)
-    if (deterministicSeed) {
-      return SeedChain.generateDeterministic(deterministicSeed, size);
-    }
+    const lastSeed = deterministicSeed
+      ? bytesToHex(await sha256(new TextEncoder().encode(deterministicSeed)))
+      : SeedChain.generateRandomSeed();
 
-    const seeds: string[] = [];
-
-    // Generate the last (oldest) seed randomly
-    const lastSeed = await SeedChain.generateRandomSeed();
-    seeds.push(lastSeed);
-
-    // Build the chain backwards: each seed = H(next_seed)
-    let currentSeed = lastSeed;
-    for (let i = 1; i < size; i++) {
-      currentSeed = await SeedChain.hashSeed(currentSeed);
-      seeds.unshift(currentSeed); // Add to front (newest first)
-    }
-
-    // The commitment is the hash of the first (newest) seed
-    // This is published BEFORE any round starts
-    const commitment = await SeedChain.hashSeed(seeds[0]);
-
-    return new SeedChain({
-      seeds,
-      current: 0,
-      commitment,
-    });
+    return SeedChain.buildChain(lastSeed, size);
   }
 
   /**
    * Generate a deterministic seed chain from a string.
    * Useful for testing - produces reproducible crash points.
-   *
-   * Pre-computed seeds for common crash points:
-   * - "test-crash-1.50" → ~1.50x
-   * - "test-crash-2.00" → ~2.00x
-   * - "test-crash-3.00" → ~3.00x
-   * - "test-crash-5.00" → ~5.00x
-   * - "test-crash-10.0" → ~10.0x
    */
   static async generateDeterministic(seedString: string, size: number = 100): Promise<SeedChain> {
-    // Derive a 32-byte seed from the string using SHA-256
-    const stringBytes = new TextEncoder().encode(seedString);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', stringBytes);
-    const lastSeed = SeedChain.bytesToHex(new Uint8Array(hashBuffer));
+    return SeedChain.generate(size, seedString);
+  }
 
+  /**
+   * Build the chain backwards from its oldest seed: each seed = H(next_seed).
+   * The commitment H(seeds[0]) is published BEFORE any round starts.
+   */
+  private static async buildChain(lastSeed: string, size: number): Promise<SeedChain> {
     const seeds: string[] = [lastSeed];
 
-    // Build the chain backwards
     let currentSeed = lastSeed;
     for (let i = 1; i < size; i++) {
-      currentSeed = await SeedChain.hashSeed(currentSeed);
+      currentSeed = await sha256Hex(currentSeed);
       seeds.unshift(currentSeed);
     }
-
-    const commitment = await SeedChain.hashSeed(seeds[0]);
 
     return new SeedChain({
       seeds,
       current: 0,
-      commitment,
+      commitment: await sha256Hex(seeds[0]),
     });
   }
 
@@ -143,7 +117,7 @@ export class SeedChain {
    */
   getSeed(): string {
     if (this.current >= this.seeds.length) {
-      throw new Error('No more seeds in chain');
+      throw new SeedChainExhaustedError();
     }
     return this.seeds[this.current];
   }
@@ -182,7 +156,7 @@ export class SeedChain {
    */
   advance(): SeedChain {
     if (this.current >= this.seeds.length - 1) {
-      throw new Error('Seed chain exhausted - generate new chain');
+      throw new SeedChainExhaustedError();
     }
 
     return new SeedChain({
@@ -226,46 +200,14 @@ export class SeedChain {
    * Verify that a seed matches the committed hash.
    */
   static async verifySeed(seed: string, committedHash: string): Promise<boolean> {
-    const seedHash = await SeedChain.hashSeed(seed);
-    return seedHash === committedHash;
+    return (await sha256Hex(seed)) === committedHash;
   }
 
   /**
    * Generate a cryptographically secure random seed (32 bytes = 64 hex chars).
    */
-  private static async generateRandomSeed(): Promise<string> {
-    const seedBytes = new Uint8Array(32);
-    crypto.getRandomValues(seedBytes);
-    return SeedChain.bytesToHex(seedBytes);
-  }
-
-  /**
-   * Hash a seed using SHA-256 (async).
-   */
-  private static async hashSeed(seed: string): Promise<string> {
-    const seedBytes = SeedChain.hexToBytes(seed);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', seedBytes as BufferSource);
-    return SeedChain.bytesToHex(new Uint8Array(hashBuffer));
-  }
-
-  /**
-   * Convert hex string to bytes.
-   */
-  private static hexToBytes(hex: string): Uint8Array {
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < bytes.length; i++) {
-      bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
-    }
-    return bytes;
-  }
-
-  /**
-   * Convert bytes to hex string.
-   */
-  private static bytesToHex(bytes: Uint8Array): string {
-    return Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+  private static generateRandomSeed(): string {
+    return bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
   }
 
   /**

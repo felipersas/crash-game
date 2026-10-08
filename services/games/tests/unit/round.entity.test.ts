@@ -2,20 +2,25 @@
  * Unit tests for Round Entity (Aggregate Root).
  *
  * Tests cover:
- * - Round creation
+ * - Round creation and restoration
  * - Round lifecycle (BETTING → ACTIVE → CRASHED)
- * - Bet placement
+ * - Bet placement / replacement
  * - Cash out
  * - Crash logic
- * - Domain events
+ * - Domain events (including bet events drained through the root)
  * - Persistence
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { Round, RoundStatus, DEFAULT_ROUND_CONFIG } from '../../src/domain/entities/round.entity';
-import { Bet } from '../../src/domain/entities/bet.entity';
+import {
+  Round,
+  RoundStatus,
+  DEFAULT_ROUND_CONFIG,
+  type RoundSnapshot,
+} from '../../src/domain/entities/round.entity';
+import { Bet, BetStatus } from '../../src/domain/entities/bet.entity';
 import { Multiplier } from '../../src/domain/value-objects/multiplier.value-object';
-import { Money, PlayerId } from '@crash/domain';
+import { Money, PlayerId, RoundId, BetId } from '@crash/domain';
 import {
   RoundNotAcceptingBetsError,
   DuplicateBetError,
@@ -23,7 +28,69 @@ import {
   RoundAlreadyCrashedError,
   BetBelowMinimumError,
   BetAboveMaximumError,
+  InvalidRoundStateError,
+  InvalidAutoCashOutMultiplierError,
+  SeedNotAvailableError,
 } from '../../src/domain/errors/domain.errors';
+
+const SEED = 'ab'.repeat(32);
+const SEED_HASH = 'cd'.repeat(32);
+const ROUND_ID = RoundId.from('round-1');
+const P1 = PlayerId.from('player-1');
+const P2 = PlayerId.from('player-2');
+
+/** Seconds of growth (default rate) needed to reach the given multiplier. */
+const secondsFor = (multiplier: number) => Math.log(multiplier) / DEFAULT_ROUND_CONFIG.growthRate;
+
+function roundSnapshot(overrides: Partial<RoundSnapshot> = {}): RoundSnapshot {
+  return {
+    id: ROUND_ID,
+    seed: SEED,
+    seedHash: SEED_HASH,
+    status: RoundStatus.ACTIVE,
+    crashPoint: 10,
+    bettingEndTime: new Date('2026-01-01T00:00:10Z'),
+    startedAt: new Date('2026-01-01T00:00:10Z'),
+    crashedAt: null,
+    version: 2,
+    ...overrides,
+  };
+}
+
+function restoredBet(
+  playerId: PlayerId,
+  status: BetStatus,
+  amountCents = 1000n,
+  roundId: RoundId = ROUND_ID,
+): Bet {
+  return Bet.restore({
+    id: BetId.from(`bet-${playerId}`),
+    roundId,
+    playerId,
+    playerName: `Name ${playerId}`,
+    amountCents,
+    status,
+    autoCashOutMultiplier: null,
+    cashOutMultiplier: null,
+    cashOutAmount: null,
+    cashedOutAt: null,
+    cancelReason: status === BetStatus.CANCELLED ? 'test' : null,
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+  });
+}
+
+/** Round in ACTIVE phase with the given bets confirmed, events cleared. */
+async function activeRoundWithConfirmedBets(
+  bets: Array<[PlayerId, string]> = [[P1, '10.00']],
+): Promise<Round> {
+  const round = await Round.create();
+  for (const [playerId, amount] of bets) {
+    round.placeBet(playerId, `Name ${playerId}`, Money.fromDecimal(amount)).confirm();
+  }
+  await round.startRound();
+  round.pullEvents();
+  return round;
+}
 
 describe('Round Entity', () => {
   let round: Round;
@@ -33,278 +100,365 @@ describe('Round Entity', () => {
   });
 
   describe('Creation', () => {
-    test('should create round with BETTING status', async () => {
-      const newRound = await Round.create();
-
-      expect(newRound.id).toBeDefined();
-      expect(newRound.getStatus()).toBe(RoundStatus.BETTING);
-      expect(newRound.getCrashPoint()).toBeNull();
-      expect(newRound.getBettingEndTime()).toBeInstanceOf(Date);
-      expect(newRound.getStartedAt()).toBeNull();
-      expect(newRound.getCrashedAt()).toBeNull();
+    test('should create round with BETTING status', () => {
+      expect(round.id).toBeDefined();
+      expect(round.getStatus()).toBe(RoundStatus.BETTING);
+      expect(round.getCrashPoint()).toBeNull();
+      expect(round.getBettingEndTime()).toBeInstanceOf(Date);
+      expect(round.getStartedAt()).toBeNull();
+      expect(round.getCrashedAt()).toBeNull();
+      expect(round.getVersion()).toBe(1);
     });
 
     test('should generate unique round IDs', async () => {
-      const round1 = await Round.create();
-      const round2 = await Round.create();
+      const other = await Round.create();
 
-      expect(round1.id).not.toBe(round2.id);
+      expect(round.id).not.toBe(other.id);
     });
 
-    test('should emit RoundStartedEvent on creation', async () => {
-      const newRound = await Round.create();
-      const events = newRound.pullEvents();
+    test('should set betting end time from config duration', async () => {
+      const before = Date.now();
+      const custom = await Round.create({ ...DEFAULT_ROUND_CONFIG, bettingDurationMs: 5000 });
+
+      const endTime = custom.getBettingEndTime()!.getTime();
+      expect(endTime).toBeGreaterThanOrEqual(before + 5000);
+      expect(endTime).toBeLessThanOrEqual(Date.now() + 5000);
+    });
+
+    test('should emit RoundStarted event with the seed hash commitment', () => {
+      const events = round.pullEvents();
 
       expect(events).toHaveLength(1);
       const event = events[0];
-      if (event.eventType === 'RoundStarted') {
-        expect(event.roundId).toBe(newRound.id);
-      } else {
-        throw new Error('Expected RoundStarted event');
-      }
+      if (event.eventType !== 'RoundStarted') throw new Error('Expected RoundStarted event');
+      expect(event.roundId).toBe(round.id);
+      expect(event.seedHash).toBe(round.getSeedHash());
+      expect(event.seedHash).toHaveLength(64);
+      expect(event.bettingEndTime).toEqual(round.getBettingEndTime()!);
     });
 
-    test('should have seed hash committed before round starts', async () => {
-      const newRound = await Round.create();
-      const events = newRound.pullEvents();
-
-      const event = events[0];
-      if (event.eventType === 'RoundStarted') {
-        expect(event.seedHash).toBeDefined();
-        expect(event.seedHash).toHaveLength(64);
-      } else {
-        throw new Error('Expected RoundStarted event');
-      }
+    test('should start with multiplier at 1.00x', () => {
+      expect(round.getCurrentMultiplier()).toBe(1.0);
     });
 
-    test('should start with multiplier at 1.00x', async () => {
-      const newRound = await Round.create();
+    test('should produce the same seed hash for the same deterministic seed', async () => {
+      const a = await Round.create(DEFAULT_ROUND_CONFIG, 'fixed-seed');
+      const b = await Round.create(DEFAULT_ROUND_CONFIG, 'fixed-seed');
 
-      expect(newRound.getCurrentMultiplier()).toBe(1.0);
+      expect(a.getSeedHash()).toBe(b.getSeedHash());
+    });
+  });
+
+  describe('Restore', () => {
+    test('should restore state from snapshot without raising events', () => {
+      const snapshot = roundSnapshot();
+
+      const restored = Round.restore(snapshot, []);
+
+      expect(restored.id).toBe(ROUND_ID);
+      expect(restored.getStatus()).toBe(RoundStatus.ACTIVE);
+      expect(restored.getCrashPoint()).toBe(10);
+      expect(restored.getSeedHash()).toBe(SEED_HASH);
+      expect(restored.getBettingEndTime()).toEqual(snapshot.bettingEndTime!);
+      expect(restored.getStartedAt()).toEqual(snapshot.startedAt!);
+      expect(restored.getCrashedAt()).toBeNull();
+      expect(restored.getVersion()).toBe(2);
+      expect(restored.pullEvents()).toHaveLength(0);
+    });
+
+    test('should restore a BETTING round without crash point', () => {
+      const restored = Round.restore(
+        roundSnapshot({ status: RoundStatus.BETTING, crashPoint: null, startedAt: null }),
+        [],
+      );
+
+      expect(restored.getStatus()).toBe(RoundStatus.BETTING);
+      expect(restored.getCrashPoint()).toBeNull();
+    });
+
+    test('should attach live bets and skip CANCELLED ones', () => {
+      const restored = Round.restore(roundSnapshot(), [
+        restoredBet(P1, BetStatus.ACTIVE),
+        restoredBet(P2, BetStatus.CANCELLED),
+      ]);
+
+      expect(restored.getBets()).toHaveLength(1);
+      expect(restored.getBetByPlayer(P1)?.isActive()).toBe(true);
+      expect(restored.getBetByPlayer(P2)).toBeUndefined();
+    });
+
+    test('should expose the seed of a restored CRASHED round', () => {
+      const restored = Round.restore(
+        roundSnapshot({ status: RoundStatus.CRASHED, crashPoint: 2.5, crashedAt: new Date() }),
+        [],
+      );
+
+      expect(restored.getSeed()).toBe(SEED);
+    });
+
+    test('should round-trip through toPersistence', async () => {
+      round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
+      await round.startRound();
+
+      const restored = Round.restore(round.toPersistence(), round.getBets());
+
+      expect(restored.id).toBe(round.id);
+      expect(restored.getStatus()).toBe(round.getStatus());
+      expect(restored.getCrashPoint()).toBe(round.getCrashPoint());
+      expect(restored.getSeedHash()).toBe(round.getSeedHash());
+      expect(restored.getVersion()).toBe(round.getVersion());
+      expect(restored.getBets()).toHaveLength(1);
+    });
+
+    test('should apply the given config', () => {
+      const restored = Round.restore(
+        roundSnapshot({ status: RoundStatus.BETTING, crashPoint: null }),
+        [],
+        { ...DEFAULT_ROUND_CONFIG, minBetAmount: Money.fromDecimal('5.00') },
+      );
+
+      expect(() => restored.placeBet(P1, 'Player One', Money.fromDecimal('4.99'))).toThrow(
+        BetBelowMinimumError,
+      );
     });
   });
 
   describe('Bet Placement', () => {
-    test('should place bet during BETTING phase', () => {
-      const playerId = PlayerId.from('player-1');
-      const amount = Money.fromDecimal('10.00');
+    test('should place PENDING bet during BETTING phase and return it', () => {
+      const bet = round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
 
-      round.placeBet(playerId, 'Player One', amount);
-
-      const bet = round.getBetByPlayer(playerId);
-      expect(bet).toBeDefined();
-      expect(bet?.getAmount().toCents()).toBe(1000n);
-      expect(bet?.getStatus()).toBe('PENDING');
+      expect(bet).toBeInstanceOf(Bet);
+      expect(bet.roundId).toBe(round.id);
+      expect(bet.playerId).toBe(P1);
+      expect(bet.playerName).toBe('Player One');
+      expect(bet.getAmount().toCents()).toBe(1000n);
+      expect(bet.getStatus()).toBe(BetStatus.PENDING);
+      expect(round.getBetByPlayer(P1)).toBe(bet);
     });
 
-    test('should emit BetPlacedEvent when bet is placed', () => {
-      const playerId = PlayerId.from('player-1');
-      const amount = Money.fromDecimal('10.00');
-
+    test('should emit BetPlaced event', () => {
       round.pullEvents();
 
-      round.placeBet(playerId, 'Player One', amount);
+      const bet = round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
 
       const events = round.pullEvents();
       expect(events).toHaveLength(1);
       const event = events[0];
-      if (event.eventType === 'BetPlaced') {
-        expect(event.playerId).toBe(playerId);
-      } else {
-        throw new Error('Expected BetPlaced event');
-      }
+      if (event.eventType !== 'BetPlaced') throw new Error('Expected BetPlaced event');
+      expect(event.aggregateId).toBe(round.id);
+      expect(event.betId).toBe(bet.id);
+      expect(event.playerId).toBe(P1);
+      expect(event.amount).toBe(1000n);
     });
 
     test('should reject bet when not in BETTING phase', async () => {
-      const playerId = PlayerId.from('player-1');
-      const amount = Money.fromDecimal('10.00');
-
       await round.startRound();
 
-      expect(() => round.placeBet(playerId, 'Player One', amount)).toThrow(
+      expect(() => round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'))).toThrow(
         RoundNotAcceptingBetsError,
       );
     });
 
     test('should reject duplicate bet from same player', () => {
-      const playerId = PlayerId.from('player-1');
-      const amount = Money.fromDecimal('10.00');
+      round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
 
-      round.placeBet(playerId, 'Player One', amount);
-
-      expect(() => round.placeBet(playerId, 'Player One', amount)).toThrow(DuplicateBetError);
+      expect(() => round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'))).toThrow(
+        DuplicateBetError,
+      );
     });
 
     test('should reject bet below minimum', () => {
-      const playerId = PlayerId.from('player-1');
-      const amount = Money.fromDecimal('0.50');
-
-      expect(() => round.placeBet(playerId, 'Player One', amount)).toThrow(BetBelowMinimumError);
+      expect(() => round.placeBet(P1, 'Player One', Money.fromDecimal('0.50'))).toThrow(
+        BetBelowMinimumError,
+      );
     });
 
     test('should reject bet above maximum', () => {
-      const playerId = PlayerId.from('player-1');
-      const amount = Money.fromDecimal('2000.00');
-
-      expect(() => round.placeBet(playerId, 'Player One', amount)).toThrow(BetAboveMaximumError);
+      expect(() => round.placeBet(P1, 'Player One', Money.fromDecimal('2000.00'))).toThrow(
+        BetAboveMaximumError,
+      );
     });
 
-    test('should accept minimum bet amount', () => {
-      const playerId = PlayerId.from('player-1');
-      const amount = Money.fromDecimal('1.00');
-
-      expect(() => round.placeBet(playerId, 'Player One', amount)).not.toThrow();
+    test('should accept minimum and maximum bet amounts', () => {
+      expect(() => round.placeBet(P1, 'Player One', Money.fromDecimal('1.00'))).not.toThrow();
+      expect(() => round.placeBet(P2, 'Player Two', Money.fromDecimal('1000.00'))).not.toThrow();
     });
 
-    test('should accept maximum bet amount', () => {
-      const playerId = PlayerId.from('player-1');
-      const amount = Money.fromDecimal('1000.00');
+    test('should report the configured limits in error messages', async () => {
+      const custom = await Round.create({
+        ...DEFAULT_ROUND_CONFIG,
+        minBetAmount: Money.fromDecimal('5.00'),
+        maxBetAmount: Money.fromDecimal('500.00'),
+      });
 
-      expect(() => round.placeBet(playerId, 'Player One', amount)).not.toThrow();
+      expect(() => custom.placeBet(P1, 'Player One', Money.fromDecimal('4.99'))).toThrow(
+        'Bet amount $4.99 is below minimum of $5.00',
+      );
+      expect(() => custom.placeBet(P1, 'Player One', Money.fromDecimal('500.01'))).toThrow(
+        'Bet amount $500.01 exceeds maximum of $500.00',
+      );
     });
 
     test('should NOT increment version when bet is placed (bet is separate entity)', () => {
-      const playerId = PlayerId.from('player-1');
-      const amount = Money.fromDecimal('10.00');
       const initialVersion = round.getVersion();
 
-      round.placeBet(playerId, 'Player One', amount);
+      round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
 
       expect(round.getVersion()).toBe(initialVersion);
     });
   });
 
   describe('placeOrReplaceBet', () => {
-    const playerId = PlayerId.from('player-1');
     const amount = Money.fromDecimal('10.00');
 
     test('should place bet when no existing bet', () => {
-      const { bet, replacedBet } = round.placeOrReplaceBet(playerId, 'Player One', amount);
+      const { bet, replacedBet } = round.placeOrReplaceBet(P1, 'Player One', amount);
 
-      expect(bet).toBeDefined();
-      expect(bet.playerId).toBe(playerId);
+      expect(bet.playerId).toBe(P1);
       expect(bet.getAmount().toCents()).toBe(1000n);
       expect(replacedBet).toBeNull();
+      expect(round.getBetByPlayer(P1)).toBe(bet);
     });
 
-    test('should replace PENDING bet and return it', () => {
-      round.placeBet(playerId, 'Player One', Money.fromDecimal('5.00'));
+    test('should replace PENDING bet, cancel it and return it', () => {
+      const original = round.placeBet(P1, 'Player One', Money.fromDecimal('5.00'));
 
-      const { bet, replacedBet } = round.placeOrReplaceBet(playerId, 'Player One', amount);
+      const { bet, replacedBet } = round.placeOrReplaceBet(P1, 'Player One', amount);
 
-      expect(bet.getAmount().toCents()).toBe(1000n);
-      expect(replacedBet).not.toBeNull();
-      expect(replacedBet!.getStatus()).toBe('CANCELLED');
-      expect(round.getBetByPlayer(playerId)?.getAmount().toCents()).toBe(1000n);
+      expect(replacedBet).toBe(original);
+      expect(replacedBet!.getStatus()).toBe(BetStatus.CANCELLED);
+      expect(replacedBet!.getCancelReason()).toBe('Replaced by new bet attempt');
+      expect(bet.id).not.toBe(original.id);
+      expect(round.getBetByPlayer(P1)).toBe(bet);
+      expect(round.getBets()).toHaveLength(1);
+    });
+
+    test('should emit the replaced bet BetCancelled before the new BetPlaced', () => {
+      const original = round.placeBet(P1, 'Player One', Money.fromDecimal('5.00'));
+      round.pullEvents();
+
+      const { bet } = round.placeOrReplaceBet(P1, 'Player One', amount);
+
+      const events = round.pullEvents();
+      expect(events.map((e) => e.eventType)).toEqual(['BetCancelled', 'BetPlaced']);
+      const [cancelled, placed] = events;
+      if (cancelled.eventType !== 'BetCancelled') throw new Error('Expected BetCancelled');
+      if (placed.eventType !== 'BetPlaced') throw new Error('Expected BetPlaced');
+      expect(cancelled.betId).toBe(original.id);
+      expect(placed.betId).toBe(bet.id);
+      expect(round.pullEvents()).toHaveLength(0);
     });
 
     test('should replace CANCELLED bet without returning it', () => {
-      round.placeBet(playerId, 'Player One', Money.fromDecimal('5.00'));
-      const existingBet = round.getBetByPlayer(playerId)!;
-      existingBet.cancel('test');
-      (round as any).bets.set(playerId, existingBet);
+      round.placeBet(P1, 'Player One', Money.fromDecimal('5.00')).cancel('Insufficient funds');
 
-      const { bet, replacedBet } = round.placeOrReplaceBet(playerId, 'Player One', amount);
+      const { bet, replacedBet } = round.placeOrReplaceBet(P1, 'Player One', amount);
 
       expect(bet.getAmount().toCents()).toBe(1000n);
       expect(replacedBet).toBeNull();
+      expect(round.getBetByPlayer(P1)).toBe(bet);
     });
 
-    test('should reject when existing bet is ACTIVE', async () => {
-      round.placeBet(playerId, 'Player One', amount);
-      const bet = round.getBetByPlayer(playerId)!;
-      (bet as any).confirm();
+    test('should reject when existing bet is ACTIVE', () => {
+      round.placeBet(P1, 'Player One', amount).confirm();
 
-      await round.startRound();
-
-      expect(() => round.placeOrReplaceBet(playerId, 'Player One', amount)).toThrow(
-        RoundNotAcceptingBetsError,
-      );
-    });
-
-    test('should reject duplicate if existing bet is not PENDING or CANCELLED', async () => {
-      round.placeBet(playerId, 'Player One', amount);
-      const bet = round.getBetByPlayer(playerId)!;
-      (bet as any).confirm();
-      await round.startRound();
-
-      const round2 = await Round.create();
-      round2.placeBet(playerId, 'Player One', amount);
-      const bet2 = round2.getBetByPlayer(playerId)!;
-      (bet2 as any).status = 'ACTIVE';
-
-      expect(() => round2.placeOrReplaceBet(playerId, 'Player One', amount)).toThrow(
-        DuplicateBetError,
-      );
+      expect(() => round.placeOrReplaceBet(P1, 'Player One', amount)).toThrow(DuplicateBetError);
+      expect(round.getBetByPlayer(P1)?.isActive()).toBe(true);
     });
 
     test('should reject when not in BETTING phase', async () => {
       await round.startRound();
 
-      expect(() => round.placeOrReplaceBet(playerId, 'Player One', amount)).toThrow(
+      expect(() => round.placeOrReplaceBet(P1, 'Player One', amount)).toThrow(
         RoundNotAcceptingBetsError,
       );
     });
 
-    test('should emit BetPlacedEvent for new bet', () => {
-      round.pullEvents();
+    describe('regression: invalid input leaves the existing PENDING bet untouched', () => {
+      let original: Bet;
 
-      const { bet } = round.placeOrReplaceBet(playerId, 'Player One', amount);
+      beforeEach(() => {
+        original = round.placeBet(P1, 'Player One', Money.fromDecimal('5.00'));
+        round.pullEvents();
+      });
 
-      const events = round.pullEvents();
-      expect(events).toHaveLength(1);
-      expect(events[0].eventType).toBe('BetPlaced');
+      function expectOriginalUntouched() {
+        expect(original.isPending()).toBe(true);
+        expect(original.getCancelReason()).toBeNull();
+        expect(round.getBetByPlayer(P1)).toBe(original);
+        expect(round.pullEvents()).toHaveLength(0);
+      }
+
+      test('amount below minimum', () => {
+        expect(() => round.placeOrReplaceBet(P1, 'Player One', Money.fromDecimal('0.50'))).toThrow(
+          BetBelowMinimumError,
+        );
+        expectOriginalUntouched();
+      });
+
+      test('amount above maximum', () => {
+        expect(() =>
+          round.placeOrReplaceBet(P1, 'Player One', Money.fromDecimal('2000.00')),
+        ).toThrow(BetAboveMaximumError);
+        expectOriginalUntouched();
+      });
+
+      test('invalid auto cash-out multiplier', () => {
+        expect(() => round.placeOrReplaceBet(P1, 'Player One', amount, 1.0)).toThrow(
+          InvalidAutoCashOutMultiplierError,
+        );
+        expectOriginalUntouched();
+      });
     });
 
-    test('should NOT increment version (bet is separate entity from round lifecycle)', () => {
+    test('should NOT increment version', () => {
       const v0 = round.getVersion();
 
-      round.placeOrReplaceBet(playerId, 'Player One', amount);
-      expect(round.getVersion()).toBe(v0);
+      round.placeOrReplaceBet(P1, 'Player One', amount);
+      round.placeOrReplaceBet(P1, 'Player One', Money.fromDecimal('20.00'));
 
-      round.placeOrReplaceBet(playerId, 'Player One', Money.fromDecimal('20.00'));
       expect(round.getVersion()).toBe(v0);
     });
   });
 
   describe('Round Start', () => {
-    test('should transition to ACTIVE phase when started', async () => {
+    test('should transition to ACTIVE, set startedAt and compute crash point', async () => {
       await round.startRound();
 
       expect(round.getStatus()).toBe(RoundStatus.ACTIVE);
-    });
-
-    test('should set startedAt timestamp', async () => {
-      await round.startRound();
-
       expect(round.getStartedAt()).toBeInstanceOf(Date);
-    });
-
-    test('should calculate crash point from seed', async () => {
-      await round.startRound();
-
       expect(round.getCrashPoint()).toBeGreaterThanOrEqual(1.0);
     });
 
-    test('should emit BettingPhaseEndedEvent', async () => {
+    test('should derive the same crash point for the same deterministic seed', async () => {
+      const a = await Round.create(DEFAULT_ROUND_CONFIG, 'fixed-seed');
+      const b = await Round.create(DEFAULT_ROUND_CONFIG, 'fixed-seed');
+
+      await a.startRound();
+      await b.startRound();
+
+      expect(a.getCrashPoint()).toBe(b.getCrashPoint());
+    });
+
+    test('should emit BettingPhaseEnded event', async () => {
+      round.pullEvents();
+
       await round.startRound();
+
       const events = round.pullEvents();
-
-      const bettingEndedEvent = events.find((e) => e.eventType === 'BettingPhaseEnded');
-      expect(bettingEndedEvent).toBeDefined();
-      if (bettingEndedEvent && bettingEndedEvent.eventType === 'BettingPhaseEnded') {
-        expect(bettingEndedEvent.roundId).toBe(round.id);
-      }
+      expect(events.map((e) => e.eventType)).toEqual(['BettingPhaseEnded']);
+      expect(events[0].version).toBe(round.getVersion());
     });
 
-    test('should reject starting already ACTIVE round', async () => {
+    test('should reject starting an ACTIVE round', async () => {
       await round.startRound();
 
-      await expect(round.startRound()).rejects.toThrow();
+      await expect(round.startRound()).rejects.toThrow(InvalidRoundStateError);
     });
 
-    test('should increment version when round starts (lifecycle transition)', async () => {
+    test('should increment version', async () => {
       const initialVersion = round.getVersion();
+
       await round.startRound();
 
       expect(round.getVersion()).toBe(initialVersion + 1);
@@ -312,80 +466,83 @@ describe('Round Entity', () => {
   });
 
   describe('Cash Out', () => {
-    const P1 = PlayerId.from('player-1');
-    const P1_NAME = 'Player One';
+    let active: Round;
 
     beforeEach(async () => {
-      round.placeBet(P1, P1_NAME, Money.fromDecimal('10.00'));
-      await round.startRound();
-
-      const bet = round.getBetByPlayer(P1);
-      if (bet && bet.isPending()) {
-        (bet as any).confirm();
-      }
+      active = await activeRoundWithConfirmedBets();
     });
 
-    test('should cash out active bet', () => {
-      const multiplier = Multiplier.fromValue(2.0);
-      (round as any).currentMultiplier = multiplier;
+    test('should cash out active bet at the current multiplier', () => {
+      const restored = Round.restore(roundSnapshot({ crashPoint: 10 }), [
+        restoredBet(P1, BetStatus.ACTIVE),
+      ]);
+      restored.updateMultiplier(secondsFor(2.5));
+      const current = restored.getCurrentMultiplier();
 
-      const payout = round.cashOut(P1);
+      const payout = restored.cashOut(P1);
+
+      const bet = restored.getBetByPlayer(P1)!;
+      expect(bet.isCashedOut()).toBe(true);
+      expect(bet.getCashOutMultiplier()?.getValue()).toBe(current);
+      expect(payout.toCents()).toBe(Multiplier.fromValue(current).calculatePayout(1000n));
+    });
+
+    test('should cash out at the override multiplier', () => {
+      const payout = active.cashOut(P1, Multiplier.fromValue(2.0));
 
       expect(payout.toCents()).toBe(2000n);
+      expect(active.getBetByPlayer(P1)?.getCashOutMultiplier()?.getValue()).toBe(2.0);
     });
 
-    test('should mark bet as cashed out', () => {
-      const multiplier = Multiplier.fromValue(2.0);
-      (round as any).currentMultiplier = multiplier;
+    test('should emit PlayerCashedOut event', () => {
+      active.cashOut(P1, Multiplier.fromValue(2.0));
 
-      round.cashOut(P1);
-
-      const bet = round.getBetByPlayer(P1);
-      expect(bet?.isCashedOut()).toBe(true);
+      const events = active.pullEvents();
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      if (event.eventType !== 'PlayerCashedOut') throw new Error('Expected PlayerCashedOut');
+      expect(event.playerId).toBe(P1);
+      expect(event.betAmount).toBe(1000n);
+      expect(event.cashOutMultiplier).toBe(2.0);
+      expect(event.winAmount).toBe(2000n);
     });
 
-    test('should emit PlayerCashedOutEvent', () => {
-      const multiplier = Multiplier.fromValue(2.0);
-      (round as any).currentMultiplier = multiplier;
+    test('should throw InvalidRoundStateError while BETTING', () => {
+      round.placeBet(P1, 'Player One', Money.fromDecimal('10.00')).confirm();
 
-      round.cashOut(P1);
-
-      const events = round.pullEvents();
-      const cashOutEvent = events.find((e) => e.eventType === 'PlayerCashedOut');
-      expect(cashOutEvent).toBeDefined();
-      if (cashOutEvent && cashOutEvent.eventType === 'PlayerCashedOut') {
-        expect(cashOutEvent.playerId).toBe(P1);
-      }
+      expect(() => round.cashOut(P1)).toThrow(InvalidRoundStateError);
     });
 
-    test('should reject cash out when not in ACTIVE phase', async () => {
-      const inactiveRound = await Round.create();
-      inactiveRound.placeBet(P1, P1_NAME, Money.fromDecimal('10.00'));
+    test('should throw RoundAlreadyCrashedError after the crash', () => {
+      active.crash();
 
-      expect(() => inactiveRound.cashOut(P1)).toThrow(RoundAlreadyCrashedError);
+      expect(() => active.cashOut(P1)).toThrow(RoundAlreadyCrashedError);
     });
 
     test('should reject cash out for non-existent bet', () => {
-      expect(() => round.cashOut(PlayerId.from('non-existent-player'))).toThrow(NoActiveBetError);
+      expect(() => active.cashOut(PlayerId.from('nobody'))).toThrow(NoActiveBetError);
+    });
+
+    test('should reject cash out for a PENDING bet', async () => {
+      const r = await Round.create();
+      r.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
+      await r.startRound();
+
+      expect(() => r.cashOut(P1)).toThrow(NoActiveBetError);
     });
 
     test('should reject duplicate cash out', () => {
-      const multiplier = Multiplier.fromValue(2.0);
-      (round as any).currentMultiplier = multiplier;
+      active.cashOut(P1, Multiplier.fromValue(2.0));
 
-      round.cashOut(P1);
-
-      expect(() => round.cashOut(P1)).toThrow(NoActiveBetError);
+      expect(() => active.cashOut(P1)).toThrow(NoActiveBetError);
     });
 
-    test('should NOT increment version when cashing out (bet mutation, not round lifecycle)', () => {
-      const multiplier = Multiplier.fromValue(2.0);
-      (round as any).currentMultiplier = multiplier;
-      const initialVersion = round.getVersion();
+    test('should NOT increment version', () => {
+      const initialVersion = active.getVersion();
 
-      round.cashOut(P1);
+      active.cashOut(P1, Multiplier.fromValue(2.0));
 
-      expect(round.getVersion()).toBe(initialVersion);
+      expect(active.getVersion()).toBe(initialVersion);
     });
   });
 
@@ -395,317 +552,252 @@ describe('Round Entity', () => {
 
       round.updateMultiplier(1);
 
-      expect(round.getCurrentMultiplier()).toBeGreaterThan(1.0);
+      expect(round.getCurrentMultiplier()).toBeCloseTo(Math.exp(0.06), 10);
     });
 
-    test('should not update multiplier when not in ACTIVE phase', () => {
-      round.updateMultiplier(1);
+    test('should not update multiplier when not ACTIVE', () => {
+      round.updateMultiplier(10);
 
       expect(round.getCurrentMultiplier()).toBe(1.0);
     });
 
-    test('should crash when multiplier exceeds crash point', async () => {
-      round.placeBet(PlayerId.from('player-1'), 'Player One', Money.fromDecimal('10.00'));
-      await round.startRound();
+    test('should not crash below the crash point', () => {
+      const restored = Round.restore(roundSnapshot({ crashPoint: 2.0 }), []);
 
-      (round as any).crashPoint = { shouldCrashAt: () => true, getValue: () => 1.01 };
+      restored.updateMultiplier(secondsFor(1.9));
 
-      round.updateMultiplier(0.01);
+      expect(restored.getStatus()).toBe(RoundStatus.ACTIVE);
+    });
 
-      expect(round.getStatus()).toBe(RoundStatus.CRASHED);
+    test('should crash when the multiplier reaches the crash point', () => {
+      const restored = Round.restore(roundSnapshot({ crashPoint: 2.0 }), []);
+
+      restored.updateMultiplier(secondsFor(2.1));
+
+      expect(restored.getStatus()).toBe(RoundStatus.CRASHED);
     });
   });
 
   describe('Crash', () => {
-    const P1 = PlayerId.from('player-1');
-    const P2 = PlayerId.from('player-2');
+    let active: Round;
 
     beforeEach(async () => {
-      round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
-      round.placeBet(P2, 'Player Two', Money.fromDecimal('20.00'));
-      await round.startRound();
+      active = await activeRoundWithConfirmedBets([
+        [P1, '10.00'],
+        [P2, '20.00'],
+      ]);
+    });
 
-      for (const pid of [P1, P2]) {
-        const bet = round.getBetByPlayer(pid);
-        if (bet && bet.isPending()) {
-          (bet as any).confirm();
-        }
+    test('should transition to CRASHED, set crashedAt and increment version', () => {
+      const initialVersion = active.getVersion();
+
+      active.crash();
+
+      expect(active.getStatus()).toBe(RoundStatus.CRASHED);
+      expect(active.getCrashedAt()).toBeInstanceOf(Date);
+      expect(active.getVersion()).toBe(initialVersion + 1);
+    });
+
+    test('should mark active bets as lost and keep cashed out bets', () => {
+      active.cashOut(P1, Multiplier.fromValue(2.0));
+
+      active.crash();
+
+      expect(active.getBetByPlayer(P1)?.isCashedOut()).toBe(true);
+      expect(active.getBetByPlayer(P2)?.isLost()).toBe(true);
+    });
+
+    test('should cancel PENDING bets and drain their BetCancelled events', async () => {
+      const r = await Round.create();
+      r.placeBet(P1, 'Player One', Money.fromDecimal('10.00')).confirm();
+      const pending = r.placeBet(P2, 'Player Two', Money.fromDecimal('20.00'));
+      await r.startRound();
+      r.pullEvents();
+
+      r.crash();
+
+      expect(pending.isCancelled()).toBe(true);
+      expect(pending.getCancelReason()).toBe('Round crashed before wallet confirmation');
+      expect(r.getBetByPlayer(P1)?.isLost()).toBe(true);
+      const events = r.pullEvents();
+      expect(events.map((e) => e.eventType).sort()).toEqual(['BetCancelled', 'RoundCrashed']);
+    });
+
+    test('should emit RoundCrashed with revealed seed and totals excluding cancelled bets', async () => {
+      const r = await Round.create();
+      r.placeBet(P1, 'Player One', Money.fromDecimal('10.00')).confirm();
+      r.placeBet(P2, 'Player Two', Money.fromDecimal('20.00')).confirm();
+      r.placeBet(PlayerId.from('player-3'), 'Player Three', Money.fromDecimal('50.00'));
+      await r.startRound();
+      r.cashOut(P1, Multiplier.fromValue(2.5));
+      r.pullEvents();
+
+      r.crash();
+
+      const crashEvent = r.pullEvents().find((e) => e.eventType === 'RoundCrashed');
+      if (!crashEvent || crashEvent.eventType !== 'RoundCrashed') {
+        throw new Error('Expected RoundCrashed event');
       }
+      expect(crashEvent.crashPoint).toBe(r.getCrashPoint()!);
+      expect(crashEvent.seed).toBe(r.getSeed());
+      expect(crashEvent.seed).toHaveLength(64);
+      expect(crashEvent.totalBets).toBe(2);
+      expect(crashEvent.totalBetAmount).toBe(3000n);
+      // Profit of the cashed out bet: 25.00 payout - 10.00 stake
+      expect(crashEvent.totalWinAmount).toBe(1500n);
+      expect(crashEvent.version).toBe(r.getVersion());
     });
 
-    test('should transition to CRASHED status', async () => {
-      (round as any).crashPoint = { shouldCrashAt: () => true, getValue: () => 1.01 };
-      round.updateMultiplier(0.01);
-
-      expect(round.getStatus()).toBe(RoundStatus.CRASHED);
+    test('should reject crashing a BETTING round', () => {
+      expect(() => round.crash()).toThrow(InvalidRoundStateError);
     });
 
-    test('should mark active bets as lost', async () => {
-      (round as any).crashPoint = { shouldCrashAt: () => true, getValue: () => 1.01 };
-      round.updateMultiplier(0.01);
+    test('should reject crashing an already CRASHED round', () => {
+      active.crash();
 
-      const bet1 = round.getBetByPlayer(P1);
-      const bet2 = round.getBetByPlayer(P2);
-
-      expect(bet1?.isLost()).toBe(true);
-      expect(bet2?.isLost()).toBe(true);
-    });
-
-    test('should not mark cashed out bets as lost', async () => {
-      const multiplier = Multiplier.fromValue(2.0);
-      (round as any).currentMultiplier = multiplier;
-      round.cashOut(P1);
-
-      (round as any).crashPoint = { shouldCrashAt: () => true, getValue: () => 3.0 };
-      round.updateMultiplier(0.01);
-
-      const bet1 = round.getBetByPlayer(P1);
-      const bet2 = round.getBetByPlayer(P2);
-
-      expect(bet1?.isCashedOut()).toBe(true);
-      expect(bet2?.isLost()).toBe(true);
-    });
-
-    test('should set crashedAt timestamp', async () => {
-      (round as any).crashPoint = { shouldCrashAt: () => true, getValue: () => 1.01 };
-      round.updateMultiplier(0.01);
-
-      expect(round.getCrashedAt()).toBeInstanceOf(Date);
-    });
-
-    test('should emit RoundCrashedEvent', async () => {
-      (round as any).crashPoint = { shouldCrashAt: () => true, getValue: () => 1.01 };
-      round.updateMultiplier(0.01);
-
-      const events = round.pullEvents();
-      const crashEvent = events.find((e) => e.eventType === 'RoundCrashed');
-
-      expect(crashEvent).toBeDefined();
-      if (crashEvent && crashEvent.eventType === 'RoundCrashed') {
-        expect(crashEvent.crashPoint).toBeDefined();
-      }
-    });
-
-    test('should include seed in RoundCrashedEvent', async () => {
-      (round as any).crashPoint = { shouldCrashAt: () => true, getValue: () => 1.01 };
-      round.updateMultiplier(0.01);
-
-      const events = round.pullEvents();
-      const crashEvent = events.find((e) => e.eventType === 'RoundCrashed');
-
-      if (crashEvent && crashEvent.eventType === 'RoundCrashed') {
-        expect(crashEvent.seed).toBeDefined();
-        expect(crashEvent.seed).toHaveLength(64);
-      }
-    });
-
-    test('should increment version on crash (lifecycle transition)', async () => {
-      const initialVersion = round.getVersion();
-      (round as any).crashPoint = { shouldCrashAt: () => true, getValue: () => 1.01 };
-      round.updateMultiplier(0.01);
-
-      expect(round.getVersion()).toBe(initialVersion + 1);
+      expect(() => active.crash()).toThrow(InvalidRoundStateError);
     });
   });
 
   describe('Seed Access', () => {
     test('should reveal seed after crash', async () => {
       await round.startRound();
+      round.crash();
 
-      (round as any).crashPoint = { shouldCrashAt: () => true, getValue: () => 1.01 };
-      round.updateMultiplier(0.01);
-
-      const seed = round.getSeed();
-      expect(seed).toBeDefined();
-      expect(seed).toHaveLength(64);
+      expect(round.getSeed()).toHaveLength(64);
     });
 
     test('should reject seed access before crash', async () => {
+      expect(() => round.getSeed()).toThrow(SeedNotAvailableError);
       await round.startRound();
-
       expect(() => round.getSeed()).toThrow('Results are not available until the round crashes');
+    });
+
+    test('should reveal a seed that hashes to the committed seed hash', async () => {
+      const { SeedChain } = await import('../../src/domain/value-objects/seed-chain.value-object');
+      await round.startRound();
+      round.crash();
+
+      expect(await SeedChain.verifySeed(round.getSeed(), round.getSeedHash())).toBe(true);
     });
   });
 
   describe('Domain Events', () => {
-    test('should collect and clear events on pullEvents', async () => {
-      round.placeBet(PlayerId.from('player-1'), 'Player One', Money.fromDecimal('10.00'));
+    test('should collect and clear events on pullEvents', () => {
+      round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
 
-      const events1 = round.pullEvents();
-      const events2 = round.pullEvents();
-
-      expect(events1.length).toBeGreaterThan(0);
-      expect(events2).toHaveLength(0);
+      expect(round.pullEvents().length).toBeGreaterThan(0);
+      expect(round.pullEvents()).toHaveLength(0);
     });
 
-    test('should track pending events count', async () => {
-      round.placeBet(PlayerId.from('player-1'), 'Player One', Money.fromDecimal('10.00'));
+    test('should drain events raised by bets in the round', () => {
+      const bet = round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
+      round.pullEvents();
 
-      expect(round.getPendingEventsCount()).toBeGreaterThan(0);
+      bet.confirm();
+
+      const events = round.pullEvents();
+      expect(events.map((e) => e.eventType)).toEqual(['BetConfirmed']);
+      expect(bet.pullEvents()).toHaveLength(0);
+    });
+
+    test('should list root events before bet events', () => {
+      round.pullEvents();
+      const bet = round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
+      bet.confirm();
+
+      expect(round.pullEvents().map((e) => e.eventType)).toEqual(['BetPlaced', 'BetConfirmed']);
+    });
+  });
+
+  describe('syncBet', () => {
+    test('should add a bet unknown to the aggregate', () => {
+      const restored = Round.restore(roundSnapshot(), []);
+      const bet = restoredBet(P1, BetStatus.ACTIVE);
+
+      restored.syncBet(bet);
+
+      expect(restored.getBetByPlayer(P1)).toBe(bet);
+    });
+
+    test('should replace the in-memory copy with the persisted bet', () => {
+      const restored = Round.restore(roundSnapshot(), [restoredBet(P1, BetStatus.PENDING)]);
+      const persisted = restoredBet(P1, BetStatus.ACTIVE);
+
+      restored.syncBet(persisted);
+
+      expect(restored.getBets()).toHaveLength(1);
+      expect(restored.getBetByPlayer(P1)).toBe(persisted);
+      expect(restored.cashOut(P1, Multiplier.fromValue(2)).toCents()).toBe(2000n);
+    });
+
+    test('should ignore CANCELLED bets', () => {
+      const restored = Round.restore(roundSnapshot(), []);
+
+      restored.syncBet(restoredBet(P1, BetStatus.CANCELLED));
+
+      expect(restored.getBetByPlayer(P1)).toBeUndefined();
     });
   });
 
   describe('Getters', () => {
-    test('should return all bets', () => {
-      round.placeBet(PlayerId.from('player-1'), 'Player One', Money.fromDecimal('10.00'));
-      round.placeBet(PlayerId.from('player-2'), 'Player Two', Money.fromDecimal('20.00'));
+    test('should return all bets and bet by player', () => {
+      const bet = round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
+      round.placeBet(P2, 'Player Two', Money.fromDecimal('20.00'));
 
-      const bets = round.getBets();
-
-      expect(bets).toHaveLength(2);
+      expect(round.getBets()).toHaveLength(2);
+      expect(round.getBetByPlayer(P1)).toBe(bet);
+      expect(round.getBetByPlayer(PlayerId.from('nobody'))).toBeUndefined();
     });
 
-    test('should return bet by player ID', () => {
-      const p1 = PlayerId.from('player-1');
-      round.placeBet(p1, 'Player One', Money.fromDecimal('10.00'));
+    test('getTotalWagered should sum stakes', () => {
+      round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
+      round.placeBet(P2, 'Player Two', Money.fromDecimal('20.00'));
 
-      const bet = round.getBetByPlayer(p1);
-
-      expect(bet).toBeDefined();
-      expect(bet?.playerId).toBe(p1);
+      expect(round.getTotalWagered().toCents()).toBe(3000n);
     });
 
-    test('should return undefined for non-existent player', () => {
-      const bet = round.getBetByPlayer(PlayerId.from('non-existent'));
+    test('getTotalWagered should exclude cancelled bets', () => {
+      round.placeBet(P1, 'Player One', Money.fromDecimal('10.00'));
+      round.placeBet(P2, 'Player Two', Money.fromDecimal('20.00')).cancel('Insufficient funds');
 
-      expect(bet).toBeUndefined();
+      expect(round.getTotalWagered().toCents()).toBe(1000n);
+    });
+
+    test('getTotalWagered should be zero without bets', () => {
+      expect(round.getTotalWagered().toCents()).toBe(0n);
     });
   });
 
   describe('Persistence', () => {
-    test('should convert to persistence format', async () => {
-      round.placeBet(PlayerId.from('player-1'), 'Player One', Money.fromDecimal('10.00'));
+    test('should convert to snapshot', async () => {
+      await round.startRound();
 
       const data = round.toPersistence();
 
-      expect(data.id).toBeDefined();
-      expect(data.seed).toBeDefined();
-      expect(data.seedHash).toBeDefined();
-      expect(data.status).toBe(RoundStatus.BETTING);
-    });
-
-    test('should restore from persistence', async () => {
-      const original = await Round.create();
-      original.placeBet(PlayerId.from('player-1'), 'Player One', Money.fromDecimal('10.00'));
-      await original.startRound();
-
-      const data = original.toPersistence();
-
-      const restored = Round.restore(
-        data.id,
-        data.seed,
-        data.seedHash,
-        data.nextSeed,
-        data.status,
-        data.crashPoint,
-        data.bettingEndTime,
-        data.startedAt,
-        data.crashedAt,
-        [],
-        data.version,
-      );
-
-      expect(restored.id).toBe(original.id);
-      expect(restored.getStatus()).toBe(original.getStatus());
+      expect(data.id).toBe(round.id);
+      expect(data.seed).toHaveLength(64);
+      expect(data.seedHash).toBe(round.getSeedHash());
+      expect(data.status).toBe(RoundStatus.ACTIVE);
+      expect(data.crashPoint).toBe(round.getCrashPoint());
+      expect(data.bettingEndTime).toEqual(round.getBettingEndTime());
+      expect(data.startedAt).toEqual(round.getStartedAt());
+      expect(data.crashedAt).toBeNull();
+      expect(data.version).toBe(round.getVersion());
     });
   });
 
-  describe('Round auto cash-out', () => {
-    test('should place bet with autoCashOutMultiplier', async () => {
-      const round = await Round.create(DEFAULT_ROUND_CONFIG);
-      round.pullEvents();
-
-      round.placeBet('p1' as any, 'Player 1', Money.fromCents(1000n), 2.5);
-
-      const bets = round.getBets();
-      const bet = bets.find((b) => b.playerId === 'p1');
-      expect(bet?.getAutoCashOutMultiplier()).toBe(2.5);
-    });
-
-    test('should placeOrReplaceBet with autoCashOutMultiplier', async () => {
-      const round = await Round.create(DEFAULT_ROUND_CONFIG);
-      round.pullEvents();
-
-      const { bet } = round.placeOrReplaceBet('p1' as any, 'Player 1', Money.fromCents(1000n), 2.5);
+  describe('Auto cash-out', () => {
+    test('should place bet with autoCashOutMultiplier', () => {
+      const bet = round.placeBet(P1, 'Player One', Money.fromCents(1000n), 2.5);
 
       expect(bet.getAutoCashOutMultiplier()).toBe(2.5);
     });
 
-    test('should cashOut with override multiplier', async () => {
-      const round = await Round.create(DEFAULT_ROUND_CONFIG);
-      round.pullEvents();
-      round.placeBet('p1' as any, 'Player 1', Money.fromCents(1000n));
-      round.pullEvents();
+    test('should placeOrReplaceBet with autoCashOutMultiplier', () => {
+      const { bet } = round.placeOrReplaceBet(P1, 'Player One', Money.fromCents(1000n), 2.5);
 
-      // Start round
-      await round.startRound();
-      round.pullEvents();
-
-      // Confirm the bet so it becomes ACTIVE
-      const betBefore = round.getBetByPlayer('p1' as any);
-      if (betBefore && betBefore.isPending()) {
-        (betBefore as any).confirm();
-      }
-
-      // Cash out with override at exactly 2.0
-      const payout = round.cashOut('p1' as any, Multiplier.fromValue(2.0));
-
-      expect(payout.toCents()).toBe(2000n);
-      const bet = round.getBetByPlayer('p1' as any);
-      expect(bet?.getCashOutMultiplier()?.getValue()).toBe(2.0);
-    });
-
-    test('should cashOut without override uses current multiplier', async () => {
-      const round = await Round.create(DEFAULT_ROUND_CONFIG);
-      round.pullEvents();
-      round.placeBet('p1' as any, 'Player 1', Money.fromCents(1000n));
-      round.pullEvents();
-
-      await round.startRound();
-      round.pullEvents();
-
-      // Confirm the bet so it becomes ACTIVE
-      const betBefore = round.getBetByPlayer('p1' as any);
-      if (betBefore && betBefore.isPending()) {
-        (betBefore as any).confirm();
-      }
-
-      const currentMultiplier = round.getCurrentMultiplier();
-      const payout = round.cashOut('p1' as any);
-
-      // Should use the current multiplier (not an override)
-      const bet = round.getBetByPlayer('p1' as any);
-      expect(bet?.getCashOutMultiplier()?.getValue()).toBe(currentMultiplier);
-    });
-  });
-
-  describe('Configuration', () => {
-    test('should use default config when not provided', async () => {
-      const defaultRound = await Round.create();
-
-      expect(() =>
-        defaultRound.placeBet(PlayerId.from('p1'), 'Player 1', Money.fromDecimal('1.00')),
-      ).not.toThrow();
-      expect(() =>
-        defaultRound.placeBet(PlayerId.from('p2'), 'Player 2', Money.fromDecimal('1000.00')),
-      ).not.toThrow();
-    });
-
-    test('should accept custom config', async () => {
-      const customConfig = {
-        ...DEFAULT_ROUND_CONFIG,
-        minBetAmount: Money.fromDecimal('5.00'),
-        maxBetAmount: Money.fromDecimal('500.00'),
-      };
-
-      const customRound = await Round.create(customConfig);
-
-      expect(() =>
-        customRound.placeBet(PlayerId.from('p1'), 'Player 1', Money.fromDecimal('5.00')),
-      ).not.toThrow();
-      expect(() =>
-        customRound.placeBet(PlayerId.from('p2'), 'Player 2', Money.fromDecimal('4.99')),
-      ).toThrow();
+      expect(bet.getAutoCashOutMultiplier()).toBe(2.5);
     });
   });
 });

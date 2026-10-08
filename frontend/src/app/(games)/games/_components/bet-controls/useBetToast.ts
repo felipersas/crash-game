@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useGameStore } from "@/store/game-store";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { calculatePayout, formatMoney } from "@/domain/money";
-import { RoundStatus, type Bet } from "@/types";
+import { BetStatus, RoundStatus } from "@/types";
 
 export function useBetToast() {
   const myActiveBet = useGameStore((s) => s.myActiveBet);
@@ -18,24 +18,20 @@ export function useBetToast() {
   const hasShownWinToast = useRef(false);
   const hasShownLossToast = useRef(false);
 
-  function handleToasts(
-    bet: Bet | null,
-    status: RoundStatus,
-    multiplier: number,
-  ) {
+  useEffect(() => {
+    const bet = myActiveBet;
+    const status = roundStatus;
+    const multiplier = liveMultiplier;
+
     if (
-      prevMyActiveBet.current?.status !== "CASHED_OUT" &&
-      bet?.status === "CASHED_OUT" &&
+      prevMyActiveBet.current?.status !== BetStatus.CASHED_OUT &&
+      bet?.status === BetStatus.CASHED_OUT &&
       !hasShownWinToast.current
     ) {
-      const winAmount = bet.payoutCents
-        ? formatMoney(bet.payoutCents)
-        : formatMoney(
-            calculatePayout(
-              bet.amountCents,
-              bet.cashOutMultiplier || multiplier,
-            ),
-          );
+      const winAmount = formatMoney(
+        bet.payoutCents ??
+          calculatePayout(bet.amountCents, bet.cashOutMultiplier ?? multiplier),
+      );
 
       toast.success("Cashed Out!", {
         description: `You won ${winAmount} at ${bet.cashOutMultiplier?.toFixed(2)}x`,
@@ -50,7 +46,7 @@ export function useBetToast() {
       prevRoundStatus.current !== RoundStatus.CRASHED &&
       status === RoundStatus.CRASHED &&
       bet &&
-      bet.status !== "CASHED_OUT" &&
+      bet.status !== BetStatus.CASHED_OUT &&
       !hasShownLossToast.current
     ) {
       toast.error("Crashed!", {
@@ -71,9 +67,5 @@ export function useBetToast() {
 
     prevRoundStatus.current = status;
     prevMyActiveBet.current = bet;
-  }
-
-  useEffect(() => {
-    handleToasts(myActiveBet, roundStatus, liveMultiplier);
-  }, [roundStatus, myActiveBet, liveMultiplier]);
+  }, [roundStatus, myActiveBet, liveMultiplier, playWin]);
 }

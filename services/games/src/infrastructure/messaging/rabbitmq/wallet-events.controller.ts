@@ -2,6 +2,15 @@ import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload, Ctx, type RmqContext } from '@nestjs/microservices';
 import { WalletDebitedEventHandler } from './handlers/wallet-debited.handler';
 import { WalletDebitFailedEventHandler } from './handlers/wallet-debit-failed.handler';
+import type {
+  WalletDebitedMessage,
+  WalletDebitFailedMessage,
+} from '@/infrastructure/messaging/types/wallet.events';
+
+/**
+ * Consumes wallet replies of the bet saga from the `wallet.events` exchange.
+ * Failed messages are rejected without requeue; the inbox retry job owns retries.
+ */
 @Controller()
 export class WalletEventsController {
   private readonly logger = new Logger(WalletEventsController.name);
@@ -12,36 +21,39 @@ export class WalletEventsController {
   ) {}
 
   @EventPattern('WalletDebited')
-  async handleWalletDebited(@Payload() event: any, @Ctx() context: RmqContext): Promise<void> {
-    const channel = context.getChannelRef();
-    const msg = context.getMessage();
-
-    try {
-      await this.walletDebitedHandler.handle(event);
-      channel.ack(msg);
-      this.logger.debug('WalletDebited event processed');
-    } catch (error: unknown) {
-      this.logger.error(
-        `Error processing WalletDebited: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      channel.nack(msg, false, false);
-    }
+  async handleWalletDebited(
+    @Payload() event: WalletDebitedMessage,
+    @Ctx() context: RmqContext,
+  ): Promise<void> {
+    await this.acknowledge(context, event.eventType, () => this.walletDebitedHandler.handle(event));
   }
 
   @EventPattern('WalletDebitFailed')
-  async handleWalletDebitFailed(@Payload() event: any, @Ctx() context: RmqContext): Promise<void> {
+  async handleWalletDebitFailed(
+    @Payload() event: WalletDebitFailedMessage,
+    @Ctx() context: RmqContext,
+  ): Promise<void> {
+    await this.acknowledge(context, event.eventType, () =>
+      this.walletDebitFailedHandler.handle(event),
+    );
+  }
+
+  private async acknowledge(
+    context: RmqContext,
+    eventType: string,
+    handle: () => Promise<void>,
+  ): Promise<void> {
     const channel = context.getChannelRef();
-    const msg = context.getMessage();
+    const message = context.getMessage();
 
     try {
-      await this.walletDebitFailedHandler.handle(event);
-      channel.ack(msg);
-      this.logger.debug('WalletDebitFailed event processed');
+      await handle();
+      channel.ack(message);
     } catch (error: unknown) {
       this.logger.error(
-        `Error processing WalletDebitFailed: ${error instanceof Error ? error.message : String(error)}`,
+        `Error processing ${eventType}: ${error instanceof Error ? error.message : String(error)}`,
       );
-      channel.nack(msg, false, false);
+      channel.nack(message, false, false);
     }
   }
 }

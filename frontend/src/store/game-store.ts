@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import { RoundStatus, Bet } from "@/types";
+import { RoundStatus, BetStatus, type Bet } from "@/types";
 import type { ConnectionStatus } from "@/websocket/websocket.types";
 import { GAME_CONSTANTS } from "@/constants/game";
 
@@ -57,10 +57,20 @@ interface GameState {
   updateBet: (betId: string, updates: Partial<Bet>) => void;
 }
 
+/**
+ * Mirrors the server-side crash: ACTIVE bets are lost, PENDING bets (stake
+ * never confirmed by the wallet) are cancelled.
+ */
+function settleOnCrash(bet: Bet): Bet {
+  if (bet.status === BetStatus.ACTIVE) return { ...bet, status: BetStatus.LOST };
+  if (bet.status === BetStatus.PENDING) return { ...bet, status: BetStatus.CANCELLED };
+  return bet;
+}
+
 const initialState = {
   isHydrated: false,
   isConnected: false,
-  connectionStatus: "disconnected" as const,
+  connectionStatus: "disconnected" as ConnectionStatus,
   currentRoundId: null,
   roundStatus: RoundStatus.BETTING,
   liveMultiplier: 1.0,
@@ -114,10 +124,14 @@ export const useGameStore = create<GameState>()(
       setMultiplier: (multiplier) => set({ liveMultiplier: multiplier }),
 
       setCrash: (crashPoint) =>
-        set({
+        set((state) => ({
           roundStatus: RoundStatus.CRASHED,
           liveMultiplier: crashPoint,
-        }),
+          currentBets: state.currentBets.map(settleOnCrash),
+          myActiveBet: state.myActiveBet
+            ? settleOnCrash(state.myActiveBet)
+            : null,
+        })),
 
       setMyActiveBet: (bet) => set({ myActiveBet: bet }),
 

@@ -13,24 +13,26 @@ import { formatMoney, formatMultiplier } from "@/domain/money";
 import { BetStatus } from "@/types";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 
-function statusBadge(status: string) {
-  const map: Record<string, string> = {
-    [BetStatus.CASHED_OUT]: "bg-primary/20 text-primary",
-    [BetStatus.LOST]: "bg-error/20 text-error",
-    [BetStatus.PENDING]: "bg-warning/20 text-warning",
-    [BetStatus.ACTIVE]: "bg-warning/20 text-warning",
-    [BetStatus.CANCELLED]: "bg-surface-bright/30 text-text-muted",
-  };
-  const labels: Record<string, string> = {
-    [BetStatus.CASHED_OUT]: "WON",
-    [BetStatus.LOST]: "LOST",
-    [BetStatus.PENDING]: "PENDING",
-    [BetStatus.ACTIVE]: "ACTIVE",
-    [BetStatus.CANCELLED]: "CANCELLED",
-  };
+const STATUS_BADGE_CLASS: Record<BetStatus, string> = {
+  [BetStatus.CASHED_OUT]: "bg-primary/20 text-primary",
+  [BetStatus.LOST]: "bg-error/20 text-error",
+  [BetStatus.PENDING]: "bg-warning/20 text-warning",
+  [BetStatus.ACTIVE]: "bg-warning/20 text-warning",
+  [BetStatus.CANCELLED]: "bg-surface-bright/30 text-text-muted",
+};
+
+const STATUS_LABEL: Record<BetStatus, string> = {
+  [BetStatus.CASHED_OUT]: "WON",
+  [BetStatus.LOST]: "LOST",
+  [BetStatus.PENDING]: "PENDING",
+  [BetStatus.ACTIVE]: "ACTIVE",
+  [BetStatus.CANCELLED]: "CANCELLED",
+};
+
+function statusBadge(status: BetStatus) {
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-terminal uppercase ${map[status] || "bg-surface-bright/30 text-text-muted"}`}>
-      {labels[status] || status}
+    <span className={`inline-block px-2 py-0.5 rounded text-xs font-terminal uppercase ${STATUS_BADGE_CLASS[status] ?? "bg-surface-bright/30 text-text-muted"}`}>
+      {STATUS_LABEL[status] ?? status}
     </span>
   );
 }
@@ -42,7 +44,7 @@ export function MyBetsClient() {
   const bets = data?.data ?? [];
   const meta = data?.meta;
   const summary = data?.summary;
-  const profitValue = summary ? Number(summary.profitCents) : 0;
+  const profitCents = summary?.profitCents ?? 0;
 
   return (
     <>
@@ -51,7 +53,7 @@ export function MyBetsClient() {
           <SummaryCard label="Total Wagered" value={formatMoney(summary.totalWageredCents)} icon={<Wallet className="w-4 h-4" />} />
           <SummaryCard label="Wins" value={String(summary.wins)} icon={<TrendingUp className="w-4 h-4 text-primary" />} valueClass="text-primary" />
           <SummaryCard label="Losses" value={String(summary.losses)} icon={<TrendingDown className="w-4 h-4 text-error" />} valueClass="text-error" />
-          <SummaryCard label="Profit/Loss" value={formatMoney(Math.abs(profitValue))} icon={<Minus className="w-4 h-4" />} valueClass={profitValue >= 0 ? "text-primary" : "text-error"} prefix={profitValue >= 0 ? "+" : "-"} />
+          <SummaryCard label="Profit/Loss" value={formatMoney(profitCents)} icon={<Minus className="w-4 h-4" />} valueClass={profitCents >= 0 ? "text-primary" : "text-error"} prefix={profitCents > 0 ? "+" : ""} />
         </div>
       )}
 
@@ -98,11 +100,11 @@ export function MyBetsClient() {
 
       {meta && meta.totalPages > 1 && (
         <div className="flex items-center justify-center gap-4 pt-4">
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-4 py-2 text-sm font-terminal text-text-muted border border-border rounded hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-4 py-2 text-sm font-terminal text-text-muted border border-border rounded hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
             Previous
           </button>
           <span className="text-sm font-terminal text-text-muted">{page} / {meta.totalPages}</span>
-          <button onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))} disabled={page >= meta.totalPages} className="px-4 py-2 text-sm font-terminal text-text-muted border border-border rounded hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          <button type="button" onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))} disabled={page >= meta.totalPages} className="px-4 py-2 text-sm font-terminal text-text-muted border border-border rounded hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
             Next
           </button>
         </div>

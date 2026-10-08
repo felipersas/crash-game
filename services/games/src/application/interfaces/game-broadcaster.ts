@@ -1,42 +1,51 @@
 /**
  * Game Broadcaster Interface - Application Layer
  *
- * Abstraction for broadcasting game events to connected clients.
+ * Abstraction for pushing game state to connected clients.
  * Decouples use cases from the concrete WebSocket implementation.
+ * Implementations must never throw: broadcasting is best-effort.
  */
 
+export interface RoundStartedBroadcast {
+  roundId: string;
+  seedHash: string;
+  bettingEndTime: Date;
+}
+
+export interface CrashBroadcast {
+  roundId: string;
+  crashPoint: number;
+  seed: string;
+}
+
+export interface BetBroadcast {
+  roundId: string;
+  betId: string;
+  playerId: string;
+  playerName: string;
+  amountCents: bigint;
+}
+
+export interface BetCancelledBroadcast extends BetBroadcast {
+  reason: string;
+}
+
+export interface PlayerCashedOutBroadcast {
+  roundId: string;
+  betId: string;
+  playerId: string;
+  playerName: string;
+  multiplier: number;
+  payoutCents: bigint;
+}
+
 export interface IGameBroadcaster {
-  broadcastRoundStarted(roundId: string, seedHash: string, bettingEndTime: Date): void;
+  broadcastRoundStarted(data: RoundStartedBroadcast): void;
   broadcastBettingEnded(roundId: string): void;
-  broadcastCrash(roundId: string, crashPoint: number, seed: string): void;
-  broadcastBetPlaced(
-    roundId: string,
-    betId: string,
-    playerId: string,
-    playerName: string,
-    amountCents: bigint,
-  ): void;
-  broadcastBetConfirmed(
-    roundId: string,
-    betId: string,
-    playerId: string,
-    playerName: string,
-    amountCents: bigint,
-  ): void;
-  broadcastBetCancelled(
-    roundId: string,
-    betId: string,
-    playerId: string,
-    playerName: string,
-    amountCents: bigint,
-    reason: string,
-  ): void;
-  broadcastPlayerCashedOut(
-    roundId: string,
-    betId: string,
-    playerId: string,
-    playerName: string,
-    multiplier: number,
-    payoutCents: bigint,
-  ): void;
+  broadcastMultiplierUpdate(roundId: string, multiplier: number): void;
+  broadcastCrash(data: CrashBroadcast): void;
+  broadcastBetPlaced(data: BetBroadcast): void;
+  broadcastBetConfirmed(data: BetBroadcast): void;
+  broadcastBetCancelled(data: BetCancelledBroadcast): void;
+  broadcastPlayerCashedOut(data: PlayerCashedOutBroadcast): void;
 }

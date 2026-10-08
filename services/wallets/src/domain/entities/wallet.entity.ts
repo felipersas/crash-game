@@ -49,8 +49,7 @@ export class Wallet {
    */
   static restore(id: WalletId, playerId: PlayerId, balanceCents: bigint, version: number): Wallet {
     const balance = Money.fromCents(balanceCents);
-    const wallet = new Wallet(id, playerId, balance, version);
-    return wallet;
+    return new Wallet(id, playerId, balance, version);
   }
 
   /**
@@ -103,7 +102,7 @@ export class Wallet {
    * Returns boolean without throwing.
    */
   canDebit(amount: Money): boolean {
-    return this.balance.isGreaterThan(amount) || this.balance.equals(amount);
+    return !this.balance.isLessThan(amount);
   }
 
   /**
@@ -125,7 +124,7 @@ export class Wallet {
    * Used by infrastructure to publish events to message broker.
    */
   pullEvents(): WalletDomainEvent[] {
-    const events = [...this.events];
+    const events = this.events;
     this.events = [];
     return events;
   }
@@ -140,7 +139,7 @@ export class Wallet {
   /**
    * Convert wallet to plain object for persistence.
    */
-  toPersistence() {
+  toPersistence(): { id: WalletId; playerId: PlayerId; balance: bigint; version: number } {
     return {
       id: this.id,
       playerId: this.playerId,

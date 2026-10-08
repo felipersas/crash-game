@@ -40,6 +40,7 @@ model Bet {
   cashOutMultiplier Float?       @map("cash_out_multiplier")
   cashOutAmount     BigInt?      @map("cash_out_amount")
   cashedOutAt       DateTime?    @map("cashed_out_at")
+  cancelReason      String?      @map("cancel_reason")
   createdAt         DateTime     @default(now()) @map("created_at")
 
   round             Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)

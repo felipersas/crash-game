@@ -1,7 +1,7 @@
 "use client";
 
 import { formatMoney, calculatePayout } from "@/domain/money";
-import type { Bet } from "@/types";
+import { BetStatus, type Bet } from "@/types";
 
 interface BetStatusDisplayProps {
   myActiveBet: Bet | null;
@@ -16,9 +16,9 @@ export function BetStatusDisplay({
   isActivePhase,
   liveMultiplier,
 }: BetStatusDisplayProps) {
-  const hasCashedOut = myActiveBet?.status === "CASHED_OUT";
+  const hasCashedOut = myActiveBet?.status === BetStatus.CASHED_OUT;
 
-  if (myActiveBet?.status === "PENDING") {
+  if (myActiveBet?.status === BetStatus.PENDING) {
     return (
       <div className="text-center py-4">
         <span className="flex items-center justify-center gap-2">
@@ -50,7 +50,7 @@ export function BetStatusDisplay({
     );
   }
 
-  if (isCrashed && myActiveBet && myActiveBet.status !== "CASHED_OUT") {
+  if (isCrashed && myActiveBet && myActiveBet.status !== BetStatus.CASHED_OUT) {
     return (
       <div className="text-center py-4">
         <p className="text-error font-terminal text-sm uppercase tracking-wider">
@@ -104,6 +104,7 @@ export function CashOutButton({
         <span className="text-primary">{formatMoney(potentialWin)}</span>
       </div>
       <button
+        type="button"
         onClick={onCashOut}
         disabled={isCashingOut || disabled}
         className={`w-full btn-cyber-primary py-4 text-lg font-black uppercase tracking-widest rounded-xl disabled:opacity-50 disabled:cursor-not-allowed ${!disabled ? "glow-cashout" : ""}`}

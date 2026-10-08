@@ -1,0 +1,26 @@
+{
+  "name": "@crash/http",
+  "version": "0.0.1",
+  "private": true,
+  "type": "commonjs",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@crash/domain": "workspace:*"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^11.1.17",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.3"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  }
+}

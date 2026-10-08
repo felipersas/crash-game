@@ -1,16 +1,13 @@
 import { Controller, Get, Post } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { PlayerId } from '@crash/domain';
-import {
-  UserContext,
-  type UserContext as UserContextType,
-} from '../decorators/user-context.decorator';
+import { UserContext } from '@crash/http';
+import { CreateWalletUseCase } from '@/application/use-cases/create-wallet.use-case';
+import { GetWalletUseCase } from '@/application/use-cases/get-wallet.use-case';
+import { ApiErrorResponseDto } from '../dtos/api-error.dto';
 import { HealthCheckResponseDto } from '../dtos/health-check-response.dto';
 import { CreateWalletResponseDto } from '../dtos/create-wallet.dto';
 import { GetWalletResponseDto } from '../dtos/get-wallet.dto';
-import { CreateWalletUseCase } from '@/application/use-cases/create-wallet.use-case';
-import { GetWalletUseCase } from '@/application/use-cases/get-wallet.use-case';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { ApiErrorResponseDto } from '../dtos/api-error.dto';
 
 @ApiTags('Wallets')
 @Controller('wallets')
@@ -32,22 +29,18 @@ export class WalletsController {
 
   @ApiOperation({
     summary: 'Create a wallet',
-    description: 'Creates wallet for authenticated player. Balance starts at 0.',
+    description:
+      'Creates the wallet of the authenticated player with a zero balance. Idempotent: returns the existing wallet if there is one.',
   })
   @ApiBearerAuth()
   @ApiResponse({ status: 201, description: 'Wallet created', type: CreateWalletResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 409, description: 'Wallet already exists', type: ApiErrorResponseDto })
   @Post()
-  async createWallet(@UserContext() user: UserContextType): Promise<CreateWalletResponseDto> {
+  async createWallet(@UserContext() user: UserContext): Promise<CreateWalletResponseDto> {
     const result = await this.createWalletUseCase.execute({
       playerId: PlayerId.from(user.playerId),
     });
-    return {
-      walletId: result.walletId,
-      playerId: result.playerId,
-      balance: result.balance,
-    };
+    return CreateWalletResponseDto.from(result);
   }
 
   @ApiOperation({
@@ -59,13 +52,8 @@ export class WalletsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Wallet not found', type: ApiErrorResponseDto })
   @Get('me')
-  async getWallet(@UserContext() user: UserContextType): Promise<GetWalletResponseDto> {
+  async getWallet(@UserContext() user: UserContext): Promise<GetWalletResponseDto> {
     const result = await this.getWalletUseCase.execute({ playerId: PlayerId.from(user.playerId) });
-    return {
-      walletId: result.walletId,
-      playerId: result.playerId,
-      balance: result.balance,
-      version: result.version,
-    };
+    return GetWalletResponseDto.from(result);
   }
 }

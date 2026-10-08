@@ -32,110 +32,61 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 
 ## Mock Helper Pattern
 
-Project uses custom mock factory functions (NOT jest.fn or vi.fn):
+Project uses hand-rolled mocks (NOT jest.fn / vi.fn / bun `mock`). Each service has ONE
+shared module — `tests/helpers/mocks.ts` — with `mockFn` and a factory per port. Do not
+redefine mocks inside test files; pass `overrides` or call `mockResolvedValue` instead.
 
 ```typescript
-// Reusable mock helper
-function mockFn<T extends (...args: any[]) => any>(impl?: T) {
-  const fn: any = (...args: any[]) => {
-    fn.callCount++;
-    return fn._impl(...args);
-  };
-  fn._impl = impl || (() => {});
-  fn.callCount = 0;
-  fn.mockReturnValue = (v: any) => { fn._impl = () => v; };
-  fn.mockResolvedValue = (v: any) => { fn._impl = () => Promise.resolve(v); };
-  return fn as T & { callCount: number; mockReturnValue: (v: any) => void; mockResolvedValue: (v: any) => void; };
-}
+import {
+  FAKE_TX,
+  mockFn,
+  createMockRoundRepository,
+  createMockBetRepository,
+  createMockUnitOfWork,
+  createMockBroadcaster,
+  createMockMetrics,
+} from '../../helpers/mocks';
+
+const fn = mockFn(async (id: string) => null);
+fn.mockResolvedValue(bet);       // also mockReturnValue / mockRejectedValue / mockImplementation
+fn.calls;                        // [[arg1, arg2], ...]
+fn.callCount;
 ```
 
-## Repository Mocks
-
-```typescript
-function createMockRoundRepository(overrides = {}) {
-  return {
-    findCurrentRound: mockFn(() => Promise.resolve(null)),
-    create: mockFn(() => Promise.resolve()),
-    save: mockFn(() => Promise.resolve()),
-    findById: mockFn(() => Promise.resolve(null)),
-    findHistory: mockFn(() => Promise.resolve([])),
-    findHistoryCount: mockFn(() => Promise.resolve(0)),
-    ...overrides,
-  };
-}
-
-function createMockBetRepository(overrides = {}) {
-  return {
-    create: mockFn(() => Promise.resolve()),
-    update: mockFn(() => Promise.resolve()),
-    findById: mockFn(() => Promise.resolve(null)),
-    findByRound: mockFn(() => Promise.resolve([])),
-    findByPlayerAndRound: mockFn(() => Promise.resolve(null)),
-    findByPlayerPaginated: mockFn(() => Promise.resolve([])),
-    countByPlayer: mockFn(() => Promise.resolve(0)),
-    ...overrides,
-  };
-}
-
-function createMockEventPublisher() {
-  return {
-    publish: mockFn(() => Promise.resolve()),
-    publishBatch: mockFn(() => Promise.resolve()),
-    isConnected: mockFn(() => true),
-  };
-}
-
-function createMockGamesGateway(overrides = {}) {
-  return {
-    broadcastBetPlaced: mockFn(() => {}),
-    broadcastBetConfirmed: mockFn(() => {}),
-    broadcastBetCancelled: mockFn(() => {}),
-    broadcastPlayerCashedOut: mockFn(() => {}),
-    broadcastRoundStarted: mockFn(() => {}),
-    broadcastBettingEnded: mockFn(() => {}),
-    broadcastMultiplierUpdate: mockFn(() => {}),
-    broadcastCrash: mockFn(() => {}),
-    ...overrides,
-  };
-}
-```
+`createMockUnitOfWork()` runs the `work` callback with `FAKE_TX` and records commits:
+assert persisted events with `unitOfWork.commits` / `unitOfWork.committedEvents`, and
+repository calls with `repo.save.calls` → `[[aggregate, FAKE_TX]]`.
 
 ## Use Case Test Pattern
 
 ```typescript
 describe('XxxUseCase', () => {
   let roundRepository: ReturnType<typeof createMockRoundRepository>;
-  let betRepository: ReturnType<typeof createMockBetRepository>;
-  let eventPublisher: ReturnType<typeof createMockEventPublisher>;
-  let gamesGateway: ReturnType<typeof createMockGamesGateway>;
+  let unitOfWork: ReturnType<typeof createMockUnitOfWork>;
+  let broadcaster: ReturnType<typeof createMockBroadcaster>;
   let useCase: XxxUseCase;
 
   beforeEach(() => {
     roundRepository = createMockRoundRepository();
-    betRepository = createMockBetRepository();
-    eventPublisher = createMockEventPublisher();
-    gamesGateway = createMockGamesGateway();
-    useCase = new XxxUseCase(
-      roundRepository as any,
-      betRepository as any,
-      eventPublisher as any,
-      gamesGateway as any,
-    );
+    unitOfWork = createMockUnitOfWork();
+    broadcaster = createMockBroadcaster();
+    // Same order as the use case constructor
+    useCase = new XxxUseCase(roundRepository as any, unitOfWork as any, broadcaster as any);
   });
 
   test('should do something', async () => {
     // Arrange
-    const round = await Round.create(DEFAULT_ROUND_CONFIG);
-    round.pullEvents(); // Clear creation events
-    roundRepository.findCurrentRound.mockResolvedValue(round);
+    const round = await Round.create(undefined, 'test-crash-10.0'); // deterministic crash point
+    round.pullEvents(); // clear creation events
+    roundRepository.findById.mockResolvedValue(round);
 
     // Act
-    const result = await useCase.execute({ playerId: 'p1', amountCents: 1000n });
+    const result = await useCase.execute({ roundId: round.id });
 
     // Assert
-    expect(result.roundId).toBe(round.id);
-    expect(betRepository.create.callCount).toBe(1);
-    expect(eventPublisher.publishBatch.callCount).toBe(1);
+    expect(unitOfWork.committedEvents.map((e) => e.eventType)).toEqual(['XxxHappened']);
+    expect(roundRepository.save.calls).toEqual([[round, FAKE_TX]]);
+    expect(result.amountCents).toBe(1000n);
   });
 });
 ```
@@ -171,9 +122,10 @@ E2E tests use real Docker services. Helpers provide:
 - `deterministic-seeds.ts` — predictable crash points
 
 ## Validation
-- [ ] Mock factories used, not jest.fn/vi.fn
-- [ ] `as any` cast for mock→use case construction
+- [ ] Mocks come from `tests/helpers/mocks.ts`, not redefined per file
+- [ ] `as any` cast for mock → use case construction, in constructor order
 - [ ] `round.pullEvents()` called after `Round.create()` to clear initial events
-- [ ] Event counts verified with `publishBatch.callCount`
+- [ ] Persisted events asserted through the unit of work mock (`commits` / `committedEvents`)
 - [ ] Domain errors tested with `expect(() => ...).toThrow(ErrorClass)`
 - [ ] Money amounts use `bigint` literals (e.g., `1000n`)
+- [ ] Every bug fix gets a regression test describing the old wrong behavior

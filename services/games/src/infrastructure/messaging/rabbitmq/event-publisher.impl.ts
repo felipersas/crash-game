@@ -1,41 +1,24 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
-import { type ClientProxy } from '@nestjs/microservices';
+import { Injectable, Inject } from '@nestjs/common';
+import type { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
+import type { IEventPublisher, SerializedEvent } from '@crash/messaging';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
-import type { GameDomainEvent } from '@/domain/events/round.events';
-import type { IGameEventPublisher } from '@/application/interfaces/event-publisher';
+import { GAMES_EVENTS_CLIENT } from '@/infrastructure/di.tokens';
 
+const EXCHANGE = 'games.events';
+
+/**
+ * Publishes serialized game events to the `games.events` fanout exchange.
+ */
 @Injectable()
-export class RabbitMQEventPublisher implements IGameEventPublisher {
-  private readonly logger = new Logger(RabbitMQEventPublisher.name);
-
+export class RabbitMQEventPublisher implements IEventPublisher {
   constructor(
-    @Inject('GAMES_EVENTS_CLIENT') private readonly client: ClientProxy,
+    @Inject(GAMES_EVENTS_CLIENT) private readonly client: ClientProxy,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
   ) {}
 
-  async publish(event: GameDomainEvent): Promise<void> {
-    const serialized = JSON.parse(
-      JSON.stringify(event, (_key, value) =>
-        typeof value === 'bigint' ? value.toString() : value,
-      ),
-    );
-
-    await firstValueFrom(this.client.emit(event.eventType, serialized), {
-      defaultValue: undefined,
-    });
-
-    this.metrics.incrRabbitPublished('games.events', event.eventType);
-    this.logger.debug(`Published event: ${event.eventType}`);
-  }
-
-  async publishBatch(events: GameDomainEvent[]): Promise<void> {
-    for (const event of events) {
-      await this.publish(event);
-    }
-  }
-
-  isConnected(): boolean {
-    return true;
+  async publish(event: SerializedEvent): Promise<void> {
+    await firstValueFrom(this.client.emit(event.eventType, event), { defaultValue: undefined });
+    this.metrics.incrRabbitPublished(EXCHANGE, event.eventType);
   }
 }

@@ -1,4 +1,5 @@
-import { InvalidSeedError } from '../errors/domain.errors';
+import { InvalidCrashPointError, InvalidSeedError } from '../errors/domain.errors';
+import { hexToBytes, sha256 } from '../crypto/sha256';
 
 /**
  * Crash Point Value Object - Represents the predetermined crash multiplier.
@@ -11,6 +12,11 @@ export class CrashPoint {
   private static readonly SEED_PRECISION = 52; // Number of bits from seed
   private static readonly HOUSE_EDGE = 0.04; // 4% house edge
   private static readonly MIN_CRASH = 1.0; // Minimum crash point
+
+  /** Human-readable description of fromSeed(), shown to players for verification. */
+  static readonly FORMULA =
+    `SHA-256(seed) → extract first ${CrashPoint.SEED_PRECISION} bits → ` +
+    `crash = max(${CrashPoint.MIN_CRASH.toFixed(2)}, (1 - ${CrashPoint.HOUSE_EDGE}) / (bits / 2^${CrashPoint.SEED_PRECISION}))`;
   private readonly value: number;
 
   private constructor(value: number) {
@@ -25,11 +31,9 @@ export class CrashPoint {
       throw new InvalidSeedError(seed);
     }
 
-    const seedBytes = CrashPoint.hexToBytes(seed);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', seedBytes as BufferSource);
-    const hashArray = new Uint8Array(hashBuffer);
+    const hash = await sha256(hexToBytes(seed));
 
-    const first52Bits = this.extractBits(hashArray, CrashPoint.SEED_PRECISION);
+    const first52Bits = CrashPoint.extractBits(hash, CrashPoint.SEED_PRECISION);
     const max52Bit = Math.pow(2, CrashPoint.SEED_PRECISION);
     const result = first52Bits / max52Bit;
     const houseEdgeAdjusted = (1 - CrashPoint.HOUSE_EDGE) / result;
@@ -43,7 +47,7 @@ export class CrashPoint {
    */
   static fromValue(value: number): CrashPoint {
     if (value < CrashPoint.MIN_CRASH) {
-      throw new Error(`Crash point must be at least ${CrashPoint.MIN_CRASH}`);
+      throw new InvalidCrashPointError(value, CrashPoint.MIN_CRASH);
     }
     return new CrashPoint(value);
   }
@@ -58,14 +62,6 @@ export class CrashPoint {
 
   toString(): string {
     return `${this.value.toFixed(2)}x`;
-  }
-
-  private static hexToBytes(hex: string): Uint8Array {
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < bytes.length; i++) {
-      bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
-    }
-    return bytes;
   }
 
   private static extractBits(bytes: Uint8Array, bitCount: number): number {

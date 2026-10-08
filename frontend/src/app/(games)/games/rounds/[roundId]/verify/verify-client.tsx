@@ -1,29 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import { Copy, Check } from "lucide-react";
-import { useVerifyRound } from "@/hooks/useVerifyRound";
-import { computeSHA256 } from "@/utils/crypto";
+import { useSeedVerification } from "@/hooks/useSeedVerification";
 import { formatMultiplier } from "@/domain/money";
 import Link from "next/link";
 
 export function VerifyRoundClient({ roundId }: { roundId: string }) {
-  const { data, isLoading, error } = useVerifyRound(roundId);
-  const [computedHash, setComputedHash] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const handleVerify = async () => {
-    if (!data) return;
-    const hash = await computeSHA256(data.seed);
-    setComputedHash(hash);
-  };
-
-  const handleCopy = async () => {
-    if (!data) return;
-    await navigator.clipboard.writeText(data.seedHash);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const { data, isLoading, error, computedHash, hashesMatch, copied, verify, copyHash } =
+    useSeedVerification(roundId);
 
   if (isLoading) {
     return (
@@ -44,8 +28,6 @@ export function VerifyRoundClient({ roundId }: { roundId: string }) {
     );
   }
 
-  const hashesMatch = computedHash === data.seedHash;
-
   return (
     <>
       <div className="space-y-4 font-terminal text-sm">
@@ -60,7 +42,8 @@ export function VerifyRoundClient({ roundId }: { roundId: string }) {
       </div>
 
       <button
-        onClick={handleCopy}
+        type="button"
+        onClick={copyHash}
         className="flex items-center gap-2 text-sm font-terminal text-primary hover:text-primary/80 transition-colors"
       >
         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -68,7 +51,8 @@ export function VerifyRoundClient({ roundId }: { roundId: string }) {
       </button>
 
       <button
-        onClick={handleVerify}
+        type="button"
+        onClick={verify}
         className="w-full btn-cyber-primary py-3 rounded-lg text-sm uppercase tracking-widest"
       >
         Verify Now (SHA-256)

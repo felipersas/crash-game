@@ -24,33 +24,40 @@ Guide all changes to the frontend following established conventions for state ma
 
 ```
 frontend/
-├── app/
-│   ├── (auth)/login/           # Auth route group
-│   ├── (games)/
-│   │   ├── _components/        # Route-scoped components
-│   │   │   ├── bet-controls/   # BetButton, BetInput, BetStatusDisplay, useBetToast
-│   │   │   ├── bets-list/      # BetsList
-│   │   │   ├── crash-graph/    # CrashGraph, useCurvePoints
-│   │   │   ├── game-layout/    # GameLayout (shell)
-│   │   │   ├── round-history/  # RoundHistory, RoundHistoryTable, VerificationModal
-│   │   │   └── sidebar/        # Sidebar, MobileBottomNav
-│   │   ├── games/              # Game pages + bets/me + rounds/*
-│   │   └── layout.tsx          # Games layout with providers
-│   └── layout.tsx              # Root layout
-├── components/ui/              # Shared UI primitives (Button, Input, Popover, etc.)
-├── hooks/                      # useGame, useGameWebSocket, useAuth, useWallet, useGameSounds, etc.
-├── infrastructure/
-│   ├── api/                    # games-api.ts, wallets-api.ts, http-client.ts
-│   └── auth/                   # keycloak-provider.ts, nextauth.config.ts
-├── store/                      # Zustand stores (game-store.ts)
-├── websocket/                  # GamesWebSocket class, websocket.types.ts
-├── shared/
-│   ├── constants/              # api.constants.ts, game.constants.ts, error-codes.ts
-│   ├── schemas/                # Zod schemas (api-schemas, bet-form.schema)
-│   └── utils/                  # money.ts, crypto.ts
-├── types/                      # game.types.ts
-├── e2e/                        # Playwright specs (multiplayer.spec.ts)
-└── middleware.ts               # Auth middleware
+├── middleware.ts                    # NextAuth route protection (/games is public)
+├── next-auth.d.ts                   # Session / JWT type augmentation
+├── src/
+│   ├── app/
+│   │   ├── (auth)/login/            # Auth route group
+│   │   ├── (games)/
+│   │   │   ├── _components/sidebar/ # Sidebar, MobileBottomNav
+│   │   │   ├── games/
+│   │   │   │   ├── _components/     # Route-scoped components
+│   │   │   │   │   ├── bet-controls/  # BetControls (form), BetInput, AutoCashOut, BetStatusDisplay, useBetToast
+│   │   │   │   │   ├── bets-list/     # BetsList
+│   │   │   │   │   ├── crash-graph/   # CrashGraph, useCurvePoints
+│   │   │   │   │   ├── game-layout/   # GameLayout (shell + balance)
+│   │   │   │   │   └── round-history/ # RoundHistory, RoundHistoryTable, VerificationModal
+│   │   │   │   ├── bets/me/         # My bets page
+│   │   │   │   ├── rounds/          # history + [roundId]/verify pages
+│   │   │   │   └── game-content.tsx # Main game screen (opens the WebSocket)
+│   │   │   └── layout.tsx
+│   │   ├── api/auth/[...nextauth]/  # NextAuth route
+│   │   └── layout.tsx               # Root layout
+│   ├── components/ui/               # Shared UI primitives (Button, Input, Popover, Skeleton)
+│   ├── constants/                   # api.ts, game.ts (GAME_CONSTANTS), error-codes.ts
+│   ├── domain/                      # money.ts (bigint cents helpers)
+│   ├── hooks/                       # useGame, useWallet, useGameWebSocket (+ useConnection,
+│   │                                # useRoundSync, useGameEvents), useSeedVerification, ...
+│   ├── libs/                        # axios.ts, games-api.ts, wallets-api.ts, auth.ts,
+│   │                                # providers.tsx, get-query-client.ts, server-fetch.ts
+│   ├── schemas/                     # Zod schemas (bet-form.schema.ts)
+│   ├── store/                       # Zustand store (game-store.ts)
+│   ├── types/                       # bet.ts, game.ts (BetStatus, RoundStatus, Phase, ...)
+│   ├── utils/                       # crypto.ts, helpers.ts
+│   └── websocket/                   # GamesWebSocket class, websocket.types.ts
+├── tests/                           # Vitest setup + render helpers
+└── e2e/                             # Playwright specs (multiplayer.spec.ts)
 ```
 
 ## Key Patterns
@@ -80,18 +87,23 @@ export const useGameStore = create<GameState>()(
 // hooks/useGameWebSocket.ts
 export function useGameWebSocket(options): UseGameWebSocketReturn
 ```
-- Manages connection lifecycle (connect on mount, disconnect on unmount)
-- On connect: syncs current round via REST, then subscribes to WS events
-- All WS events update Zustand store via store actions
+- Enable it only once the session is resolved (`enabled: status !== "loading"`)
+- Reconnects when `enabled`, `token` or `playerId` change (handlers are rebuilt, never stale)
+- `useConnection` guards on the socket instance (`wsRef.current`), not on `connected`
+- On connect: syncs current round via REST (`useRoundSync`), restoring my bet
+- All WS events update Zustand store via store actions (`useGameStore.getState()` in handlers)
 - Uses `currentRoundIdRef` to filter stale events
 - Sounds triggered from WS callbacks (`playCrash` on crash)
+- Never write refs during render; keep effects free of synchronous setState
 
 ### API Layer
 ```typescript
-// infrastructure/api/http-client.ts — base client with auth
-// infrastructure/api/games-api.ts — game endpoints
-// infrastructure/api/wallets-api.ts — wallet endpoints
+// libs/axios.ts — axios client with auth interceptor, typed ApiError
+// libs/games-api.ts — game endpoints
+// libs/wallets-api.ts — wallet endpoints
 ```
+- Type query errors: `useQuery<T, ApiError>` (no `as unknown as ApiError`)
+- Optimistic bet: status is always `BetStatus.PENDING` until `betConfirmed`
 All API calls go through Kong gateway (`localhost:8000`).
 
 ### Component Conventions
@@ -101,30 +113,41 @@ All API calls go through Kong gateway (`localhost:8000`).
 - `use client` directive for interactive components
 - Server components for data fetching pages (`page.tsx`)
 
-### Money Formatting
+### Money (integer cents only)
 ```typescript
-// shared/utils/money.ts
-export function formatMoney(cents: number): string  // 1000 → "10.00"
+// domain/money.ts — bigint arithmetic, accepts number | bigint | string cents
+formatMoney(1050)            // "$10.50"   formatMoney(-500) → "-$5.00"
+centsToDecimal(1050)         // "10.50"
+calculatePayout(1000, 2.019) // 2010 — multiplier truncated to hundredths (matches backend)
 ```
+- `GET /wallets/me` → `balance` is a string of integer cents (`useWallet().balanceCents`)
+- Compare/subtract balances with `BigInt`, never `parseFloat` / `Number(x) * 100`
+- Never `(cents / 100).toFixed(2)`
 
 ### Game Constants
 ```typescript
-// shared/constants/game.constants.ts
+// constants/game.ts
 GAME_CONSTANTS.MIN_BET_CENTS = 100    // $1.00
 GAME_CONSTANTS.MAX_BET_CENTS = 100000 // $1,000.00
+GAME_CONSTANTS.MIN_AUTO_CASHOUT = 1.01
+GAME_CONSTANTS.MAX_AUTO_CASHOUT = 1000
 GAME_CONSTANTS.BETTING_DURATION_MS = 10000
 ```
+- Use `BetStatus` / `RoundStatus` enums, never raw status strings
 
 ### Auth Flow
-- NextAuth with Keycloak provider (`infrastructure/auth/`)
+- NextAuth with Keycloak provider (`libs/auth.ts`)
 - `middleware.ts` protects game routes
 - `hooks/useAuth.ts` for auth state
+- `libs/auth.ts` — NextAuth options (typed callbacks, token refresh)
 - Token passed to WebSocket for authentication
 
 ## Validation
 - [ ] No direct state mutation — always through Zustand actions
 - [ ] WS events check `currentRoundId` before applying
-- [ ] Money displayed via `formatMoney()`, never raw division
+- [ ] Money displayed via `formatMoney()`, never raw division; no float money math
+- [ ] Raw `<button>`s inside a `<form>` have an explicit `type`
+- [ ] `bun run lint` (0 errors), `bunx tsc --noEmit`, `bun run test`, `bun run build` pass
 - [ ] `use client` only where needed (interactivity)
 - [ ] API errors handled with toast (sonner)
 - [ ] Responsive: MobileBottomNav for small screens

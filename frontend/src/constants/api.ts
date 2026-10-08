@@ -8,7 +8,6 @@ export const API_ENDPOINTS = {
     MY_BETS: '/games/bets/me',
   },
   WALLETS: {
-    CREATE: '/wallets',
     ME: '/wallets/me',
   },
 } as const;

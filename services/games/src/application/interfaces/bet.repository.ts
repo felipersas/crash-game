@@ -1,78 +1,45 @@
-import { type Bet, type BetStatus } from '@/domain/entities/bet.entity';
-import type { PrismaTransaction } from '@/infrastructure/messaging/outbox-writer';
-import { type BetId, type RoundId, type PlayerId } from '@crash/domain';
+import type { Bet } from '@/domain/entities/bet.entity';
+import type { BetId, RoundId, PlayerId } from '@crash/domain';
+import type { TransactionContext } from './unit-of-work';
+
+export interface PlayerBetsSummary {
+  totalWageredCents: bigint;
+  wins: number;
+  losses: number;
+  profitCents: bigint;
+}
 
 /**
  * Bet Repository Interface - Application Layer
  *
- * Defines the contract for Bet persistence operations.
- * Bet is now a separate aggregate from Round, allowing for
- * better concurrency and scalability.
+ * Bets are persisted independently from their Round for better concurrency.
  */
 export interface IBetRepository {
   /**
-   * Create a new bet.
-   * Optional tx for atomic operations within a transaction boundary.
+   * @throws DuplicateBetError when the player already has a live bet in the round.
    */
-  create(bet: Bet, tx?: PrismaTransaction): Promise<void>;
+  create(bet: Bet, tx?: TransactionContext): Promise<void>;
 
-  /**
-   * Update an existing bet (status changes).
-   * Optional tx for atomic operations within a transaction boundary.
-   */
-  update(bet: Bet, tx?: PrismaTransaction): Promise<void>;
+  update(bet: Bet, tx?: TransactionContext): Promise<void>;
 
-  /**
-   * Find a bet by ID.
-   */
   findById(betId: BetId): Promise<Bet | null>;
 
   /**
-   * Find all bets for a specific round.
-   */
-  findByRound(roundId: RoundId): Promise<Bet[]>;
-
-  /**
-   * Find a specific player's bet in a round.
-   * Returns null if no bet exists for that player in the round.
+   * Latest bet of a player in a round, or null.
    */
   findByPlayerAndRound(playerId: PlayerId, roundId: RoundId): Promise<Bet | null>;
 
-  /**
-   * Find all bets for a player (paginated).
-   */
-  findByPlayer(playerId: PlayerId, limit?: number): Promise<Bet[]>;
-
-  /**
-   * Find bets by status for a round.
-   * Useful for finding PENDING bets that need confirmation/cancellation.
-   */
-  findByRoundAndStatus(roundId: RoundId, status: BetStatus): Promise<Bet[]>;
-
-  /**
-   * Find all bets for a player with pagination.
-   */
   findByPlayerPaginated(playerId: PlayerId, limit: number, offset: number): Promise<Bet[]>;
 
-  /**
-   * Count total bets for a player.
-   */
   countByPlayer(playerId: PlayerId): Promise<number>;
 
   /**
-   * Compute aggregated summary for a player's bets.
-   * Avoids loading all bets into memory.
+   * Aggregated win/loss summary computed in the database.
    */
-  getSummaryByPlayer(playerId: PlayerId): Promise<{
-    totalWageredCents: number;
-    wins: number;
-    losses: number;
-    profitCents: number;
-  }>;
+  getSummaryByPlayer(playerId: PlayerId): Promise<PlayerBetsSummary>;
 
   /**
-   * Find PENDING bets created before the given threshold.
-   * Used by timeout handler to cancel stale unconfirmed bets.
+   * PENDING bets created before the given threshold (wallet never answered).
    */
   findStalePendingBets(olderThan: Date): Promise<Bet[]>;
 }

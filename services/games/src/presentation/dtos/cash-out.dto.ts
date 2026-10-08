@@ -1,5 +1,7 @@
-import { IsString, IsOptional, IsUUID } from 'class-validator';
+import { IsOptional, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { CashOutOutput } from '@/application/use-cases/cash-out.use-case';
+import { centsField } from './money';
 
 export class CashOutRequestDto {
   @ApiProperty({
@@ -13,7 +15,7 @@ export class CashOutRequestDto {
     description: 'Optional round ID for validation',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
-  @IsString()
+  @IsUUID()
   @IsOptional()
   roundId?: string;
 }
@@ -36,4 +38,16 @@ export class CashOutResponseDto {
 
   @ApiProperty({ example: '12.25' })
   payoutDecimal!: string;
+
+  static from(result: CashOutOutput): CashOutResponseDto {
+    const payout = centsField(result.payoutCents);
+    return {
+      betId: result.betId,
+      roundId: result.roundId,
+      playerId: result.playerId,
+      cashOutMultiplier: result.cashOutMultiplier,
+      payoutCents: payout.cents,
+      payoutDecimal: payout.decimal,
+    };
+  }
 }

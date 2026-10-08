@@ -11,7 +11,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import { CrashPoint } from '../../src/domain/value-objects/crash-point.value-object';
-import { InvalidSeedError } from '../../src/domain/errors/domain.errors';
+import { InvalidCrashPointError, InvalidSeedError } from '../../src/domain/errors/domain.errors';
 
 describe('CrashPoint Value Object', () => {
   describe('Creation from Value', () => {
@@ -21,10 +21,11 @@ describe('CrashPoint Value Object', () => {
       expect(crashPoint.getValue()).toBe(1.5);
     });
 
-    test('should reject values below minimum (1.00)', () => {
-      expect(() => CrashPoint.fromValue(0.99)).toThrow();
-      expect(() => CrashPoint.fromValue(0)).toThrow();
-      expect(() => CrashPoint.fromValue(-1)).toThrow();
+    test('should reject values below minimum (1.00) with InvalidCrashPointError', () => {
+      expect(() => CrashPoint.fromValue(0.99)).toThrow(InvalidCrashPointError);
+      expect(() => CrashPoint.fromValue(0)).toThrow(InvalidCrashPointError);
+      expect(() => CrashPoint.fromValue(-1)).toThrow(InvalidCrashPointError);
+      expect(() => CrashPoint.fromValue(0.5)).toThrow('Crash point 0.5 must be at least 1');
     });
 
     test('should accept minimum crash point (1.00)', () => {
@@ -67,6 +68,27 @@ describe('CrashPoint Value Object', () => {
       const cp2 = await CrashPoint.fromSeed('11223344'.repeat(8));
 
       expect(cp1.getValue()).not.toBe(cp2.getValue());
+    });
+  });
+
+  describe('Algorithm', () => {
+    test('should match the documented formula for a known seed', async () => {
+      const seed = 'aa'.repeat(32);
+      const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', Buffer.from(seed, 'hex')));
+      // First 52 bits = first 13 hex chars of the hash
+      const hex = Buffer.from(hash).toString('hex');
+      const bits = parseInt(hex.slice(0, 13), 16);
+      const expected = Math.max(1, 0.96 / (bits / 2 ** 52));
+
+      const crashPoint = await CrashPoint.fromSeed(seed);
+
+      expect(crashPoint.getValue()).toBe(expected);
+    });
+
+    test('should describe the formula for players', () => {
+      expect(CrashPoint.FORMULA).toContain('SHA-256(seed)');
+      expect(CrashPoint.FORMULA).toContain('52 bits');
+      expect(CrashPoint.FORMULA).toContain('max(1.00, (1 - 0.04) / (bits / 2^52))');
     });
   });
 

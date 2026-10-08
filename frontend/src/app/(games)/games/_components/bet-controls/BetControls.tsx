@@ -7,7 +7,8 @@ import { useSession } from "next-auth/react";
 import { useGame } from "@/hooks/useGame";
 import { useWallet } from "@/hooks/useWallet";
 import { useGameStore } from "@/store/game-store";
-import { RoundStatus } from "@/types";
+import { BetStatus, RoundStatus } from "@/types";
+import { GAME_CONSTANTS } from "@/constants/game";
 import { BetInput } from "./BetInput";
 import { BetStatusDisplay, CashOutButton } from "./BetStatusDisplay";
 import { useBetToast } from "./useBetToast";
@@ -18,7 +19,7 @@ import { AutoCashOut } from "./AutoCashOut";
 
 export default function BetControls() {
   const { placeBet, isPlacingBet, cashOut, isCashingOut } = useGame();
-  const { balance } = useWallet();
+  const { balanceCents } = useWallet();
   const myActiveBet = useGameStore((s) => s.myActiveBet);
   const roundStatus = useGameStore((s) => s.roundStatus);
   const liveMultiplier = useGameStore((s) => s.liveMultiplier);
@@ -26,7 +27,7 @@ export default function BetControls() {
 
   const { control, handleSubmit, formState: { errors } } = useForm<BetFormValues>({
     resolver: zodResolver(betFormSchema),
-    defaultValues: { amountCents: 1000, targetMultiplier: undefined },
+    defaultValues: { amountCents: GAME_CONSTANTS.DEFAULT_BET_CENTS, targetMultiplier: undefined },
   });
 
   useBetToast();
@@ -38,13 +39,12 @@ export default function BetControls() {
   const isCrashed = roundStatus === RoundStatus.CRASHED;
 
   const canBet = isBettingPhase && !myActiveBet && isAuthenticated;
-  const isBetActive = myActiveBet?.status === "ACTIVE";
+  const isBetActive = myActiveBet?.status === BetStatus.ACTIVE;
   const canCashOut = isActivePhase && isBetActive;
   const showCashOut = isBetActive && !isCrashed;
 
   const onSubmit = (data: BetFormValues) => {
-    const balanceCents = Math.round(parseFloat(balance) * 100);
-    if (data.amountCents > balanceCents) {
+    if (BigInt(data.amountCents) > BigInt(balanceCents)) {
       toast.error("Insufficient balance");
       return;
     }
@@ -89,7 +89,7 @@ export default function BetControls() {
       <BetInput control={control} disabled={!canBet} error={errors.amountCents?.message} />
 
       {isAuthenticated && (
-        <AutoCashOut control={control} disabled={!canBet} roundStatus={roundStatus} />
+        <AutoCashOut control={control} disabled={!canBet} />
       )}
 
       {canBet && (

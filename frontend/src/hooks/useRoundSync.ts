@@ -1,77 +1,69 @@
-import { useCallback } from "react";
+import { useCallback, type RefObject } from "react";
 import { getCurrentRound } from "@/libs/games-api";
-import { RoundStatus, type Round } from "@/types";
+import { BetStatus, RoundStatus } from "@/types";
 import { useGameStore } from "@/store/game-store";
+import { GAME_CONSTANTS } from "@/constants/game";
 
+/**
+ * Returns a function that syncs the current round (and my bet in it) from
+ * REST into the store. Called on every (re)connect.
+ */
 export function useRoundSync(playerId?: string) {
-  const setStoreRoundStarted = useGameStore((s) => s.setRoundStarted);
-  const setStoreRejoinActiveRound = useGameStore((s) => s.rejoinActiveRound);
-  const setStoreCrash = useGameStore((s) => s.setCrash);
-  const setStoreCurrentBets = useGameStore((s) => s.setCurrentBets);
-  const setStoreMyActiveBet = useGameStore((s) => s.setMyActiveBet);
-  const setStoreHydrated = useGameStore((s) => s.setHydrated);
-
   return useCallback(
-    async (currentRoundIdRef: React.MutableRefObject<string | null>) => {
+    async (currentRoundIdRef: RefObject<string | null>) => {
+      const store = useGameStore.getState();
       try {
-        const round: Round = await getCurrentRound();
+        const round = await getCurrentRound();
         currentRoundIdRef.current = round.roundId;
+        const bets = round.bets ?? [];
 
         switch (round.status) {
           case RoundStatus.BETTING:
-            setStoreRoundStarted(
+            store.setRoundStarted(
               round.roundId,
-              round.seedHash || "",
+              round.seedHash ?? "",
               round.bettingEndTime
                 ? new Date(round.bettingEndTime)
-                : new Date(Date.now() + 10000),
+                : new Date(Date.now() + GAME_CONSTANTS.BETTING_DURATION_MS),
             );
-            setStoreCurrentBets(round.bets || []);
+            store.setCurrentBets(bets);
             break;
           case RoundStatus.ACTIVE:
-            setStoreRejoinActiveRound(
+            store.rejoinActiveRound(
               round.roundId,
-              round.seedHash || "",
+              round.seedHash ?? "",
               round.startedAt ? new Date(round.startedAt) : new Date(),
               round.currentMultiplier ?? 1.0,
-              round.bets || [],
+              bets,
             );
             break;
           case RoundStatus.CRASHED:
-            setStoreRoundStarted(
+            store.setRoundStarted(
               round.roundId,
-              round.seedHash || "",
+              round.seedHash ?? "",
               new Date(),
               round.startedAt ? new Date(round.startedAt) : null,
             );
-            setStoreCrash(round.crashPoint ?? 1.0);
-            setStoreCurrentBets(round.bets || []);
+            store.setCrash(round.crashPoint ?? 1.0);
+            store.setCurrentBets(bets);
             break;
         }
 
-        if (playerId && round.bets?.length) {
-          const myBet = round.bets.find(
+        if (playerId) {
+          const myBet = bets.find(
             (b) =>
               b.playerId === playerId &&
-              b.status !== "LOST" &&
-              b.status !== "CANCELLED",
+              b.status !== BetStatus.LOST &&
+              b.status !== BetStatus.CANCELLED,
           );
-          if (myBet) setStoreMyActiveBet(myBet);
+          if (myBet) store.setMyActiveBet(myBet);
         }
       } catch (error) {
         console.error("Failed to sync current round:", error);
       } finally {
-        setStoreHydrated();
+        store.setHydrated();
       }
     },
-    [
-      setStoreRoundStarted,
-      setStoreRejoinActiveRound,
-      setStoreCrash,
-      setStoreCurrentBets,
-      setStoreMyActiveBet,
-      setStoreHydrated,
-      playerId,
-    ],
+    [playerId],
   );
 }

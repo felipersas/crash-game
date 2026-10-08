@@ -1,7 +1,6 @@
-import { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useGameStore } from "@/store/game-store";
-
-export type Phase = "betting" | "active" | "crashed";
+import type { Phase } from "@/types";
 
 export interface CurveData {
   path: string;
@@ -76,39 +75,27 @@ function computeCurve(multiplier: number, elapsedMs: number): CurveData | null {
  * Animates the crash curve at 60fps using requestAnimationFrame.
  * Interpolates elapsed time between WebSocket multiplier updates
  * so the curve grows smoothly instead of jumping.
+ *
+ * The frame clock (`now`) is state written from rAF callbacks, so render
+ * stays pure (no Date.now() during render).
  */
 export function useCurvePoints(multiplier: number, phase: Phase): CurveData | null {
   const roundStartedAt = useGameStore((s) => s.roundStartedAt);
-  const [tick, setTick] = useState(0);
-  const rafRef = useRef<number>(0);
-
-  const animate = useCallback(() => {
-    setTick((t) => t + 1);
-    rafRef.current = requestAnimationFrame(animate);
-  }, []);
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
-    if (phase === "active") {
-      rafRef.current = requestAnimationFrame(animate);
-      return () => cancelAnimationFrame(rafRef.current);
-    }
-    // For crashed phase, render one final frame and stop
-    if (phase === "crashed") {
-      cancelAnimationFrame(rafRef.current);
-      setTick((t) => t + 1);
-    }
-  }, [phase, animate]);
+    if (phase === "betting") return;
+    // Active: tick every frame. Crashed: render one final frame and stop.
+    let rafId = requestAnimationFrame(function frame() {
+      setNow(Date.now());
+      if (phase === "active") rafId = requestAnimationFrame(frame);
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [phase]);
 
   return useMemo(() => {
-    // Suppress unused-variable warning — tick drives re-renders
-    void tick;
-
-    if (phase === "betting") return null;
-
-    const elapsedMs = roundStartedAt
-      ? Date.now() - new Date(roundStartedAt).getTime()
-      : 0;
-
+    if (phase === "betting" || !roundStartedAt || now === null) return null;
+    const elapsedMs = now - new Date(roundStartedAt).getTime();
     return computeCurve(multiplier, elapsedMs);
-  }, [tick, multiplier, phase, roundStartedAt]);
+  }, [now, multiplier, phase, roundStartedAt]);
 }

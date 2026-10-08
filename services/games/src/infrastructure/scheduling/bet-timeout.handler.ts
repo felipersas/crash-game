@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import type { Bet } from '@/domain/entities/bet.entity';
 import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import { BET_REPOSITORY } from '@/application/di.tokens';
 import { CancelBetUseCase } from '@/application/use-cases/cancel-bet.use-case';
@@ -37,31 +38,34 @@ export class BetTimeoutHandler {
    */
   @Cron(CronExpression.EVERY_30_SECONDS)
   async cancelStalePendingBets(): Promise<void> {
+    let staleBets: Bet[];
     try {
-      const staleThreshold = new Date(Date.now() - this.PENDING_TIMEOUT_MS);
+      staleBets = await this.betRepository.findStalePendingBets(
+        new Date(Date.now() - this.PENDING_TIMEOUT_MS),
+      );
+    } catch (error: unknown) {
+      this.logger.error('Failed to load stale PENDING bets', error);
+      return;
+    }
 
-      // Find PENDING bets older than the stale threshold
-      const staleBets = await this.betRepository.findStalePendingBets(staleThreshold);
-
-      let cancelledCount = 0;
-
-      for (const bet of staleBets) {
+    let cancelledCount = 0;
+    for (const bet of staleBets) {
+      // One failing bet must not block the others
+      try {
         await this.cancelBetUseCase.execute({
           roundId: bet.roundId,
           betId: bet.id,
           playerId: bet.playerId,
           reason: 'Wallet confirmation timeout - bet was not confirmed within expected time',
         });
-
         cancelledCount++;
+      } catch (error: unknown) {
+        this.logger.error(`Failed to cancel stale bet ${bet.id}`, error);
       }
+    }
 
-      if (cancelledCount > 0) {
-        this.logger.warn(`Cancelled ${cancelledCount} stale PENDING bets`);
-      }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Failed to cancel stale PENDING bets: ${errorMessage}`);
+    if (cancelledCount > 0) {
+      this.logger.warn(`Cancelled ${cancelledCount} stale PENDING bets`);
     }
   }
 }

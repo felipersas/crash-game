@@ -1,70 +1,61 @@
-/**
- * Credit Wallet Use Case - Application Layer
- *
- * Handles crediting money to a wallet.
- * Called via message broker from Games Service.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
-import { Money, type WalletId } from '@crash/domain';
+import { Money, type PlayerId } from '@crash/domain';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
 import { WalletNotFoundError } from '@/domain/errors/domain.errors';
 import type { IWalletRepository } from '@/application/interfaces/wallet.repository';
-import { WALLET_REPOSITORY } from '@/application/di.tokens';
-import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
-import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
+import type { IInboxRepository } from '@/application/interfaces/inbox.repository';
+import type { IUnitOfWork } from '@/application/interfaces/unit-of-work';
+import type { IUseCase } from '@/application/interfaces/use-case';
+import { WALLET_REPOSITORY, INBOX_REPOSITORY, UNIT_OF_WORK } from '@/application/di.tokens';
 
 export interface CreditWalletInput {
-  walletId: WalletId;
-  amount: bigint;
+  playerId: PlayerId;
+  amountCents: bigint;
   reason: string;
-  idempotencyKey?: string;
+  /** Inbox entry to mark processed in the same transaction (exactly-once credit). */
+  inboxEventId?: string;
 }
 
 export interface CreditWalletOutput {
   walletId: string;
-  newBalance: bigint;
+  newBalanceCents: bigint;
   version: number;
 }
 
+/**
+ * Credit Wallet Use Case - Application Layer
+ *
+ * Credits money to a player's wallet (e.g. cash-out payouts from Games).
+ */
 @Injectable()
-export class CreditWalletUseCase {
+export class CreditWalletUseCase implements IUseCase<CreditWalletInput, CreditWalletOutput> {
   constructor(
     @Inject(WALLET_REPOSITORY) private readonly walletRepository: IWalletRepository,
+    @Inject(INBOX_REPOSITORY) private readonly inboxRepository: IInboxRepository,
+    @Inject(UNIT_OF_WORK) private readonly unitOfWork: IUnitOfWork,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
-    private readonly prisma: PrismaService,
-    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(input: CreditWalletInput): Promise<CreditWalletOutput> {
-    const wallet = await this.walletRepository.findById(input.walletId);
+    const wallet = await this.walletRepository.findByPlayerId(input.playerId);
     if (!wallet) {
       throw new WalletNotFoundError();
     }
 
-    const amount = Money.fromCents(input.amount);
-    wallet.credit(amount, input.reason);
+    wallet.credit(Money.fromCents(input.amountCents), input.reason);
 
-    const events = wallet.pullEvents();
-
-    let outboxIds: string[] = [];
-    await this.prisma.$transaction(async (tx) => {
+    await this.unitOfWork.commit(wallet.id, wallet.pullEvents(), async (tx) => {
       await this.walletRepository.save(wallet, tx);
-      if (events.length > 0) {
-        outboxIds = await this.outboxWriter.writeWithinTransaction(tx, wallet.id, events);
+      if (input.inboxEventId) {
+        await this.inboxRepository.markAsProcessed(input.inboxEventId, tx);
       }
     });
 
-    // Best-effort immediate publish for low latency
-    if (events.length > 0 && outboxIds.length > 0) {
-      await this.outboxWriter.tryImmediatePublish(events, outboxIds);
-    }
-
-    this.metrics.incrWalletOp('credit', Number(input.amount));
+    this.metrics.incrWalletOp('credit', Number(input.amountCents));
 
     return {
       walletId: wallet.id,
-      newBalance: wallet.getBalance().toCents(),
+      newBalanceCents: wallet.getBalance().toCents(),
       version: wallet.getVersion(),
     };
   }

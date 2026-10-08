@@ -1,11 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type Round } from '@/domain/entities/round.entity';
-import type { IRoundRepository } from '../interfaces/round.repository';
-import type { IUseCase } from '../interfaces/use-case';
-import { ROUND_REPOSITORY } from '@/application/di.tokens';
 import { Pagination, type PaginationMeta } from '@crash/domain';
-
-export { type PaginationMeta };
+import type { Round, RoundStatus } from '@/domain/entities/round.entity';
+import type { IRoundRepository } from '@/application/interfaces/round.repository';
+import type { IUseCase } from '@/application/interfaces/use-case';
+import { ROUND_REPOSITORY } from '@/application/di.tokens';
 
 export interface GetRoundHistoryInput {
   page?: number;
@@ -15,11 +13,11 @@ export interface GetRoundHistoryInput {
 export interface RoundSummaryOutput {
   roundId: string;
   crashPoint: number | null;
-  status: string;
+  status: RoundStatus;
   startedAt: Date | null;
   crashedAt: Date | null;
   totalBets: number;
-  totalWageredCents: number;
+  totalWageredCents: bigint;
 }
 
 export interface GetRoundHistoryOutput {
@@ -39,27 +37,24 @@ export class GetRoundHistoryUseCase implements IUseCase<
 
     const [rounds, total] = await Promise.all([
       this.roundRepository.findHistory(limit, offset),
-      this.roundRepository.findHistoryCount(),
+      this.roundRepository.countHistory(),
     ]);
 
     return {
-      data: rounds.map(this.mapRoundToSummary),
+      data: rounds.map(toRoundSummary),
       meta: Pagination.buildMeta(page, limit, total),
     };
   }
+}
 
-  private mapRoundToSummary(round: Round): RoundSummaryOutput {
-    const bets = round.getBets();
-    const totalWageredCents = bets.reduce((sum, bet) => sum + Number(bet.getAmount().toCents()), 0);
-
-    return {
-      roundId: round.id,
-      crashPoint: round.getCrashPoint(),
-      status: round.getStatus(),
-      startedAt: round.getStartedAt(),
-      crashedAt: round.getCrashedAt(),
-      totalBets: bets.length,
-      totalWageredCents,
-    };
-  }
+function toRoundSummary(round: Round): RoundSummaryOutput {
+  return {
+    roundId: round.id,
+    crashPoint: round.getCrashPoint(),
+    status: round.getStatus(),
+    startedAt: round.getStartedAt(),
+    crashedAt: round.getCrashedAt(),
+    totalBets: round.getBets().filter((bet) => !bet.isCancelled()).length,
+    totalWageredCents: round.getTotalWagered().toCents(),
+  };
 }

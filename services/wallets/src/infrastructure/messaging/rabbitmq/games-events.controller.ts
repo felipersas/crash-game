@@ -1,23 +1,36 @@
-/**
- * Games Events Controller - Infrastructure Layer
- *
- * Consumes domain events from the Games service via NestJS Microservices.
- * Replaces the raw amqp-connection-manager consumer with declarative
- * @EventPattern handlers while preserving retry/DLQ logic.
- */
-
 import { Controller, Logger } from '@nestjs/common';
-import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
+import { EventPattern, Payload, Ctx, type RmqContext } from '@nestjs/microservices';
+import { Prisma } from '@prisma/client';
+import type { Channel, ConsumeMessage } from 'amqplib';
+import { OptimisticLockError } from '@/domain/errors/domain.errors';
 import { BetPlacedEventHandler } from './handlers/bet-placed.handler';
 import { PlayerCashedOutEventHandler } from './handlers/player-cashed-out.handler';
-import { OptimisticLockError } from '@/domain/errors/domain.errors';
-import type { ConsumeMessage } from 'amqplib';
+import type {
+  BetPlacedMessage,
+  PlayerCashedOutMessage,
+} from '@/infrastructure/messaging/types/games.events';
 
+const QUEUE_NAME = 'wallets.games.events';
+const MAX_RETRIES = 3;
+const RETRY_HEADER = 'x-retry-count';
+
+/** Game events published on the fanout exchange that Wallets does not act on. */
+const IGNORED_EVENTS = [
+  'RoundStarted',
+  'BettingPhaseEnded',
+  'RoundCrashed',
+  'BetConfirmed',
+  'BetCancelled',
+] as const;
+
+/**
+ * Consumes Games events from the `wallets.games.events` queue.
+ * Transient failures are re-queued up to MAX_RETRIES; everything else goes to
+ * the dead-letter queue (wallets.games.events.dlq).
+ */
 @Controller()
 export class GamesEventsController {
   private readonly logger = new Logger(GamesEventsController.name);
-  private readonly MAX_RETRIES = 3;
-  private readonly QUEUE_NAME = 'wallets.games.events';
 
   constructor(
     private readonly betPlacedHandler: BetPlacedEventHandler,
@@ -25,91 +38,68 @@ export class GamesEventsController {
   ) {}
 
   @EventPattern('BetPlaced')
-  async handleBetPlaced(@Payload() event: any, @Ctx() context: RmqContext): Promise<void> {
-    await this.processWithRetry(event, context, this.betPlacedHandler);
+  async handleBetPlaced(
+    @Payload() event: BetPlacedMessage,
+    @Ctx() context: RmqContext,
+  ): Promise<void> {
+    await this.processWithRetry(context, event.eventType, () =>
+      this.betPlacedHandler.handle(event),
+    );
   }
 
   @EventPattern('PlayerCashedOut')
-  async handlePlayerCashedOut(@Payload() event: any, @Ctx() context: RmqContext): Promise<void> {
-    await this.processWithRetry(event, context, this.playerCashedOutHandler);
+  async handlePlayerCashedOut(
+    @Payload() event: PlayerCashedOutMessage,
+    @Ctx() context: RmqContext,
+  ): Promise<void> {
+    await this.processWithRetry(context, event.eventType, () =>
+      this.playerCashedOutHandler.handle(event),
+    );
   }
 
-  // Ack-only handlers for game events not relevant to wallets
-  @EventPattern('RoundStarted')
-  async handleRoundStarted(@Ctx() context: RmqContext): Promise<void> {
-    context.getChannelRef().ack(context.getMessage());
-  }
-
-  @EventPattern('BettingPhaseEnded')
-  async handleBettingPhaseEnded(@Ctx() context: RmqContext): Promise<void> {
-    context.getChannelRef().ack(context.getMessage());
-  }
-
-  @EventPattern('RoundCrashed')
-  async handleRoundCrashed(@Ctx() context: RmqContext): Promise<void> {
-    context.getChannelRef().ack(context.getMessage());
-  }
-
-  @EventPattern('BetConfirmed')
-  async handleBetConfirmed(@Ctx() context: RmqContext): Promise<void> {
-    context.getChannelRef().ack(context.getMessage());
-  }
-
-  @EventPattern('BetCancelled')
-  async handleBetCancelled(@Ctx() context: RmqContext): Promise<void> {
-    context.getChannelRef().ack(context.getMessage());
+  @EventPattern(IGNORED_EVENTS)
+  ignore(@Ctx() context: RmqContext): void {
+    (context.getChannelRef() as Channel).ack(context.getMessage() as ConsumeMessage);
   }
 
   private async processWithRetry(
-    event: any,
     context: RmqContext,
-    handler: { handle: (e: any) => Promise<void> },
+    eventType: string,
+    handle: () => Promise<void>,
   ): Promise<void> {
-    const channel = context.getChannelRef();
-    const msg = context.getMessage() as ConsumeMessage;
-    const retryCount = (msg.properties?.headers?.['x-retry-count'] as number) ?? 0;
+    const channel = context.getChannelRef() as Channel;
+    const message = context.getMessage() as ConsumeMessage;
+    const retryCount = Number(message.properties.headers?.[RETRY_HEADER] ?? 0);
 
     try {
-      this.logger.debug(
-        `Received event: ${event.eventType} (retry: ${retryCount}/${this.MAX_RETRIES})`,
-      );
-      await handler.handle(event);
-      channel.ack(msg);
-      this.logger.debug(`Event ${event.eventType} processed successfully`);
+      await handle();
+      channel.ack(message);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(
-        `Error processing event (retry ${retryCount}/${this.MAX_RETRIES}): ${errorMessage}`,
-      );
+      const reason = error instanceof Error ? error.message : String(error);
 
-      if (this.isTransientError(error) && retryCount < this.MAX_RETRIES) {
-        const newRetryCount = retryCount + 1;
-        this.logger.warn(`Retrying immediately (attempt ${newRetryCount}/${this.MAX_RETRIES})`);
-
-        channel.sendToQueue(this.QUEUE_NAME, msg.content, {
-          headers: { 'x-retry-count': newRetryCount },
+      if (isTransientError(error) && retryCount < MAX_RETRIES) {
+        this.logger.warn(`${eventType} failed (${reason}), retry ${retryCount + 1}/${MAX_RETRIES}`);
+        channel.sendToQueue(QUEUE_NAME, message.content, {
+          headers: { [RETRY_HEADER]: retryCount + 1 },
         });
-        channel.ack(msg);
+        channel.ack(message);
       } else {
-        this.logger.error(`Sending to DLQ: ${errorMessage}`);
-        channel.nack(msg, false, false);
+        this.logger.error(`${eventType} failed permanently, sending to DLQ: ${reason}`);
+        channel.nack(message, false, false);
       }
     }
   }
+}
 
-  private isTransientError(error: unknown): boolean {
-    if (error instanceof OptimisticLockError) return true;
-
-    if (error instanceof Error) {
-      if (error.message.includes('transaction') || error.message.includes('lock')) return true;
-      if (
-        error.message.includes('timeout') ||
-        error.message.includes('ETIMEDOUT') ||
-        error.message.includes('ECONNREFUSED')
-      )
-        return true;
-    }
-
-    return false;
-  }
+/**
+ * Failures that may succeed if the message is processed again:
+ * concurrent wallet updates, serialization conflicts and lost DB connectivity.
+ */
+function isTransientError(error: unknown): boolean {
+  return (
+    error instanceof OptimisticLockError ||
+    error instanceof Prisma.PrismaClientInitializationError ||
+    (error instanceof Prisma.PrismaClientKnownRequestError &&
+      ['P1001', 'P1002', 'P1008', 'P1017', 'P2034'].includes(error.code))
+  );
 }

@@ -1,74 +1,80 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
+import type { IEventPublisher, SerializedEvent } from '@crash/messaging';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
-import type { IEventPublisher } from '@crash/messaging';
-import { RABBITMQ_PUBLISHER } from '@/application/di.tokens';
+import { RABBITMQ_PUBLISHER } from '@/infrastructure/di.tokens';
 
+/**
+ * Outbox Processor - Infrastructure Layer
+ *
+ * Polling fallback for events whose immediate publish failed.
+ */
 @Injectable()
 export class OutboxProcessor {
   private readonly logger = new Logger(OutboxProcessor.name);
-  private readonly MAX_RETRIES = 3;
+  private readonly MAX_RETRIES = 5;
   private readonly BATCH_SIZE = 50;
+  private readonly RETENTION_DAYS = 30;
+  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(RABBITMQ_PUBLISHER) private readonly eventPublisher: IEventPublisher,
-    @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
+    @Inject(RABBITMQ_PUBLISHER) private readonly publisher: IEventPublisher,
   ) {}
 
-  @Cron(CronExpression.EVERY_5_SECONDS)
-  async processPendingEvents() {
+  @Cron(CronExpression.EVERY_SECOND)
+  async processPendingEvents(): Promise<void> {
+    // Cron ticks can overlap with a slow batch; never publish the same row twice concurrently
+    if (this.running) return;
+    this.running = true;
+
     try {
-      const pendingEvents = await this.prisma.outboxEvent.findMany({
-        where: {
-          status: 'PENDING',
-          retryCount: { lt: this.MAX_RETRIES },
-        },
-        take: this.BATCH_SIZE,
+      const pending = await this.prisma.outboxEvent.findMany({
+        where: { status: 'PENDING', retryCount: { lt: this.MAX_RETRIES } },
         orderBy: { createdAt: 'asc' },
+        take: this.BATCH_SIZE,
       });
 
-      if (pendingEvents.length === 0) {
-        return;
-      }
-
-      this.logger.debug(`Processing ${pendingEvents.length} pending outbox events`);
-
-      for (const event of pendingEvents) {
-        await this.publishEvent(event);
+      for (const row of pending) {
+        await this.publish(row.id, row.payload as SerializedEvent, row.retryCount ?? 0);
       }
     } catch (error: unknown) {
-      this.logger.error('Error processing outbox events:', error);
+      this.logger.error('Error processing outbox events', error);
+    } finally {
+      this.running = false;
     }
   }
 
-  private async publishEvent(event: any) {
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async cleanupSentEvents(): Promise<void> {
+    const cutoff = new Date(Date.now() - this.RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const { count } = await this.prisma.outboxEvent.deleteMany({
+      where: { status: 'SENT', sentAt: { lt: cutoff } },
+    });
+    if (count > 0) {
+      this.logger.log(`Cleaned up ${count} sent outbox events`);
+    }
+  }
+
+  private async publish(id: string, event: SerializedEvent, retryCount: number): Promise<void> {
     try {
-      const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
-      await this.eventPublisher.publish(payload);
-
-      this.metrics.incrRabbitPublished('wallet.events', payload.eventType || 'unknown');
-
+      await this.publisher.publish(event);
       await this.prisma.outboxEvent.update({
-        where: { id: event.id },
-        data: {
-          status: 'SENT',
-          sentAt: new Date(),
-        },
+        where: { id },
+        data: { status: 'SENT', sentAt: new Date() },
       });
-
-      this.logger.debug(`Published outbox event: ${event.id}`);
     } catch (error: unknown) {
+      const attempts = retryCount + 1;
+      this.logger.error(`Failed to publish outbox event ${id} (attempt ${attempts})`, error);
       await this.prisma.outboxEvent.update({
-        where: { id: event.id },
+        where: { id },
         data: {
-          retryCount: { increment: 1 },
+          retryCount: attempts,
+          // Give up visibly instead of leaving an unpublishable row PENDING forever
+          status: attempts >= this.MAX_RETRIES ? 'FAILED' : 'PENDING',
           errorMessage: error instanceof Error ? error.message : String(error),
         },
       });
-
-      this.logger.error(`Failed to publish outbox event ${event.id}:`, error);
     }
   }
 }

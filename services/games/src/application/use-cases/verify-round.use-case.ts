@@ -1,16 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { SeedChain } from '@/domain/value-objects/seed-chain.value-object';
+import type { RoundId } from '@crash/domain';
 import { CrashPoint } from '@/domain/value-objects/crash-point.value-object';
-import type { IRoundRepository } from '../interfaces/round.repository';
-import type { IUseCase } from '../interfaces/use-case';
+import { verifyRoundFairness } from '@/domain/services/provably-fair';
+import { RoundNotFoundError } from '@/domain/errors/domain.errors';
+import type { IRoundRepository } from '@/application/interfaces/round.repository';
+import type { IUseCase } from '@/application/interfaces/use-case';
 import { ROUND_REPOSITORY } from '@/application/di.tokens';
-import { RoundStatus } from '@/domain/entities/round.entity';
-import {
-  RoundNotFoundError,
-  SeedNotAvailableError,
-  VerificationFailedError,
-} from '@/domain/errors/domain.errors';
-import { type RoundId } from '@crash/domain';
 
 export interface VerifyRoundInput {
   roundId: RoundId;
@@ -20,51 +15,44 @@ export interface VerifyRoundOutput {
   roundId: string;
   seed: string;
   seedHash: string;
+  /** Same as seed: the crash point uses no separate salt. Kept for API compatibility. */
   salt: string;
   crashPoint: number;
   verified: boolean;
   verificationFormula: string;
 }
 
+/**
+ * Verify Round Use Case - Application Layer
+ *
+ * Reveals the seed of a crashed round and checks it against the commitment
+ * and the stored crash point.
+ */
 @Injectable()
 export class VerifyRoundUseCase implements IUseCase<VerifyRoundInput, VerifyRoundOutput> {
   constructor(@Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository) {}
 
   async execute(input: VerifyRoundInput): Promise<VerifyRoundOutput> {
     const round = await this.roundRepository.findById(input.roundId);
-
     if (!round) {
       throw new RoundNotFoundError();
     }
 
-    if (round.getStatus() !== RoundStatus.CRASHED) {
-      throw new SeedNotAvailableError();
-    }
-
+    // Throws SeedNotAvailableError until the round has crashed
     const seed = round.getSeed();
     const seedHash = round.getSeedHash();
-    const crashPointValue = round.getCrashPoint();
+    const crashPoint = round.getCrashPoint()!;
 
-    if (!seed || !seedHash || crashPointValue === null) {
-      throw new VerificationFailedError();
-    }
-
-    // Verify the seed hash matches
-    const hashMatches = await SeedChain.verifySeed(seed, seedHash);
-
-    // Verify the crash point calculation
-    const calculatedCrashPoint = await CrashPoint.fromSeed(seed);
-    const crashPointMatches = Math.abs(calculatedCrashPoint.getValue() - crashPointValue) < 0.01;
+    const { verified } = await verifyRoundFairness(seed, seedHash, crashPoint);
 
     return {
       roundId: round.id,
       seed,
       seedHash,
       salt: seed,
-      crashPoint: crashPointValue,
-      verified: hashMatches && crashPointMatches,
-      verificationFormula:
-        'SHA-256(seed) → extract first 52 bits → crash = max(1.00, (1 - 0.04) / (bits / 2^52))',
+      crashPoint,
+      verified,
+      verificationFormula: CrashPoint.FORMULA,
     };
   }
 }

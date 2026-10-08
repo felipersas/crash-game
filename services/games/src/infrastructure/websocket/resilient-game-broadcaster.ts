@@ -1,82 +1,56 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import { GAMES_GATEWAY } from '@/application/di.tokens';
-import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
+import type {
+  BetBroadcast,
+  BetCancelledBroadcast,
+  CrashBroadcast,
+  IGameBroadcaster,
+  PlayerCashedOutBroadcast,
+  RoundStartedBroadcast,
+} from '@/application/interfaces/game-broadcaster';
+import { GAMES_GATEWAY } from '@/infrastructure/di.tokens';
 
+/**
+ * Decorates the WebSocket gateway so a failed broadcast is logged instead of
+ * failing the use case that triggered it.
+ */
 @Injectable()
 export class ResilientGameBroadcaster implements IGameBroadcaster {
   private readonly logger = new Logger(ResilientGameBroadcaster.name);
 
   constructor(@Inject(GAMES_GATEWAY) private readonly gateway: IGameBroadcaster) {}
 
-  broadcastRoundStarted(roundId: string, seedHash: string, bettingEndTime: Date): void {
-    this.safeCall('round started', () =>
-      this.gateway.broadcastRoundStarted(roundId, seedHash, bettingEndTime),
-    );
+  broadcastRoundStarted(data: RoundStartedBroadcast): void {
+    this.safeCall('round started', () => this.gateway.broadcastRoundStarted(data));
   }
 
   broadcastBettingEnded(roundId: string): void {
     this.safeCall('betting ended', () => this.gateway.broadcastBettingEnded(roundId));
   }
 
-  broadcastCrash(roundId: string, crashPoint: number, seed: string): void {
-    this.safeCall('crash', () => this.gateway.broadcastCrash(roundId, crashPoint, seed));
-  }
-
-  broadcastBetPlaced(
-    roundId: string,
-    betId: string,
-    playerId: string,
-    playerName: string,
-    amountCents: bigint,
-  ): void {
-    this.safeCall('bet placed', () =>
-      this.gateway.broadcastBetPlaced(roundId, betId, playerId, playerName, amountCents),
+  broadcastMultiplierUpdate(roundId: string, multiplier: number): void {
+    this.safeCall('multiplier update', () =>
+      this.gateway.broadcastMultiplierUpdate(roundId, multiplier),
     );
   }
 
-  broadcastBetConfirmed(
-    roundId: string,
-    betId: string,
-    playerId: string,
-    playerName: string,
-    amountCents: bigint,
-  ): void {
-    this.safeCall('bet confirmed', () =>
-      this.gateway.broadcastBetConfirmed(roundId, betId, playerId, playerName, amountCents),
-    );
+  broadcastCrash(data: CrashBroadcast): void {
+    this.safeCall('crash', () => this.gateway.broadcastCrash(data));
   }
 
-  broadcastBetCancelled(
-    roundId: string,
-    betId: string,
-    playerId: string,
-    playerName: string,
-    amountCents: bigint,
-    reason: string,
-  ): void {
-    this.safeCall('bet cancelled', () =>
-      this.gateway.broadcastBetCancelled(roundId, betId, playerId, playerName, amountCents, reason),
-    );
+  broadcastBetPlaced(data: BetBroadcast): void {
+    this.safeCall('bet placed', () => this.gateway.broadcastBetPlaced(data));
   }
 
-  broadcastPlayerCashedOut(
-    roundId: string,
-    betId: string,
-    playerId: string,
-    playerName: string,
-    multiplier: number,
-    payoutCents: bigint,
-  ): void {
-    this.safeCall('player cashed out', () =>
-      this.gateway.broadcastPlayerCashedOut(
-        roundId,
-        betId,
-        playerId,
-        playerName,
-        multiplier,
-        payoutCents,
-      ),
-    );
+  broadcastBetConfirmed(data: BetBroadcast): void {
+    this.safeCall('bet confirmed', () => this.gateway.broadcastBetConfirmed(data));
+  }
+
+  broadcastBetCancelled(data: BetCancelledBroadcast): void {
+    this.safeCall('bet cancelled', () => this.gateway.broadcastBetCancelled(data));
+  }
+
+  broadcastPlayerCashedOut(data: PlayerCashedOutBroadcast): void {
+    this.safeCall('player cashed out', () => this.gateway.broadcastPlayerCashedOut(data));
   }
 
   private safeCall(label: string, fn: () => void): void {

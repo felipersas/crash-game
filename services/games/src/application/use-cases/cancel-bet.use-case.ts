@@ -1,16 +1,18 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { IBetRepository } from '../interfaces/bet.repository';
-import type { IUseCase } from '../interfaces/use-case';
+import type { BetId, PlayerId, RoundId } from '@crash/domain';
 import { MetricsRecorderService, METRICS_RECORDER } from '@crash/observability';
-import { BET_REPOSITORY, GAME_BROADCASTER } from '@/application/di.tokens';
-import { BetNotFoundError } from '@/domain/errors/domain.errors';
-import { createBetCancelledEvent } from '@/domain/events/round.events';
-import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
-import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
-import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
-import { type BetId, type RoundId, type PlayerId } from '@crash/domain';
-import { AUTO_CASHOUT_REPOSITORY } from '@/application/di.tokens';
+import type { IBetRepository } from '@/application/interfaces/bet.repository';
 import type { IAutoCashOutRepository } from '@/application/interfaces/auto-cashout.repository';
+import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
+import type { IUnitOfWork } from '@/application/interfaces/unit-of-work';
+import type { IUseCase } from '@/application/interfaces/use-case';
+import { loadOwnedBet } from '@/application/services/load-owned-bet';
+import {
+  BET_REPOSITORY,
+  UNIT_OF_WORK,
+  GAME_BROADCASTER,
+  AUTO_CASHOUT_REPOSITORY,
+} from '@/application/di.tokens';
 
 export interface CancelBetInput {
   roundId: RoundId;
@@ -29,11 +31,7 @@ export interface CancelBetOutput {
 /**
  * Cancel Bet Use Case - Application Layer
  *
- * Cancels a bet after wallet debit failure.
- * Transitions the bet from PENDING to CANCELLED state.
- * Writes BetCancelledEvent to outbox for reliable delivery.
- *
- * Now uses BetRepository directly for better concurrency.
+ * Cancels a PENDING bet (wallet debit failure or confirmation timeout).
  */
 @Injectable()
 export class CancelBetUseCase implements IUseCase<CancelBetInput, CancelBetOutput> {
@@ -41,63 +39,37 @@ export class CancelBetUseCase implements IUseCase<CancelBetInput, CancelBetOutpu
 
   constructor(
     @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
+    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepository: IAutoCashOutRepository,
+    @Inject(UNIT_OF_WORK) private readonly unitOfWork: IUnitOfWork,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
-    private readonly prisma: PrismaService,
-    private readonly outboxWriter: OutboxWriter,
-    @Inject(AUTO_CASHOUT_REPOSITORY) private readonly autoCashOutRepo: IAutoCashOutRepository,
   ) {}
 
   async execute(input: CancelBetInput): Promise<CancelBetOutput> {
-    const bet = await this.betRepository.findByPlayerAndRound(input.playerId, input.roundId);
-
-    if (!bet) {
-      throw new BetNotFoundError();
-    }
+    const bet = await loadOwnedBet(this.betRepository, input);
 
     bet.cancel(input.reason);
 
-    try {
-      await this.autoCashOutRepo.removeTarget(input.roundId, input.playerId);
-    } catch (error) {
-      this.logger.error('Failed to remove auto cash-out target on cancel', error);
-    }
-
-    const event = createBetCancelledEvent(
-      input.roundId,
-      input.betId,
-      input.playerId,
-      bet.getAmount().toCents(),
-      input.reason,
-      1,
+    await this.unitOfWork.commit(bet.roundId, bet.pullEvents(), (tx) =>
+      this.betRepository.update(bet, tx),
     );
 
-    const outboxIds = await this.prisma.$transaction(async (tx) => {
-      await this.betRepository.update(bet, tx);
-      return this.outboxWriter.writeWithinTransaction(tx, input.roundId, [event]);
-    });
-
-    // Best-effort immediate publish for low latency
-    if (outboxIds.length > 0) {
-      await this.outboxWriter.tryImmediatePublish([event], outboxIds);
+    try {
+      await this.autoCashOutRepository.removeTarget(bet.roundId, bet.playerId);
+    } catch (error) {
+      this.logger.error(`Failed to remove auto cash-out target for bet ${bet.id}`, error);
     }
 
     this.metrics.incrBet('cancelled', Number(bet.getAmount().toCents()));
-
-    this.broadcaster.broadcastBetCancelled(
-      input.roundId,
-      input.betId,
-      input.playerId,
-      bet.playerName,
-      bet.getAmount().toCents(),
-      input.reason,
-    );
-
-    return {
-      betId: input.betId,
-      roundId: input.roundId,
-      playerId: input.playerId,
+    this.broadcaster.broadcastBetCancelled({
+      roundId: bet.roundId,
+      betId: bet.id,
+      playerId: bet.playerId,
+      playerName: bet.playerName,
+      amountCents: bet.getAmount().toCents(),
       reason: input.reason,
-    };
+    });
+
+    return { betId: bet.id, roundId: bet.roundId, playerId: bet.playerId, reason: input.reason };
   }
 }

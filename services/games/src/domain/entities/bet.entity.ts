@@ -1,6 +1,12 @@
 import { Multiplier } from '../value-objects/multiplier.value-object';
 import { Money, type BetId, type RoundId, type PlayerId, BetId as BetIdVO } from '@crash/domain';
 import { InvalidBetStateError, InvalidAutoCashOutMultiplierError } from '../errors/domain.errors';
+import {
+  createBetCancelledEvent,
+  createBetConfirmedEvent,
+  type BetCancelledEvent,
+  type BetConfirmedEvent,
+} from '../events/round.events';
 
 /**
  * Bet lifecycle states (saga pattern).
@@ -14,40 +20,68 @@ export enum BetStatus {
   CANCELLED = 'CANCELLED',
 }
 
+export type BetDomainEvent = BetConfirmedEvent | BetCancelledEvent;
+
+/**
+ * Plain snapshot of a bet, used for persistence and rehydration.
+ */
+export interface BetSnapshot {
+  id: BetId;
+  roundId: RoundId;
+  playerId: PlayerId;
+  playerName: string;
+  amountCents: bigint;
+  status: BetStatus;
+  autoCashOutMultiplier: number | null;
+  cashOutMultiplier: number | null;
+  cashOutAmount: bigint | null;
+  cashedOutAt: Date | null;
+  cancelReason: string | null;
+  createdAt: Date;
+}
+
 export class Bet {
+  static readonly MIN_AUTO_CASHOUT_MULTIPLIER = 1.01;
+  static readonly MAX_AUTO_CASHOUT_MULTIPLIER = 1000;
+
+  /**
+   * Bets are not versioned on their own; their events carry a fixed version
+   * and are ordered by the owning round (aggregateId = roundId).
+   */
+  private static readonly EVENT_VERSION = 1;
+
   readonly id: BetId;
   readonly roundId: RoundId;
   readonly playerId: PlayerId;
   readonly playerName: string;
-  private amount: Money;
+  readonly createdAt: Date;
+  private readonly amount: Money;
+  private readonly autoCashOutMultiplier: number | null;
   private status: BetStatus;
-  private cashOutMultiplier: Multiplier | null;
-  private cashOutAmount: Money | null;
-  private cashedOutAt: Date | null;
-  private autoCashOutMultiplier: number | null;
-  private cancelReason: string | null;
-  private createdAt: Date;
+  private cashOutMultiplier: Multiplier | null = null;
+  private cashOutAmount: Money | null = null;
+  private cashedOutAt: Date | null = null;
+  private cancelReason: string | null = null;
+  private events: BetDomainEvent[] = [];
 
-  private constructor(
-    id: BetId,
-    roundId: RoundId,
-    playerId: PlayerId,
-    playerName: string,
-    amount: Money,
-    status: BetStatus,
-  ) {
-    this.id = id;
-    this.roundId = roundId;
-    this.playerId = playerId;
-    this.playerName = playerName;
-    this.amount = amount;
-    this.status = status;
-    this.cashOutMultiplier = null;
-    this.cashOutAmount = null;
-    this.cashedOutAt = null;
-    this.cancelReason = null;
-    this.autoCashOutMultiplier = null;
-    this.createdAt = new Date();
+  private constructor(props: {
+    id: BetId;
+    roundId: RoundId;
+    playerId: PlayerId;
+    playerName: string;
+    amount: Money;
+    status: BetStatus;
+    autoCashOutMultiplier: number | null;
+    createdAt: Date;
+  }) {
+    this.id = props.id;
+    this.roundId = props.roundId;
+    this.playerId = props.playerId;
+    this.playerName = props.playerName;
+    this.amount = props.amount;
+    this.status = props.status;
+    this.autoCashOutMultiplier = props.autoCashOutMultiplier;
+    this.createdAt = props.createdAt;
   }
 
   /**
@@ -61,46 +95,60 @@ export class Bet {
     amount: Money,
     autoCashOutMultiplier?: number,
   ): Bet {
-    if (autoCashOutMultiplier !== undefined && autoCashOutMultiplier < 1.01) {
-      throw new InvalidAutoCashOutMultiplierError(autoCashOutMultiplier, 'must be at least 1.01');
+    if (autoCashOutMultiplier !== undefined) {
+      Bet.assertValidAutoCashOut(autoCashOutMultiplier);
     }
-    if (autoCashOutMultiplier !== undefined && autoCashOutMultiplier > 1000) {
-      throw new InvalidAutoCashOutMultiplierError(autoCashOutMultiplier, 'must be at most 1000');
-    }
-    const betId = BetIdVO.create();
-    const bet = new Bet(betId, roundId, playerId, playerName, amount, BetStatus.PENDING);
-    bet.autoCashOutMultiplier = autoCashOutMultiplier ?? null;
-    return bet;
+
+    return new Bet({
+      id: BetIdVO.create(),
+      roundId,
+      playerId,
+      playerName,
+      amount,
+      status: BetStatus.PENDING,
+      autoCashOutMultiplier: autoCashOutMultiplier ?? null,
+      createdAt: new Date(),
+    });
   }
 
   /**
-   * Factory method to restore a bet from persistence.
+   * Factory method to restore a bet from persistence (no events).
    */
-  static restore(
-    id: BetId,
-    roundId: RoundId,
-    playerId: PlayerId,
-    playerName: string,
-    amountCents: bigint,
-    status: BetStatus,
-    autoCashOutMultiplier: number | null,
-    cashOutMultiplier: number | null,
-    cashOutAmountCents: bigint | null,
-    cashedOutAt: Date | null,
-    createdAt?: Date,
-  ): Bet {
-    const amount = Money.fromCents(amountCents);
-    const bet = new Bet(id, roundId, playerId, playerName, amount, status);
+  static restore(snapshot: BetSnapshot): Bet {
+    const bet = new Bet({
+      id: snapshot.id,
+      roundId: snapshot.roundId,
+      playerId: snapshot.playerId,
+      playerName: snapshot.playerName,
+      amount: Money.fromCents(snapshot.amountCents),
+      status: snapshot.status,
+      autoCashOutMultiplier: snapshot.autoCashOutMultiplier,
+      createdAt: snapshot.createdAt,
+    });
 
-    bet.autoCashOutMultiplier = autoCashOutMultiplier;
-    if (cashOutMultiplier !== null) {
-      bet.cashOutMultiplier = Multiplier.fromValue(cashOutMultiplier);
-    }
-    bet.cashOutAmount = cashOutAmountCents !== null ? Money.fromCents(cashOutAmountCents) : null;
-    bet.cashedOutAt = cashedOutAt;
-    if (createdAt) bet.createdAt = createdAt;
+    bet.cashOutMultiplier =
+      snapshot.cashOutMultiplier !== null ? Multiplier.fromValue(snapshot.cashOutMultiplier) : null;
+    bet.cashOutAmount =
+      snapshot.cashOutAmount !== null ? Money.fromCents(snapshot.cashOutAmount) : null;
+    bet.cashedOutAt = snapshot.cashedOutAt;
+    bet.cancelReason = snapshot.cancelReason;
 
     return bet;
+  }
+
+  private static assertValidAutoCashOut(multiplier: number): void {
+    if (multiplier < Bet.MIN_AUTO_CASHOUT_MULTIPLIER) {
+      throw new InvalidAutoCashOutMultiplierError(
+        multiplier,
+        `must be at least ${Bet.MIN_AUTO_CASHOUT_MULTIPLIER}`,
+      );
+    }
+    if (multiplier > Bet.MAX_AUTO_CASHOUT_MULTIPLIER) {
+      throw new InvalidAutoCashOutMultiplierError(
+        multiplier,
+        `must be at most ${Bet.MAX_AUTO_CASHOUT_MULTIPLIER}`,
+      );
+    }
   }
 
   /**
@@ -113,10 +161,20 @@ export class Bet {
     }
 
     this.status = BetStatus.ACTIVE;
+
+    this.events.push(
+      createBetConfirmedEvent(
+        this.roundId,
+        this.id,
+        this.playerId,
+        this.amount.toCents(),
+        Bet.EVENT_VERSION,
+      ),
+    );
   }
 
   /**
-   * Cancel the bet after wallet debit failure.
+   * Cancel the bet (wallet debit failure, timeout, replacement or round crash).
    * Transition from PENDING to CANCELLED.
    */
   cancel(reason: string): void {
@@ -126,10 +184,21 @@ export class Bet {
 
     this.status = BetStatus.CANCELLED;
     this.cancelReason = reason;
+
+    this.events.push(
+      createBetCancelledEvent(
+        this.roundId,
+        this.id,
+        this.playerId,
+        this.amount.toCents(),
+        reason,
+        Bet.EVENT_VERSION,
+      ),
+    );
   }
 
   /**
-   * Cash out the bet at the current multiplier.
+   * Cash out the bet at the given multiplier.
    * Only allowed if bet is ACTIVE (confirmed by wallet).
    */
   cashOut(multiplier: Multiplier): Money {
@@ -137,23 +206,22 @@ export class Bet {
       throw new InvalidBetStateError(this.status, 'cash out');
     }
 
-    const payout = multiplier.calculatePayout(this.amount.toCents());
-    this.cashOutAmount = Money.fromCents(payout);
+    const payout = Money.fromCents(multiplier.calculatePayout(this.amount.toCents()));
 
     this.status = BetStatus.CASHED_OUT;
     this.cashOutMultiplier = multiplier;
+    this.cashOutAmount = payout;
     this.cashedOutAt = new Date();
 
-    return this.cashOutAmount;
+    return payout;
   }
 
   /**
    * Mark the bet as lost (round crashed before cash out).
-   * Only allowed if bet is ACTIVE.
-   * PENDING bets are also marked as lost (implicit cancellation).
+   * Only ACTIVE bets can be lost — PENDING bets were never debited and are cancelled instead.
    */
   markAsLost(): void {
-    if (this.status !== BetStatus.ACTIVE && this.status !== BetStatus.PENDING) {
+    if (this.status !== BetStatus.ACTIVE) {
       throw new InvalidBetStateError(this.status, 'mark as lost');
     }
 
@@ -161,118 +229,101 @@ export class Bet {
   }
 
   /**
-   * Get the cancellation reason (if cancelled).
+   * Net result for the player in cents: payout - stake when cashed out,
+   * -stake when lost, zero otherwise.
    */
+  getProfitCents(): bigint {
+    if (this.status === BetStatus.CASHED_OUT && this.cashOutAmount) {
+      return this.cashOutAmount.toCents() - this.amount.toCents();
+    }
+    if (this.status === BetStatus.LOST) {
+      return -this.amount.toCents();
+    }
+    return 0n;
+  }
+
   getCancelReason(): string | null {
     return this.cancelReason;
   }
 
-  /**
-   * Get the bet amount.
-   */
   getAmount(): Money {
     return this.amount;
   }
 
-  /**
-   * Get the bet status.
-   */
   getStatus(): BetStatus {
     return this.status;
   }
 
-  /**
-   * Get the cash out multiplier (if cashed out).
-   */
   getCashOutMultiplier(): Multiplier | null {
     return this.cashOutMultiplier;
   }
 
-  /**
-   * Get the cash out amount (if cashed out).
-   */
   getCashOutAmount(): Money | null {
     return this.cashOutAmount;
   }
 
-  /**
-   * Get the time when the bet was cashed out.
-   */
   getCashedOutAt(): Date | null {
     return this.cashedOutAt;
   }
 
-  /**
-   * Get the time when the bet was placed.
-   */
   getCreatedAt(): Date {
     return this.createdAt;
   }
 
-  /**
-   * Get the auto cash-out multiplier target (if set).
-   */
   getAutoCashOutMultiplier(): number | null {
     return this.autoCashOutMultiplier;
   }
 
-  /**
-   * Check if auto cash-out is enabled for this bet.
-   */
   hasAutoCashOut(): boolean {
     return this.autoCashOutMultiplier !== null;
   }
 
-  /**
-   * Check if the bet is pending confirmation.
-   */
   isPending(): boolean {
     return this.status === BetStatus.PENDING;
   }
 
-  /**
-   * Check if the bet is cancelled.
-   */
   isCancelled(): boolean {
     return this.status === BetStatus.CANCELLED;
   }
 
-  /**
-   * Check if the bet is active (confirmed and not cashed out or lost).
-   */
   isActive(): boolean {
     return this.status === BetStatus.ACTIVE;
   }
 
-  /**
-   * Check if the bet was cashed out.
-   */
   isCashedOut(): boolean {
     return this.status === BetStatus.CASHED_OUT;
   }
 
-  /**
-   * Check if the bet was lost.
-   */
   isLost(): boolean {
     return this.status === BetStatus.LOST;
   }
 
   /**
+   * Pull all pending domain events and clear the internal buffer.
+   */
+  pullEvents(): BetDomainEvent[] {
+    const events = this.events;
+    this.events = [];
+    return events;
+  }
+
+  /**
    * Convert to plain object for persistence.
    */
-  toPersistence() {
+  toPersistence(): BetSnapshot {
     return {
       id: this.id,
       roundId: this.roundId,
       playerId: this.playerId,
       playerName: this.playerName,
-      autoCashOutMultiplier: this.autoCashOutMultiplier,
       amountCents: this.amount.toCents(),
       status: this.status,
+      autoCashOutMultiplier: this.autoCashOutMultiplier,
       cashOutMultiplier: this.cashOutMultiplier?.getValue() ?? null,
       cashOutAmount: this.cashOutAmount?.toCents() ?? null,
       cashedOutAt: this.cashedOutAt,
+      cancelReason: this.cancelReason,
+      createdAt: this.createdAt,
     };
   }
 }

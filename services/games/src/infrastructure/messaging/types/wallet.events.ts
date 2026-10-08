@@ -1,42 +1,30 @@
 /**
- * External Wallet Events - Types consumed from Wallets service
- *
- * These types define the structure of events that the Games service
- * consumes from the Wallets service via RabbitMQ.
- *
- * Note: These are read-only types for consumption. The source of truth
- * for these events is in the Wallets service.
+ * Wallet events consumed by the Games service, as they arrive on the wire
+ * (bigint amounts serialized as decimal strings, dates as ISO strings).
+ * The source of truth for these events is the Wallets service.
  */
 
-interface BaseDomainEvent {
+interface WalletMessage {
   readonly aggregateId: string;
-  readonly occurredAt: Date;
+  readonly occurredAt: string;
   readonly version: number;
+  readonly roundId: string;
+  readonly betId: string;
+  readonly playerId: string;
+  readonly amount: string;
 }
 
 /**
- * Emitted by Wallets service when a bet amount is successfully debited.
- * Games service uses this to confirm the bet (PENDING → ACTIVE).
+ * Bet stake debited → confirm the bet (PENDING → ACTIVE).
  */
-export interface WalletDebitedEvent extends BaseDomainEvent {
+export interface WalletDebitedMessage extends WalletMessage {
   readonly eventType: 'WalletDebited';
-  readonly roundId: string;
-  readonly betId: string;
-  readonly playerId: string;
-  readonly amount: bigint;
-  timestamp: Date;
 }
 
 /**
- * Emitted by Wallets service when a bet debit fails.
- * Games service uses this to cancel the bet (PENDING → CANCELLED).
+ * Bet stake could not be debited → cancel the bet (PENDING → CANCELLED).
  */
-export interface WalletDebitFailedEvent extends BaseDomainEvent {
+export interface WalletDebitFailedMessage extends WalletMessage {
   readonly eventType: 'WalletDebitFailed';
-  readonly roundId: string;
-  readonly betId: string;
-  readonly playerId: string;
-  readonly amount: bigint;
   readonly reason: string;
-  timestamp: Date;
 }

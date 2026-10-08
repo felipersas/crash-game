@@ -3,42 +3,39 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
-import { ObservabilityModule } from '@crash/observability';
-import { WalletsController } from '@/presentation/controllers/wallets.controller';
-import { PrismaModule } from '@/infrastructure/persistence/prisma/prisma.module';
-import { PrismaWalletRepository } from '@/infrastructure/persistence/prisma/wallet.repository.impl';
-import { PrismaInboxRepository } from '@/infrastructure/persistence/prisma/inbox.repository.impl';
-import { RabbitMQEventPublisher } from '@/infrastructure/messaging/rabbitmq/event-publisher.impl';
-import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
-import { OutboxProcessor } from '@/infrastructure/messaging/rabbitmq/outbox-processor';
-import { InboxProcessor } from '@/infrastructure/messaging/rabbitmq/inbox-processor';
-import { GamesEventsController } from '@/infrastructure/messaging/rabbitmq/games-events.controller';
-import { BetPlacedEventHandler } from '@/infrastructure/messaging/rabbitmq/handlers/bet-placed.handler';
-import { PlayerCashedOutEventHandler } from '@/infrastructure/messaging/rabbitmq/handlers/player-cashed-out.handler';
-import { DlqSetupService } from '@/infrastructure/messaging/rabbitmq/dlq-setup.service';
+import { AllExceptionsFilter } from '@crash/http';
+import { MetricsInterceptor, ObservabilityModule } from '@crash/observability';
+import { WALLET_REPOSITORY, INBOX_REPOSITORY, UNIT_OF_WORK } from '@/application/di.tokens';
 import { CreateWalletUseCase } from '@/application/use-cases/create-wallet.use-case';
 import { GetWalletUseCase } from '@/application/use-cases/get-wallet.use-case';
 import { CreditWalletUseCase } from '@/application/use-cases/credit-wallet.use-case';
-import { DebitWalletUseCase } from '@/application/use-cases/debit-wallet.use-case';
-import { PlayerWalletResolver } from '@/application/services/player-wallet-resolver.service';
-import {
-  WALLET_REPOSITORY,
-  INBOX_REPOSITORY,
-  RABBITMQ_PUBLISHER,
-  PLAYER_WALLET_RESOLVER,
-} from '@/application/di.tokens';
-import { AllExceptionsFilter } from './infrastructure/filters/all-exceptions.filter';
-import { MetricsInterceptor } from './infrastructure/interceptors/metrics.interceptor';
+import { DebitBetStakeUseCase } from '@/application/use-cases/debit-bet-stake.use-case';
+import { RABBITMQ_PUBLISHER, WALLET_EVENTS_CLIENT } from '@/infrastructure/di.tokens';
+import { WALLETS_ERROR_STATUS } from '@/infrastructure/http/error-status';
+import { PrismaModule } from '@/infrastructure/persistence/prisma/prisma.module';
+import { PrismaWalletRepository } from '@/infrastructure/persistence/prisma/wallet.repository.impl';
+import { PrismaInboxRepository } from '@/infrastructure/persistence/prisma/inbox.repository.impl';
+import { PrismaUnitOfWork } from '@/infrastructure/persistence/prisma/prisma-unit-of-work';
+import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
+import { RabbitMQEventPublisher } from '@/infrastructure/messaging/rabbitmq/event-publisher.impl';
+import { OutboxProcessor } from '@/infrastructure/messaging/rabbitmq/outbox-processor';
+import { DlqSetupService } from '@/infrastructure/messaging/rabbitmq/dlq-setup.service';
+import { GamesEventsController } from '@/infrastructure/messaging/rabbitmq/games-events.controller';
+import { BetPlacedEventHandler } from '@/infrastructure/messaging/rabbitmq/handlers/bet-placed.handler';
+import { PlayerCashedOutEventHandler } from '@/infrastructure/messaging/rabbitmq/handlers/player-cashed-out.handler';
+import { IdempotentInbox } from '@/infrastructure/messaging/inbox/idempotent-inbox';
+import { InboxProcessor } from '@/infrastructure/messaging/inbox/inbox-processor';
+import { WalletsController } from '@/presentation/controllers/wallets.controller';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    PrismaModule,
-    ObservabilityModule,
     ScheduleModule.forRoot(),
+    ObservabilityModule,
+    PrismaModule,
     ClientsModule.register([
       {
-        name: 'WALLET_EVENTS_CLIENT',
+        name: WALLET_EVENTS_CLIENT,
         transport: Transport.RMQ,
         options: {
           urls: [process.env.RABBITMQ_URL || 'amqp://admin:admin@localhost:5672'],
@@ -50,37 +47,30 @@ import { MetricsInterceptor } from './infrastructure/interceptors/metrics.interc
   ],
   controllers: [WalletsController, GamesEventsController],
   providers: [
-    // Exception Filter (global - handles all exceptions)
-    {
-      provide: APP_FILTER,
-      useClass: AllExceptionsFilter,
-    },
-    // Metrics Interceptor (global - records HTTP request metrics)
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: MetricsInterceptor,
-    },
-    // Repositories
+    // HTTP cross-cutting concerns
+    { provide: APP_FILTER, useValue: new AllExceptionsFilter(WALLETS_ERROR_STATUS) },
+    { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
+
+    // Ports → adapters
     { provide: WALLET_REPOSITORY, useClass: PrismaWalletRepository },
     { provide: INBOX_REPOSITORY, useClass: PrismaInboxRepository },
+    { provide: UNIT_OF_WORK, useClass: PrismaUnitOfWork },
+
     // Messaging
-    {
-      provide: RABBITMQ_PUBLISHER,
-      useClass: RabbitMQEventPublisher,
-    },
+    { provide: RABBITMQ_PUBLISHER, useClass: RabbitMQEventPublisher },
     OutboxWriter,
+    OutboxProcessor,
     DlqSetupService,
+    IdempotentInbox,
+    InboxProcessor,
     BetPlacedEventHandler,
     PlayerCashedOutEventHandler,
-    OutboxProcessor,
-    InboxProcessor,
-    // Application Services
-    { provide: PLAYER_WALLET_RESOLVER, useClass: PlayerWalletResolver },
-    // Use Cases
+
+    // Use cases
     CreateWalletUseCase,
     GetWalletUseCase,
     CreditWalletUseCase,
-    DebitWalletUseCase,
+    DebitBetStakeUseCase,
   ],
 })
 export class AppModule {}

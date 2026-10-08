@@ -1,12 +1,15 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Round, RoundStatus } from '@/domain/entities/round.entity';
-import { OptimisticLockError } from '@/domain/errors/domain.errors';
-import type { IRoundRepository } from '../interfaces/round.repository';
-import type { IUseCase } from '../interfaces/use-case';
-import { ROUND_REPOSITORY, GAME_BROADCASTER } from '../di.tokens';
-import type { IGameBroadcaster } from '../interfaces/game-broadcaster';
-import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
-import { OutboxWriter } from '@/infrastructure/messaging/outbox-writer';
+import {
+  InvalidRoundStateError,
+  OptimisticLockError,
+  RoundNotFoundError,
+} from '@/domain/errors/domain.errors';
+import type { IRoundRepository } from '@/application/interfaces/round.repository';
+import type { IGameBroadcaster } from '@/application/interfaces/game-broadcaster';
+import type { IUnitOfWork } from '@/application/interfaces/unit-of-work';
+import type { IUseCase } from '@/application/interfaces/use-case';
+import { ROUND_REPOSITORY, UNIT_OF_WORK, GAME_BROADCASTER } from '@/application/di.tokens';
 
 export interface StartRoundInput {
   round: Round;
@@ -19,9 +22,9 @@ export interface StartRoundOutput {
 /**
  * Start Round Use Case - Application Layer
  *
- * Transitions a round from BETTING to ACTIVE state.
- * Handles optimistic locking conflicts gracefully by reloading
- * from the database and retrying when necessary.
+ * Transitions a round from BETTING to ACTIVE. On an optimistic lock conflict
+ * the round is reloaded: if another writer already started it, that version
+ * is used; if it is still BETTING the transition is retried once.
  */
 @Injectable()
 export class StartRoundUseCase implements IUseCase<StartRoundInput, StartRoundOutput> {
@@ -29,74 +32,45 @@ export class StartRoundUseCase implements IUseCase<StartRoundInput, StartRoundOu
 
   constructor(
     @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
+    @Inject(UNIT_OF_WORK) private readonly unitOfWork: IUnitOfWork,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
-    private readonly prisma: PrismaService,
-    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(input: StartRoundInput): Promise<StartRoundOutput> {
-    let resultRound = input.round;
+    let round = input.round;
 
     try {
-      await resultRound.startRound();
-      const events = resultRound.pullEvents();
-      let outboxIds: string[] = [];
-      await this.prisma.$transaction(async (tx) => {
-        await this.roundRepository.save(resultRound, tx);
-        if (events.length > 0) {
-          outboxIds = await this.outboxWriter.writeWithinTransaction(tx, resultRound.id, events);
-        }
-      });
-
-      // Best-effort immediate publish for low latency
-      if (events.length > 0 && outboxIds.length > 0) {
-        await this.outboxWriter.tryImmediatePublish(events, outboxIds);
-      }
+      await this.start(round);
     } catch (error) {
-      if (error instanceof OptimisticLockError) {
-        this.logger.warn(
-          `Optimistic lock conflict for round ${resultRound.id}, reloading from database`,
-        );
+      if (!(error instanceof OptimisticLockError)) throw error;
 
-        const reloaded = await this.roundRepository.findById(resultRound.id);
-        if (!reloaded) {
-          this.logger.error(`Round ${resultRound.id} not found after conflict`);
-          throw error;
-        }
+      this.logger.warn(`Optimistic lock conflict for round ${round.id}, reloading from database`);
+      round = await this.reload(round.id);
 
-        if (reloaded.getStatus() === RoundStatus.ACTIVE) {
-          this.logger.log(`Round ${resultRound.id} already transitioned to ACTIVE`);
-          resultRound = reloaded;
-        } else if (reloaded.getStatus() === RoundStatus.BETTING) {
-          this.logger.log(`Retrying transition for round ${reloaded.id}`);
-          await reloaded.startRound();
-          const retryEvents = reloaded.pullEvents();
-          let retryOutboxIds: string[] = [];
-          await this.prisma.$transaction(async (tx) => {
-            await this.roundRepository.save(reloaded, tx);
-            if (retryEvents.length > 0) {
-              retryOutboxIds = await this.outboxWriter.writeWithinTransaction(
-                tx,
-                reloaded.id,
-                retryEvents,
-              );
-            }
-          });
-
-          // Best-effort immediate publish for low latency
-          if (retryEvents.length > 0 && retryOutboxIds.length > 0) {
-            await this.outboxWriter.tryImmediatePublish(retryEvents, retryOutboxIds);
-          }
-
-          resultRound = reloaded;
-        }
-      } else {
-        throw error;
+      if (round.getStatus() === RoundStatus.BETTING) {
+        await this.start(round);
+      } else if (round.getStatus() !== RoundStatus.ACTIVE) {
+        throw new InvalidRoundStateError(round.getStatus(), 'start');
       }
     }
 
-    this.broadcaster.broadcastBettingEnded(resultRound.id);
+    this.broadcaster.broadcastBettingEnded(round.id);
 
-    return { round: resultRound };
+    return { round };
+  }
+
+  private async start(round: Round): Promise<void> {
+    await round.startRound();
+    await this.unitOfWork.commit(round.id, round.pullEvents(), (tx) =>
+      this.roundRepository.save(round, tx),
+    );
+  }
+
+  private async reload(roundId: Round['id']): Promise<Round> {
+    const round = await this.roundRepository.findById(roundId);
+    if (!round) {
+      throw new RoundNotFoundError();
+    }
+    return round;
   }
 }

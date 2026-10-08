@@ -1,4 +1,4 @@
-import { Bet, BetStatus } from './bet.entity';
+import { Bet } from './bet.entity';
 import { CrashPoint } from '../value-objects/crash-point.value-object';
 import { Multiplier } from '../value-objects/multiplier.value-object';
 import { SeedChain } from '../value-objects/seed-chain.value-object';
@@ -47,6 +47,22 @@ export interface RoundConfig {
   minBetAmount: Money; // Minimum bet
   maxBetAmount: Money; // Maximum bet
   growthRate: number; // Multiplier growth rate (default 0.06)
+}
+
+/**
+ * Plain snapshot of a round, used for persistence and rehydration.
+ * Bets are persisted separately by the BetRepository.
+ */
+export interface RoundSnapshot {
+  id: RoundId;
+  seed: string;
+  seedHash: string;
+  status: RoundStatus;
+  crashPoint: number | null;
+  bettingEndTime: Date | null;
+  startedAt: Date | null;
+  crashedAt: Date | null;
+  version: number;
 }
 
 export const DEFAULT_ROUND_CONFIG: RoundConfig = {
@@ -130,38 +146,30 @@ export class Round {
   }
 
   /**
-   * Factory method to restore a round from persistence.
+   * Factory method to restore a round from persistence (no events).
+   * CANCELLED bets are not part of the aggregate's live state.
    */
   static restore(
-    id: RoundId,
-    seed: string,
-    seedHash: string,
-    _nextSeed: string | null,
-    status: RoundStatus,
-    crashPoint: number | null,
-    bettingEndTime: Date | null,
-    startedAt: Date | null,
-    crashedAt: Date | null,
+    snapshot: RoundSnapshot,
     bets: Bet[],
-    version: number,
     config: RoundConfig = DEFAULT_ROUND_CONFIG,
   ): Round {
     const seedChain = SeedChain.fromRoundPersistence({
-      currentSeed: seed,
-      currentHash: seedHash,
+      currentSeed: snapshot.seed,
+      currentHash: snapshot.seedHash,
     });
-    const round = new Round(id, seedChain, config);
+    const round = new Round(snapshot.id, seedChain, config);
 
-    round.status = status;
-    round.crashPoint = crashPoint !== null ? CrashPoint.fromValue(crashPoint) : null;
-    round.bettingEndTime = bettingEndTime;
-    round.startedAt = startedAt;
-    round.crashedAt = crashedAt;
-    round.version = version;
-    round.currentMultiplier = Multiplier.start();
+    round.status = snapshot.status;
+    round.crashPoint =
+      snapshot.crashPoint !== null ? CrashPoint.fromValue(snapshot.crashPoint) : null;
+    round.bettingEndTime = snapshot.bettingEndTime;
+    round.startedAt = snapshot.startedAt;
+    round.crashedAt = snapshot.crashedAt;
+    round.version = snapshot.version;
 
     for (const bet of bets) {
-      if (bet.getStatus() !== BetStatus.CANCELLED) {
+      if (!bet.isCancelled()) {
         round.bets.set(bet.playerId, bet);
       }
     }
@@ -171,35 +179,23 @@ export class Round {
 
   /**
    * Place a bet for a player.
-   * Only allowed during BETTING phase.
-   * Throws if player already has an active/cashed out/lost bet.
+   * Only allowed during BETTING phase, once per player.
    */
   placeBet(
     playerId: PlayerId,
     playerName: string,
     amount: Money,
     autoCashOutMultiplier?: number,
-  ): void {
-    if (this.status !== RoundStatus.BETTING) {
-      throw new RoundNotAcceptingBetsError();
-    }
+  ): Bet {
+    this.assertAcceptsBet(amount);
 
     if (this.bets.has(playerId)) {
       throw new DuplicateBetError();
     }
 
-    if (amount.isLessThan(this.config.minBetAmount)) {
-      throw new BetBelowMinimumError(amount.toCents());
-    }
-
-    if (amount.isGreaterThan(this.config.maxBetAmount)) {
-      throw new BetAboveMaximumError(amount.toCents());
-    }
-
     const bet = Bet.create(this.id, playerId, playerName, amount, autoCashOutMultiplier);
-    this.bets.set(playerId, bet);
-
-    this.addEvent(createBetPlacedEvent(this.id, bet.id, playerId, amount.toCents(), this.version));
+    this.registerBet(bet);
+    return bet;
   }
 
   /**
@@ -214,49 +210,58 @@ export class Round {
     amount: Money,
     autoCashOutMultiplier?: number,
   ): { bet: Bet; replacedBet: Bet | null } {
-    if (this.status !== RoundStatus.BETTING) {
-      throw new RoundNotAcceptingBetsError();
+    this.assertAcceptsBet(amount);
+
+    const existing = this.bets.get(playerId);
+    if (existing && !existing.isPending() && !existing.isCancelled()) {
+      throw new DuplicateBetError();
     }
+
+    // Create the new bet first so invalid input never cancels the existing one
+    const bet = Bet.create(this.id, playerId, playerName, amount, autoCashOutMultiplier);
 
     let replacedBet: Bet | null = null;
-    const existing = this.bets.get(playerId);
-
-    if (existing) {
-      if (!existing.isPending() && !existing.isCancelled()) {
-        throw new DuplicateBetError();
-      }
-
-      if (existing.isPending()) {
-        existing.cancel('Replaced by new bet attempt');
-        replacedBet = existing;
-      }
-
-      this.bets.delete(playerId);
+    if (existing?.isPending()) {
+      existing.cancel('Replaced by new bet attempt');
+      // The replaced bet leaves the aggregate, so keep its events in the root buffer
+      this.events.push(...existing.pullEvents());
+      replacedBet = existing;
     }
 
-    if (amount.isLessThan(this.config.minBetAmount)) {
-      throw new BetBelowMinimumError(amount.toCents());
-    }
-
-    if (amount.isGreaterThan(this.config.maxBetAmount)) {
-      throw new BetAboveMaximumError(amount.toCents());
-    }
-
-    const bet = Bet.create(this.id, playerId, playerName, amount, autoCashOutMultiplier);
-    this.bets.set(playerId, bet);
-
-    this.addEvent(createBetPlacedEvent(this.id, bet.id, playerId, amount.toCents(), this.version));
-
+    this.registerBet(bet);
     return { bet, replacedBet };
   }
 
+  private assertAcceptsBet(amount: Money): void {
+    if (this.status !== RoundStatus.BETTING) {
+      throw new RoundNotAcceptingBetsError();
+    }
+    if (amount.isLessThan(this.config.minBetAmount)) {
+      throw new BetBelowMinimumError(amount, this.config.minBetAmount);
+    }
+    if (amount.isGreaterThan(this.config.maxBetAmount)) {
+      throw new BetAboveMaximumError(amount, this.config.maxBetAmount);
+    }
+  }
+
+  private registerBet(bet: Bet): void {
+    this.bets.set(bet.playerId, bet);
+    this.addEvent(
+      createBetPlacedEvent(this.id, bet.id, bet.playerId, bet.getAmount().toCents(), this.version),
+    );
+  }
+
   /**
-   * Cash out a player's bet at the current multiplier.
+   * Cash out a player's bet at the current multiplier, or at the given
+   * multiplier when an auto cash-out target was reached.
    * Only allowed during ACTIVE phase.
    */
   cashOut(playerId: PlayerId, overrideMultiplier?: Multiplier): Money {
+    if (this.status === RoundStatus.CRASHED) {
+      throw new RoundAlreadyCrashedError(this.crashPoint!.getValue());
+    }
     if (this.status !== RoundStatus.ACTIVE) {
-      throw new RoundAlreadyCrashedError(this.crashPoint?.getValue() || 0);
+      throw new InvalidRoundStateError(this.status, 'cash out');
     }
 
     const bet = this.bets.get(playerId);
@@ -311,18 +316,19 @@ export class Round {
 
     this.currentMultiplier = Multiplier.afterDuration(elapsedSeconds, this.config.growthRate);
 
-    if (this.crashPoint && this.crashPoint.shouldCrashAt(this.currentMultiplier.getValue())) {
+    if (this.crashPoint?.shouldCrashAt(this.currentMultiplier.getValue())) {
       this.crash();
     }
   }
 
   /**
-   * Crash the round.
-   * Marks all active bets as lost.
+   * Crash the round: active bets are lost, unconfirmed (PENDING) bets are cancelled.
+   * Normally triggered by updateMultiplier() reaching the crash point; also called
+   * when reconciling a persisted copy of a round whose live instance already crashed.
    */
-  private crash(): void {
+  crash(): void {
     if (this.status !== RoundStatus.ACTIVE) {
-      return;
+      throw new InvalidRoundStateError(this.status, 'crash');
     }
 
     this.version++;
@@ -338,27 +344,18 @@ export class Round {
       }
     }
 
-    let totalBets = 0;
-    let totalBetAmount = 0n;
-    let totalWinAmount = 0n;
-
-    for (const bet of this.bets.values()) {
-      totalBets++;
-      const betAmount = bet.getAmount().toCents();
-      totalBetAmount += betAmount;
-      if (bet.isCashedOut()) {
-        const cashOutAmount = bet.getCashOutAmount()!.toCents();
-        totalWinAmount += cashOutAmount - betAmount;
-      }
-    }
+    const bets = this.getBets().filter((bet) => !bet.isCancelled());
+    const totalWinAmount = bets
+      .filter((bet) => bet.isCashedOut())
+      .reduce((sum, bet) => sum + bet.getProfitCents(), 0n);
 
     this.addEvent(
       createRoundCrashedEvent(
         this.id,
         this.crashPoint!.getValue(),
         this.seedChain.getSeed(),
-        totalBets,
-        totalBetAmount,
+        bets.length,
+        this.getTotalWagered().toCents(),
         totalWinAmount,
         this.version,
       ),
@@ -439,21 +436,22 @@ export class Round {
   }
 
   /**
-   * Remove a player's bet from the aggregate.
-   * Used when cancelling a stale PENDING bet before retry.
+   * Total amount wagered on this round (cancelled bets excluded).
    */
-  removeBet(playerId: PlayerId): void {
-    this.bets.delete(playerId);
+  getTotalWagered(): Money {
+    return this.getBets()
+      .filter((bet) => !bet.isCancelled())
+      .reduce((sum, bet) => sum.add(bet.getAmount()), Money.zero());
   }
 
   /**
-   * Sync a bet loaded from persistence into the in-memory aggregate.
-   * Needed because the lifecycle manager's in-memory round is a separate
-   * instance from what PlaceBetUseCase mutated — bets are persisted to DB
-   * but the in-memory round never receives them.
+   * Upsert a bet loaded from persistence into this in-memory aggregate.
+   * Needed because the lifecycle manager's live round is a separate instance
+   * from the rounds use cases load from the database; the persisted bet is
+   * authoritative.
    */
   syncBet(bet: Bet): void {
-    if (bet.getStatus() !== BetStatus.CANCELLED && !this.bets.has(bet.playerId)) {
+    if (!bet.isCancelled()) {
       this.bets.set(bet.playerId, bet);
     }
   }
@@ -466,19 +464,13 @@ export class Round {
   }
 
   /**
-   * Pull all pending domain events and clear the internal buffer.
+   * Pull all pending domain events (including those raised by bets in this
+   * round) and clear the internal buffers.
    */
   pullEvents(): GameDomainEvent[] {
-    const events = [...this.events];
+    const events = [...this.events, ...this.getBets().flatMap((bet) => bet.pullEvents())];
     this.events = [];
     return events;
-  }
-
-  /**
-   * Get count of pending events without clearing.
-   */
-  getPendingEventsCount(): number {
-    return this.events.length;
   }
 
   /**
@@ -490,15 +482,15 @@ export class Round {
 
   /**
    * Convert to plain object for persistence.
-   * NOTE: Seed is only included after round crashes (security).
-   * NOTE: Bets are managed separately by BetRepository.
+   * The seed is persisted so the crash point can be recomputed after a restart;
+   * it is only exposed through the API once the round has crashed (see getSeed()).
+   * Bets are managed separately by BetRepository.
    */
-  toPersistence() {
+  toPersistence(): RoundSnapshot {
     return {
       id: this.id,
       seed: this.seedChain.getSeed(),
       seedHash: this.seedChain.getCurrentSeedHash(),
-      nextSeed: null,
       status: this.status,
       crashPoint: this.crashPoint?.getValue() ?? null,
       bettingEndTime: this.bettingEndTime,

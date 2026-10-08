@@ -1,155 +1,198 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { AutoCashOutWorker } from '../../../src/infrastructure/workers/auto-cashout.worker';
+import {
+  AutoCashOutWorker,
+  type AutoCashOutJobData,
+} from '../../../src/infrastructure/workers/auto-cashout.worker';
+import { createMockAutoCashOutRepository, mockFn } from '../../helpers/mocks';
 
-function mockFn<T extends (...args: any[]) => any>(impl?: T) {
-  const fn: any = (...args: any[]) => {
-    fn.callCount++;
-    return fn._impl(...args);
-  };
-  fn._impl = impl || (() => {});
-  fn.callCount = 0;
-  fn.mockReturnValue = (v: any) => {
-    fn._impl = () => v;
-  };
-  fn.mockResolvedValue = (v: any) => {
-    fn._impl = () => Promise.resolve(v);
-  };
-  return fn as T & {
-    callCount: number;
-    mockReturnValue: (v: any) => void;
-    mockResolvedValue: (v: any) => void;
-  };
-}
+const JOB_DATA: AutoCashOutJobData = {
+  playerId: 'player-1',
+  roundId: 'round-1',
+  targetMultiplier: 2.5,
+  idempotencyKey: 'auto-round-1-player-1',
+};
 
-function createMockAutoCashOutRepo() {
+function createJob(overrides: { attemptsMade?: number; attempts?: number } = {}) {
   return {
-    addTarget: mockFn(() => Promise.resolve()),
-    removeTarget: mockFn(() => Promise.resolve()),
-    fetchAndRemoveEligible: mockFn(() =>
-      Promise.resolve([] as Array<{ playerId: string; targetMultiplier: number }>),
-    ),
-    acquireLock: mockFn(() => Promise.resolve(true)),
-    getCachedResult: mockFn(() => Promise.resolve(null)),
-    cacheResult: mockFn(() => Promise.resolve()),
-    clearRound: mockFn(() => Promise.resolve()),
-  };
+    data: { ...JOB_DATA },
+    attemptsMade: overrides.attemptsMade ?? 1,
+    opts: { attempts: overrides.attempts },
+  } as any;
 }
 
 function createMockCashOutUseCase() {
   return {
-    execute: mockFn(() =>
-      Promise.resolve({
-        betId: 'bet-1',
-        roundId: 'round-1',
-        playerId: 'player-1',
-        cashOutMultiplier: 2.5,
-        payoutCents: 2500n,
-      }),
-    ),
+    execute: mockFn(async (_input: unknown) => ({
+      betId: 'bet-1',
+      roundId: 'round-1',
+      playerId: 'player-1',
+      cashOutMultiplier: 2.5,
+      payoutCents: 2500n,
+    })),
+  };
+}
+
+function createMockQueue() {
+  return {
+    add: mockFn(async (_name: string, _data: unknown) => ({ id: 'dlq-1' })),
   };
 }
 
 describe('AutoCashOutWorker', () => {
-  let autoCashOutRepo: ReturnType<typeof createMockAutoCashOutRepo>;
+  let autoCashOutRepository: ReturnType<typeof createMockAutoCashOutRepository>;
   let cashOutUseCase: ReturnType<typeof createMockCashOutUseCase>;
+  let deadLetterQueue: ReturnType<typeof createMockQueue>;
   let worker: AutoCashOutWorker;
 
   beforeEach(() => {
-    autoCashOutRepo = createMockAutoCashOutRepo();
+    autoCashOutRepository = createMockAutoCashOutRepository();
     cashOutUseCase = createMockCashOutUseCase();
-    worker = new AutoCashOutWorker(autoCashOutRepo as any, cashOutUseCase as any);
+    deadLetterQueue = createMockQueue();
+    worker = new AutoCashOutWorker(
+      autoCashOutRepository as any,
+      cashOutUseCase as any,
+      deadLetterQueue as any,
+    );
+    // Silence worker logs
+    const logger = (worker as any).logger;
+    logger.log = () => {};
+    logger.warn = () => {};
+    logger.error = () => {};
   });
 
-  test('should process auto cash-out job successfully', async () => {
-    const job = {
-      data: {
-        playerId: 'player-1',
-        roundId: 'round-1',
-        targetMultiplier: 2.5,
-        idempotencyKey: 'auto-round-1-player-1',
-      },
-    } as any;
+  describe('process', () => {
+    test('should cash out and return payoutCents as a string', async () => {
+      const result = await worker.process(createJob());
 
-    const result = await worker.process(job);
-
-    expect(result.cashOutMultiplier).toBe(2.5);
-    expect(result.payoutCents).toBe(2500);
-    expect(autoCashOutRepo.acquireLock.callCount).toBe(1);
-    expect(cashOutUseCase.execute.callCount).toBe(1);
-    expect(autoCashOutRepo.cacheResult.callCount).toBe(1);
-  });
-
-  test('should return cached result when lock not acquired and result exists', async () => {
-    autoCashOutRepo.acquireLock.mockResolvedValue(false);
-    autoCashOutRepo.getCachedResult.mockResolvedValue({ multiplier: 2.5, payoutCents: 2500n });
-
-    const job = {
-      data: {
-        playerId: 'player-1',
-        roundId: 'round-1',
-        targetMultiplier: 2.5,
-        idempotencyKey: 'auto-round-1-player-1',
-      },
-    } as any;
-
-    const result = await worker.process(job);
-
-    expect(result).toEqual({ cashOutMultiplier: 2.5, payoutCents: 2500 });
-    expect(cashOutUseCase.execute.callCount).toBe(0);
-  });
-
-  test('should throw when lock not acquired and no cached result', async () => {
-    autoCashOutRepo.acquireLock.mockResolvedValue(false);
-    autoCashOutRepo.getCachedResult.mockResolvedValue(null);
-
-    const job = {
-      data: {
-        playerId: 'player-1',
-        roundId: 'round-1',
-        targetMultiplier: 2.5,
-        idempotencyKey: 'auto-round-1-player-1',
-      },
-    } as any;
-
-    expect(worker.process(job)).rejects.toThrow();
-    expect(cashOutUseCase.execute.callCount).toBe(0);
-  });
-
-  test('should pass correct args to CashOutUseCase', async () => {
-    const job = {
-      data: {
-        playerId: 'player-1',
-        roundId: 'round-1',
-        targetMultiplier: 2.5,
-        idempotencyKey: 'auto-round-1-player-1',
-      },
-    } as any;
-
-    await worker.process(job);
-
-    expect(cashOutUseCase.execute.callCount).toBe(1);
-  });
-
-  test('should cache result after successful cash-out', async () => {
-    cashOutUseCase.execute.mockResolvedValue({
-      betId: 'bet-1',
-      roundId: 'round-1',
-      playerId: 'player-1',
-      cashOutMultiplier: 3.0,
-      payoutCents: 3000n,
+      expect(result).toEqual({ cashOutMultiplier: 2.5, payoutCents: '2500' });
+      expect(autoCashOutRepository.acquireLock.calls).toEqual([['round-1', 'player-1']]);
+      expect(cashOutUseCase.execute.callCount).toBe(1);
     });
 
-    const job = {
-      data: {
+    test('should pass job data to CashOutUseCase', async () => {
+      await worker.process(createJob());
+
+      expect(cashOutUseCase.execute.calls[0][0]).toEqual({
         playerId: 'player-1',
         roundId: 'round-1',
-        targetMultiplier: 3.0,
         idempotencyKey: 'auto-round-1-player-1',
-      },
-    } as any;
+        targetMultiplier: 2.5,
+      });
+    });
 
-    await worker.process(job);
+    test('should cache the result with bigint payout after a successful cash-out', async () => {
+      cashOutUseCase.execute.mockResolvedValue({
+        betId: 'bet-1',
+        roundId: 'round-1',
+        playerId: 'player-1',
+        cashOutMultiplier: 3.0,
+        payoutCents: 3000n,
+      });
 
-    expect(autoCashOutRepo.cacheResult.callCount).toBe(1);
+      await worker.process(createJob());
+
+      expect(autoCashOutRepository.cacheResult.calls).toEqual([
+        ['round-1', 'player-1', { multiplier: 3.0, payoutCents: 3000n }],
+      ]);
+    });
+
+    test('should keep large payouts exact in the string result', async () => {
+      cashOutUseCase.execute.mockResolvedValue({
+        betId: 'bet-1',
+        roundId: 'round-1',
+        playerId: 'player-1',
+        cashOutMultiplier: 1000,
+        payoutCents: 9_007_199_254_740_993n,
+      });
+
+      const result = await worker.process(createJob());
+
+      expect(result.payoutCents).toBe('9007199254740993');
+    });
+
+    test('should return the cached result when the lock is held and a result exists', async () => {
+      autoCashOutRepository.acquireLock.mockResolvedValue(false);
+      autoCashOutRepository.getCachedResult.mockResolvedValue({
+        multiplier: 2.5,
+        payoutCents: 2500n,
+      });
+
+      const result = await worker.process(createJob());
+
+      expect(result).toEqual({ cashOutMultiplier: 2.5, payoutCents: '2500' });
+      expect(cashOutUseCase.execute.callCount).toBe(0);
+      expect(autoCashOutRepository.cacheResult.callCount).toBe(0);
+    });
+
+    test('should throw (to retry) when the lock is held and no result is cached', async () => {
+      autoCashOutRepository.acquireLock.mockResolvedValue(false);
+      autoCashOutRepository.getCachedResult.mockResolvedValue(null);
+
+      await expect(worker.process(createJob())).rejects.toThrow('Lock not acquired');
+      expect(cashOutUseCase.execute.callCount).toBe(0);
+    });
+
+    test('should propagate cash-out failures without caching a result', async () => {
+      cashOutUseCase.execute.mockRejectedValue(new Error('No active bet'));
+
+      await expect(worker.process(createJob())).rejects.toThrow('No active bet');
+      expect(autoCashOutRepository.cacheResult.callCount).toBe(0);
+    });
+
+    test('should release the lock when the cash-out fails so the retry can run', async () => {
+      const job = createJob();
+      cashOutUseCase.execute.mockRejectedValue(new Error('db down'));
+
+      await expect(worker.process(job)).rejects.toThrow('db down');
+      expect(autoCashOutRepository.releaseLock.calls).toEqual([
+        [job.data.roundId, job.data.playerId],
+      ]);
+    });
+
+    test('should keep the lock after a successful cash-out', async () => {
+      await worker.process(createJob());
+
+      expect(autoCashOutRepository.releaseLock.callCount).toBe(0);
+    });
+  });
+
+  describe('moveToDeadLetterQueue', () => {
+    test('should not enqueue while attempts remain', async () => {
+      await worker.moveToDeadLetterQueue(
+        createJob({ attemptsMade: 1, attempts: 3 }),
+        new Error('boom'),
+      );
+
+      expect(deadLetterQueue.add.callCount).toBe(0);
+    });
+
+    test('should enqueue to the DLQ once attempts are exhausted', async () => {
+      await worker.moveToDeadLetterQueue(
+        createJob({ attemptsMade: 3, attempts: 3 }),
+        new Error('boom'),
+      );
+
+      expect(deadLetterQueue.add.calls).toEqual([
+        ['auto-cashout-failed', { ...JOB_DATA, failedReason: 'boom', attemptsMade: 3 }],
+      ]);
+    });
+
+    test('should enqueue when attemptsMade exceeds the configured attempts', async () => {
+      await worker.moveToDeadLetterQueue(
+        createJob({ attemptsMade: 4, attempts: 3 }),
+        new Error('boom'),
+      );
+
+      expect(deadLetterQueue.add.callCount).toBe(1);
+    });
+
+    test('should treat a job without attempts option as a single attempt', async () => {
+      await worker.moveToDeadLetterQueue(
+        createJob({ attemptsMade: 1, attempts: undefined }),
+        new Error('boom'),
+      );
+
+      expect(deadLetterQueue.add.callCount).toBe(1);
+    });
   });
 });

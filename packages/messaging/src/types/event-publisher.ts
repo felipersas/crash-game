@@ -1,28 +1,14 @@
-import type { DomainEvent } from './domain-event';
+import type { SerializedEvent } from './serialization';
 
 /**
- * Defines the contract for publishing domain events to message broker.
- * Implemented by Infrastructure layer of each bounded context.
- * 
- * @example
- * // Wallet Service implements for WalletDomainEvent
- * // Games Service implements for GameDomainEvent
+ * Publishes serialized domain events to the message broker.
+ * Implemented by the infrastructure layer of each bounded context and used by
+ * its transactional outbox (immediate publish + polling fallback).
  */
-export interface IEventPublisher<TEvent extends DomainEvent = DomainEvent> {
+export interface IEventPublisher {
   /**
-   * Publish a domain event to the message broker.
-   * Should handle connection errors gracefully.
+   * @throws when the broker rejects or cannot receive the event; callers keep
+   * the outbox entry pending so it is retried.
    */
-  publish(event: TEvent): Promise<void>;
-
-  /**
-   * Publish multiple events in batch.
-   * More efficient than publishing one by one.
-   */
-  publishBatch(events: TEvent[]): Promise<void>;
-
-  /**
-   * Check if the publisher is connected to the broker.
-   */
-  isConnected(): boolean;
+  publish(event: SerializedEvent): Promise<void>;
 }

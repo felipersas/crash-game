@@ -24,86 +24,110 @@ Guide all changes to the games service following established DDD architecture an
 
 ```
 services/games/src/
-├── domain/           # Entities (Round, Bet), VOs (CrashPoint, Multiplier, SeedChain), Events, Errors
-├── application/      # Use cases (one per operation), Repository interfaces, Shared utils
-├── infrastructure/   # Prisma repos, RabbitMQ pub/sub, WebSocket gateway, Scheduling, DI tokens
-└── presentation/     # Controllers, DTOs, Decorators (@UserContext)
+├── domain/           # Round (aggregate root) + Bet, VOs (CrashPoint, Multiplier, SeedChain),
+│                     # events, errors, crypto/sha256, services/provably-fair
+├── application/      # Use cases, ports (interfaces/), di.tokens.ts, services/
+├── infrastructure/   # Prisma adapters + unit of work, outbox/inbox, RabbitMQ, Redis,
+│                     # WebSocket, scheduling (lifecycle), BullMQ workers, di.tokens.ts
+└── presentation/     # GamesController, DTOs (with static from())
 ```
+
+Dependency rule: `domain` imports nothing from other layers; `application` imports only
+`domain` and its own ports; never import `@/infrastructure/*` or Prisma from application.
 
 ## Key Patterns
 
 ### Entity Pattern
-- Private constructor + static factory methods: `static create()`, `static restore()`
-- `toPersistence()` for infrastructure conversion
-- `pullEvents()` for domain event extraction (event sourcing)
-- Encapsulate ALL business rules — no getters/setters for mutation
-- Use `Money` from `@crash/domain` — NEVER raw numbers for amounts
+- Private constructor + static factories: `create()` for new aggregates (emit events),
+  `restore(snapshot)` for rehydration (no events)
+- `toPersistence()` returns the same snapshot shape `restore()` accepts
+- Business rules live in the aggregate; validate BEFORE mutating
+- Bets record `BetConfirmed`/`BetCancelled` themselves; `Round.pullEvents()` also drains
+  the events of its bets — never build events in use cases
+- `Money` from `@crash/domain` for amounts, `bigint` cents in outputs — never `number`
 
 ### Use Case Pattern
 ```typescript
 @Injectable()
-export class XxxUseCase implements IUseCase<Input, Output> {
+export class XxxUseCase implements IUseCase<XxxInput, XxxOutput> {
   constructor(
-    @Inject(ROUND_REPOSITORY) private readonly roundRepo: IRoundRepository,
-    @Inject(BET_REPOSITORY) private readonly betRepo: IBetRepository,
-    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: IEventPublisher,
+    @Inject(ROUND_REPOSITORY) private readonly roundRepository: IRoundRepository,
+    @Inject(BET_REPOSITORY) private readonly betRepository: IBetRepository,
+    @Inject(UNIT_OF_WORK) private readonly unitOfWork: IUnitOfWork,
     @Inject(GAME_BROADCASTER) private readonly broadcaster: IGameBroadcaster,
     @Inject(METRICS_RECORDER) private readonly metrics: MetricsRecorderService,
   ) {}
 
-  async execute(input: Input): Promise<Output> { ... }
+  async execute(input: XxxInput): Promise<XxxOutput> {
+    const round = await this.roundRepository.findById(input.roundId);
+    round.doSomething();                                   // domain rule + events
+    await this.unitOfWork.commit(round.id, round.pullEvents(), (tx) =>
+      this.roundRepository.save(round, tx),                // same transaction as outbox
+    );
+    this.broadcaster.broadcastXxx({ ... });                // best-effort, after commit
+    return { ... };                                        // bigint money
+  }
 }
 ```
 
-**Use case flow**: Load aggregate → mutate → persist → pull events → publish batch → broadcast WS
+**Flow**: load aggregate → mutate (domain) → `unitOfWork.commit` (persist + outbox) →
+side effects (broadcast, Redis, metrics) → output.
 
-### DI Tokens
-All tokens in `infrastructure/di/tokens.ts`. Use `useExisting` for interface→impl aliasing:
-```typescript
-{ provide: GAME_BROADCASTER, useExisting: GAMES_GATEWAY },
-```
+### Ports and DI Tokens
+- `application/di.tokens.ts`: ports used by use cases (`ROUND_REPOSITORY`, `BET_REPOSITORY`,
+  `UNIT_OF_WORK`, `GAME_BROADCASTER`, `ROUND_STATE_PROVIDER`, `AUTO_CASHOUT_REPOSITORY`, ...)
+- `infrastructure/di.tokens.ts`: infra-only wiring (`RABBITMQ_PUBLISHER`, `GAMES_GATEWAY`,
+  `REDIS_CLIENT`, queue names)
+- `IUnitOfWork.commit(aggregateId, events, work?)` — `work` receives an opaque
+  `TransactionContext` that repositories accept as `tx?`
 
 ### Round Lifecycle
-- `RoundLifecycleManager` orchestrates: BETTING → ACTIVE → CRASHED
-- `RoundCrashHandler` extracted for crash processing
-- `BetTimeoutHandler` cancels stale PENDING bets via `findStalePendingBets(olderThan)`
-- Optimistic locking via version field — handle `OptimisticLockError` with reload+retry
-
-### Domain Events
-All events defined in `domain/events/round.events.ts` with factory helpers (`createXxxEvent`).
-Union type `GameDomainEvent` for type safety.
+- `RoundLifecycleManager` owns the live round (BETTING → ACTIVE → CRASHED) and delegates to
+  `CreateRoundUseCase`, `StartRoundUseCase`, `CrashRoundUseCase`
+- Rounds are created only from the provably fair `SeedChain`
+- Ticks never overlap; timer callbacks never throw (game loop must survive failures)
+- `BetTimeoutHandler` cancels stale PENDING bets one by one
+- Optimistic locking via `version`: `OptimisticLockError` → reload + retry once
 
 ### Bet Saga
 States: `PENDING → ACTIVE → CASHED_OUT | LOST` (or `CANCELLED`)
-- PENDING: Created, waiting for wallet debit confirmation
-- ACTIVE: Wallet confirmed, participating in round
-- CASHED_OUT: Player cashed out at multiplier
-- LOST: Round crashed before cash out
-- CANCELLED: Wallet rejected or bet replaced
+- Wallet replies reference a bet id: load with `findById` and check ownership (`loadOwnedBet`)
+- A round crash cancels PENDING bets and marks ACTIVE bets LOST
+
+### Messaging
+- Outbox: `OutboxWriter` + `OutboxProcessor` (FAILED after max retries)
+- Inbox: wrap consumers in `IdempotentInbox.process(key, type, payload, handler)`
+- Wire messages are typed in `infrastructure/messaging/types` (amounts are strings)
 
 ### Prisma Interop
-Domain enums (`RoundStatus`, `BetStatus`) cast `as any` for Prisma (same strings, different types).
-Typed `RoundRow`/`BetRow` interfaces for repository results — no `any`.
+Mapping lives in the repository/mapper (`bet.mapper.ts`): rows → `restore(snapshot)`,
+enums cast to `$Enums.*`. Detect Prisma errors with `Prisma.PrismaClientKnownRequestError`.
 
 ### WebSocket
-- Server push only via `GamesGateway` (Socket.IO)
-- Auth via Kong JWT passthrough
-- CORS restricted to `localhost:3000` + `localhost:5173`
-- Broadcast methods: `broadcastRoundStarted`, `broadcastBetPlaced`, `broadcastCrash`, etc.
+- Server push only via `GamesGateway`, wrapped by `ResilientGameBroadcaster`
+- Broadcast methods take one typed payload object; money converted to JSON numbers at the gateway
+
+### HTTP
+- Errors: `AllExceptionsFilter` from `@crash/http`, status per error code in
+  `infrastructure/http/error-status.ts`
+- `@UserContext()` from `@crash/http`; DTOs map outputs with `XxxDto.from(output)` and
+  format money with `formatCents` (bigint), never `Number(cents) / 100`
 
 ## Routes (via Kong)
-- `POST /games/bet` — Place bet
-- `POST /games/cashout` — Cash out
-- `GET /games/current` — Current round state
-- `GET /games/history` — Round history (paginated)
-- `GET /games/bets/me` — Player's bets
-- `GET /games/verify/:roundId` — Provably fair verification
+- `POST /games/bet` — Place bet (202, confirmation is asynchronous)
+- `POST /games/bet/cashout` — Cash out (idempotent via `idempotencyKey`)
+- `GET /games/bets/me` — Player's bets (paginated, with summary)
+- `GET /games/bets/:betId` — Bet status (polling)
+- `GET /games/rounds/current` — Current round state
+- `GET /games/rounds/history` — Round history (paginated)
+- `GET /games/rounds/:roundId/verify` — Provably fair verification
 - `GET /games/health` — Health check
 
 ## Validation
-- [ ] No raw `number` for money — always `Money` / `bigint` cents
-- [ ] Domain events pulled and published after mutation
-- [ ] WebSocket broadcast wrapped in try/catch (non-blocking)
-- [ ] DI tokens used, not string literals
-- [ ] Domain errors extend base, thrown from entities
-- [ ] Use case inputs/outputs defined as interfaces (not DTOs)
+- [ ] No `number` for money in domain/application — `Money` / `bigint` cents
+- [ ] No infrastructure or Prisma import in `domain/` or `application/`
+- [ ] Persistence + events go through `unitOfWork.commit`; events come from aggregates
+- [ ] Side effects (broadcast, Redis) after commit and never fail the use case
+- [ ] Domain errors extend `DomainError` with a stable code mapped in `error-status.ts`
+- [ ] Use case inputs/outputs are interfaces; DTOs only in presentation
+- [ ] Tests use `tests/helpers/mocks.ts` factories
